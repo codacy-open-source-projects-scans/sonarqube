@@ -25,7 +25,7 @@ import javax.annotation.Nullable;
 public record DopSettingsResource(
   @Schema(accessMode = Schema.AccessMode.READ_ONLY)
   String id,
-  @Schema(description = "Supported DevOps Platform are: github, gitlab, azure_devops, bitbucket_cloud, bitbucket_server")
+  @Schema(description = "Supported DevOps Platform are: github, gitlab, azure, bitbucketcloud, bitbucket_server")
   String type,
   String key,
   @Nullable

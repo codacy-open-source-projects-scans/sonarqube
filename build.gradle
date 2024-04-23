@@ -210,7 +210,7 @@ subprojects {
   ext {
     protobufVersion = '3.24.2'
     springVersion = '5.3.31'
-    elasticSearchVersion = '7.17.17'
+    elasticSearchVersion = '7.17.19'
   }
 
   sonar {
@@ -265,13 +265,13 @@ subprojects {
       dependency 'org.sonarsource.slang:sonar-scala-plugin:1.15.0.4655'
       dependency 'com.sonarsource.swift:sonar-swift-plugin:4.12.0.7262'
       dependency 'com.sonarsource.tsql:sonar-tsql-plugin:1.12.0.7020'
-      dependency 'org.sonarsource.dotnet:sonar-csharp-plugin:9.23.1.88495'
-      dependency 'org.sonarsource.dotnet:sonar-vbnet-plugin:9.23.1.88495'
+      dependency 'org.sonarsource.dotnet:sonar-csharp-plugin:9.23.2.88755'
+      dependency 'org.sonarsource.dotnet:sonar-vbnet-plugin:9.23.2.88755'
       dependency 'org.sonarsource.flex:sonar-flex-plugin:2.12.0.4568'
       dependency 'org.sonarsource.html:sonar-html-plugin:3.15.0.5107'
       dependency 'org.sonarsource.jacoco:sonar-jacoco-plugin:1.3.0.1538'
-      dependency 'org.sonarsource.java:sonar-java-plugin:7.32.0.35531'
-      dependency 'org.sonarsource.javascript:sonar-javascript-plugin:10.13.1.25965'
+      dependency 'org.sonarsource.java:sonar-java-plugin:7.33.0.35775'
+      dependency 'org.sonarsource.javascript:sonar-javascript-plugin:10.13.2.25981'
       dependency 'org.sonarsource.php:sonar-php-plugin:3.35.0.11659'
       dependency 'org.sonarsource.plugins.cayc:sonar-cayc-plugin:2.3.0.1782'
       dependency 'org.sonarsource.python:sonar-python-plugin:4.17.0.14845'
@@ -285,11 +285,12 @@ subprojects {
       dependency 'com.sonarsource.jcl:sonar-jcl-plugin:1.1.0.855'
 
       // please keep this list alphabetically ordered
-      dependencySet(group: 'ch.qos.logback', version: '1.3.11') {
-        entry 'logback-access'
+      dependencySet(group: 'ch.qos.logback', version: '1.5.3') {
         entry 'logback-classic'
         entry 'logback-core'
       }
+      // TODO switch to dependency 'ch.qos.logback.access:tomcat:2.0.1' when upgrading to Tomcat 10+
+      dependency 'ch.qos.logback:logback-access:1.3.14'
       dependency('commons-beanutils:commons-beanutils:1.9.4') {
         exclude 'commons-logging:commons-logging'
       }
@@ -413,9 +414,9 @@ subprojects {
       }
       dependency "org.elasticsearch.plugin:transport-netty4-client:${elasticSearchVersion}"
       dependency 'org.elasticsearch:mocksocket:1.2'
-      dependency "org.codelibs.elasticsearch.module:analysis-common:${elasticSearchVersion}"
-      dependency "org.codelibs.elasticsearch.module:reindex:${elasticSearchVersion}"
       dependency 'org.eclipse.jgit:org.eclipse.jgit:6.9.0.202403050737-r'
+      dependency "org.codelibs.elasticsearch.module:analysis-common:7.17.18"
+      dependency "org.codelibs.elasticsearch.module:reindex:7.17.18"
       dependency 'org.tmatesoft.svnkit:svnkit:1.10.11'
       dependency 'org.hamcrest:hamcrest-all:1.3'
       dependency 'org.jsoup:jsoup:1.17.2'
@@ -460,6 +461,7 @@ subprojects {
       dependency 'javax.el:javax.el-api:3.0.0'
       dependency 'org.glassfish:jakarta.el:3.0.4'
       dependency 'org.kohsuke:github-api:1.318'
+      dependency 'org.wiremock:wiremock-standalone:3.5.2'
 
       // please keep this list alphabetically ordered
     }

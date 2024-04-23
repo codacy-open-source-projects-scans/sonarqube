@@ -17,7 +17,24 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { SyncIcon } from '@primer/octicons-react';
-import { OcticonHoc } from './Icon';
+package org.sonar.server.common;
 
-export const RefreshIcon = OcticonHoc(SyncIcon, 'RefreshIcon');
+import org.junit.jupiter.api.Test;
+import org.sonar.db.alm.setting.ALM;
+import org.sonarqube.ws.AlmSettings;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+class AlmSettingMapperTest {
+
+
+  @Test
+  void toResponseAlm_shouldCorrectlyMapAlms() {
+    assertThat(AlmSettingMapper.toResponseAlm(ALM.GITHUB)).isEqualTo(AlmSettings.Alm.github);
+    assertThat(AlmSettingMapper.toResponseAlm(ALM.BITBUCKET)).isEqualTo(AlmSettings.Alm.bitbucket);
+    assertThat(AlmSettingMapper.toResponseAlm(ALM.BITBUCKET_CLOUD)).isEqualTo(AlmSettings.Alm.bitbucketcloud);
+    assertThat(AlmSettingMapper.toResponseAlm(ALM.AZURE_DEVOPS)).isEqualTo(AlmSettings.Alm.azure);
+    assertThat(AlmSettingMapper.toResponseAlm(ALM.GITLAB)).isEqualTo(AlmSettings.Alm.gitlab);
+  }
+
+}

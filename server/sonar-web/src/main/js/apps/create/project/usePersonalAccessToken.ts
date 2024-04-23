@@ -23,7 +23,7 @@ import {
   setAlmPersonalAccessToken,
 } from '../../../api/alm-integrations';
 import { translate } from '../../../helpers/l10n';
-import { AlmSettingsInstance } from '../../../types/alm-settings';
+import { AlmInstanceBase } from '../../../types/alm-settings';
 import { tokenExistedBefore } from './utils';
 
 export interface PATType {
@@ -41,7 +41,7 @@ export interface PATType {
 }
 
 export const usePersonalAccessToken = (
-  almSetting: AlmSettingsInstance,
+  almSetting: AlmInstanceBase,
   resetPat: boolean,
   onPersonalAccessTokenCreated: () => void,
 ): PATType => {
@@ -63,7 +63,7 @@ export const usePersonalAccessToken = (
         setCheckingPat(true);
         const { patIsValid, error } = await checkPersonalAccessTokenIsValid(key)
           .then(({ status, error }) => ({ patIsValid: status, error }))
-          .catch(() => ({ patIsValid: status, error: translate('default_error_message') }));
+          .catch(() => ({ patIsValid: false, error: translate('default_error_message') }));
         if (patIsValid) {
           onPersonalAccessTokenCreated();
           return;

@@ -51,20 +51,22 @@ const ui = {
   addButton: byRole('button', { name: 'onboarding.create_project.monorepo.add_project' }),
   cancelButton: byRole('button', { name: 'cancel' }),
   dopSettingSelector: byRole('combobox', {
-    name: `onboarding.create_project.monorepo.choose_dop_setting.${AlmKeys.GitHub}`,
+    name: `onboarding.create_project.monorepo.choose_dop_settingalm.${AlmKeys.GitHub}`,
   }),
   gitHubOnboardingTitle: byRole('heading', { name: 'onboarding.create_project.github.title' }),
   monorepoProjectTitle: byRole('heading', {
     name: 'onboarding.create_project.monorepo.project_title',
   }),
-  monorepoSetupLink: byRole('link', { name: 'onboarding.create_project.github.subtitle.link' }),
+  monorepoSetupLink: byRole('link', {
+    name: 'onboarding.create_project.subtitle_monorepo_setup_link',
+  }),
   monorepoTitle: byRole('heading', { name: 'onboarding.create_project.monorepo.titlealm.github' }),
   organizationSelector: byRole('combobox', {
-    name: `onboarding.create_project.monorepo.choose_organization.${AlmKeys.GitHub}`,
+    name: `onboarding.create_project.monorepo.choose_organization`,
   }),
   removeButton: byRole('button', { name: 'onboarding.create_project.monorepo.remove_project' }),
   repositorySelector: byRole('combobox', {
-    name: `onboarding.create_project.monorepo.choose_repository.${AlmKeys.GitHub}`,
+    name: `onboarding.create_project.monorepo.choose_repository`,
   }),
   notBoundRepositoryMessage: byText(
     'onboarding.create_project.monorepo.choose_repository.no_already_bound_projects',
