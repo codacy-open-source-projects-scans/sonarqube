@@ -19,6 +19,9 @@
  */
 import { sortBy, uniq } from 'lodash';
 import * as React from 'react';
+import { getBranchLikeQuery, isMainBranch } from '~sonar-aligned/helpers/branch-like';
+import { ComponentQualifier } from '~sonar-aligned/types/component';
+import { MetricKey } from '~sonar-aligned/types/metrics';
 import { getApplicationDetails, getApplicationLeak } from '../../../api/application';
 import { getMeasuresWithPeriodAndMetrics } from '../../../api/measures';
 import { getProjectActivity } from '../../../api/projectActivity';
@@ -34,11 +37,7 @@ import {
   getHistoryMetrics,
   saveActivityGraph,
 } from '../../../components/activity-graph/utils';
-import {
-  getBranchLikeDisplayName,
-  getBranchLikeQuery,
-  isMainBranch,
-} from '../../../helpers/branch-like';
+import { getBranchLikeDisplayName } from '../../../helpers/branch-like';
 import { parseDate, toISO8601WithOffsetString } from '../../../helpers/dates';
 import { enhanceConditionWithMeasure, enhanceMeasuresWithMetrics } from '../../../helpers/measures';
 import {
@@ -48,8 +47,6 @@ import {
 import { isDefined } from '../../../helpers/types';
 import { ApplicationPeriod } from '../../../types/application';
 import { Branch, BranchLike } from '../../../types/branch-like';
-import { ComponentQualifier } from '../../../types/component';
-import { MetricKey } from '../../../types/metrics';
 import { Analysis, GraphType, MeasureHistory } from '../../../types/project-activity';
 import { QualityGateStatus, QualityGateStatusCondition } from '../../../types/quality-gates';
 import { Component, MeasureEnhanced, Metric, Period, QualityGate } from '../../../types/types';

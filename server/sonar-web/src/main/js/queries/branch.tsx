@@ -22,6 +22,9 @@ import { debounce, flatten } from 'lodash';
 import * as React from 'react';
 import { useCallback, useContext } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { useLocation } from '~sonar-aligned/components/hoc/withRouter';
+import { isBranch } from '~sonar-aligned/helpers/branch-like';
+import { searchParamsToQuery } from '~sonar-aligned/helpers/router';
 import {
   deleteBranch,
   deletePullRequest,
@@ -34,12 +37,11 @@ import {
 import { dismissAnalysisWarning, getAnalysisStatus } from '../api/ce';
 import { getQualityGateProjectStatus } from '../api/quality-gates';
 import { AvailableFeaturesContext } from '../app/components/available-features/AvailableFeaturesContext';
-import { useLocation } from '../components/hoc/withRouter';
-import { isBranch, isPullRequest } from '../helpers/branch-like';
+import { isPullRequest } from '../helpers/branch-like';
 import { extractStatusConditionsFromProjectStatus } from '../helpers/qualityGates';
-import { searchParamsToQuery } from '../helpers/urls';
+import { isPortfolioLike } from '../sonar-aligned/helpers/component';
 import { Branch, BranchLike } from '../types/branch-like';
-import { isApplication, isPortfolioLike, isProject } from '../types/component';
+import { isApplication, isProject } from '../types/component';
 import { Feature } from '../types/features';
 import { Component, LightComponent } from '../types/types';
 

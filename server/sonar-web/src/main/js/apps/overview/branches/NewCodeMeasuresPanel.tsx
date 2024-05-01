@@ -32,19 +32,20 @@ import {
 } from 'design-system';
 import React from 'react';
 import { useIntl } from 'react-intl';
-import { getLeakValue } from '../../../components/measure/utils';
-import { DEFAULT_ISSUES_QUERY } from '../../../components/shared/utils';
-import { getBranchLikeQuery } from '../../../helpers/branch-like';
-import { findMeasure, formatMeasure, formatRating } from '../../../helpers/measures';
+import { getBranchLikeQuery } from '~sonar-aligned/helpers/branch-like';
+import { formatMeasure } from '~sonar-aligned/helpers/measures';
 import {
-  CodeScope,
   getComponentIssuesUrl,
   getComponentSecurityHotspotsUrl,
-} from '../../../helpers/urls';
+} from '~sonar-aligned/helpers/urls';
+import { MetricKey, MetricType } from '~sonar-aligned/types/metrics';
+import { getLeakValue } from '../../../components/measure/utils';
+import { DEFAULT_ISSUES_QUERY } from '../../../components/shared/utils';
+import { findMeasure, formatRating } from '../../../helpers/measures';
+import { CodeScope } from '../../../helpers/urls';
 import { Branch } from '../../../types/branch-like';
 import { isApplication } from '../../../types/component';
 import { IssueStatus } from '../../../types/issues';
-import { MetricKey, MetricType } from '../../../types/metrics';
 import { QualityGateStatus } from '../../../types/quality-gates';
 import { Component, MeasureEnhanced } from '../../../types/types';
 import { IssueMeasuresCardInner } from '../components/IssueMeasuresCardInner';
@@ -171,9 +172,8 @@ export default function NewCodeMeasuresPanel(props: Readonly<Props>) {
             ? 'issue.type.SECURITY_HOTSPOT'
             : 'issue.type.SECURITY_HOTSPOT.plural'
         }
-        url={getComponentSecurityHotspotsUrl(component.key, {
+        url={getComponentSecurityHotspotsUrl(component.key, branch, {
           inNewCodePeriod: 'true',
-          ...getBranchLikeQuery(branch),
         })}
         value={newSecurityHotspots}
         metric={MetricKey.new_security_hotspots}

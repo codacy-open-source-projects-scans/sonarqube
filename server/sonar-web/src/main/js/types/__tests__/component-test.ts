@@ -17,16 +17,10 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import {
-  ComponentQualifier,
-  isApplication,
-  isFile,
-  isPortfolioLike,
-  isProject,
-  isView,
-} from '../component';
+import { ComponentQualifier } from '~sonar-aligned/types/component';
+import { isApplication, isFile, isProject, isView } from '../component';
 
-it.each([[isFile], [isView], [isProject], [isApplication], [isPortfolioLike]])(
+it.each([[isFile], [isView], [isProject], [isApplication]])(
   '%p should work properly',
   (utilityMethod: (componentQualifier: ComponentQualifier) => void) => {
     const results = Object.values(ComponentQualifier).reduce(

@@ -18,8 +18,9 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 import * as React from 'react';
-import { getWrappedDisplayName } from '../../../components/hoc/utils';
-import { ComponentContextShape, ComponentQualifier } from '../../../types/component';
+import { getWrappedDisplayName } from '~sonar-aligned/components/hoc/utils';
+import { ComponentQualifier } from '~sonar-aligned/types/component';
+import { ComponentContextShape } from '../../../types/component';
 import { ComponentContext } from './ComponentContext';
 
 export default function withComponentContext<P extends Partial<ComponentContextShape>>(

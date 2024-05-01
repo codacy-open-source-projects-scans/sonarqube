@@ -19,9 +19,9 @@
  */
 import { screen } from '@testing-library/react';
 import { renderWithContext } from '../../helpers/testUtils';
+import { Note } from '../../sonar-aligned';
 import { FCProps } from '../../types/misc';
 import { Banner } from '../Banner';
-import { Note } from '../Text';
 
 it('should render with close button', async () => {
   const onDismiss = jest.fn();

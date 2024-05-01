@@ -27,9 +27,11 @@ import {
 } from 'design-system';
 import * as React from 'react';
 import { FormattedMessage } from 'react-intl';
+import { queryToSearchString } from '~sonar-aligned/helpers/urls';
+import { useAppState } from '../../../../app/components/app-state/withAppStateContext';
 import { AvailableFeaturesContext } from '../../../../app/components/available-features/AvailableFeaturesContext';
 import { translate } from '../../../../helpers/l10n';
-import { getGlobalSettingsUrl, queryToSearch } from '../../../../helpers/urls';
+import { getGlobalSettingsUrl } from '../../../../helpers/urls';
 import { AzureProject, AzureRepository } from '../../../../types/alm-integration';
 import { AlmKeys, AlmSettingsInstance } from '../../../../types/alm-settings';
 import { Feature } from '../../../../types/features';
@@ -42,7 +44,6 @@ import AzurePersonalAccessTokenForm from './AzurePersonalAccessTokenForm';
 import AzureProjectsList from './AzureProjectsList';
 
 export interface AzureProjectCreateRendererProps {
-  canAdmin?: boolean;
   loading: boolean;
   loadingRepositories: Dict<boolean>;
   onImportRepository: (resository: AzureRepository) => void;
@@ -65,7 +66,6 @@ export default function AzureProjectCreateRenderer(
   props: Readonly<AzureProjectCreateRendererProps>,
 ) {
   const {
-    canAdmin,
     loading,
     loadingRepositories,
     projects,
@@ -82,6 +82,8 @@ export default function AzureProjectCreateRenderer(
   const isMonorepoSupported = React.useContext(AvailableFeaturesContext).includes(
     Feature.MonoRepositoryPullRequestDecoration,
   );
+
+  const { canAdmin } = useAppState();
 
   const showCountError = !loading && (!almInstances || almInstances.length === 0);
   const showUrlError =
@@ -100,7 +102,7 @@ export default function AzureProjectCreateRenderer(
                   <Link
                     to={{
                       pathname: '/projects/create',
-                      search: queryToSearch({
+                      search: queryToSearchString({
                         mode: CreateProjectModes.AzureDevOps,
                         mono: true,
                       }),
@@ -149,7 +151,7 @@ export default function AzureProjectCreateRenderer(
         </FlagMessage>
       )}
 
-      {showCountError && <WrongBindingCountAlert alm={AlmKeys.Azure} canAdmin={!!canAdmin} />}
+      {showCountError && <WrongBindingCountAlert alm={AlmKeys.Azure} />}
 
       {!loading &&
         selectedAlmInstance?.url &&

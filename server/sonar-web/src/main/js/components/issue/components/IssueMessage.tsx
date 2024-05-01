@@ -19,14 +19,15 @@
  */
 import { IssueMessageHighlighting, StandoutLink } from 'design-system';
 import * as React from 'react';
+import { useLocation } from '~sonar-aligned/components/hoc/withRouter';
+import { getBranchLikeQuery } from '~sonar-aligned/helpers/branch-like';
+import { getComponentIssuesUrl } from '~sonar-aligned/helpers/urls';
 import { ComponentContext } from '../../../app/components/componentContext/ComponentContext';
 import { areMyIssuesSelected, parseQuery, serializeQuery } from '../../../apps/issues/utils';
-import { getBranchLikeQuery } from '../../../helpers/branch-like';
 import { translate } from '../../../helpers/l10n';
-import { getComponentIssuesUrl, getIssuesUrl } from '../../../helpers/urls';
+import { getIssuesUrl } from '../../../helpers/urls';
 import { BranchLike } from '../../../types/branch-like';
 import { Issue } from '../../../types/types';
-import { useLocation } from '../../hoc/withRouter';
 
 export interface IssueMessageProps {
   issue: Issue;

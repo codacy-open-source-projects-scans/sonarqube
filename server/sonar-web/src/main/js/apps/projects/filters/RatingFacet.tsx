@@ -17,12 +17,12 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { MetricsEnum, MetricsRatingBadge } from 'design-system';
+import { MetricsRatingBadge, RatingEnum } from 'design-system';
 import * as React from 'react';
+import { formatMeasure } from '~sonar-aligned/helpers/measures';
+import { MetricType } from '~sonar-aligned/types/metrics';
+import { RawQuery } from '~sonar-aligned/types/router';
 import { translate, translateWithParameters } from '../../../helpers/l10n';
-import { formatMeasure } from '../../../helpers/measures';
-import { MetricType } from '../../../types/metrics';
-import { RawQuery } from '../../../types/types';
 import { Facet } from '../types';
 import RangeFacetBase from './RangeFacetBase';
 
@@ -77,6 +77,6 @@ function renderOption(option: number) {
   const ratingFormatted = formatMeasure(option, MetricType.Rating);
 
   return (
-    <MetricsRatingBadge label={ratingFormatted} rating={ratingFormatted as MetricsEnum} size="xs" />
+    <MetricsRatingBadge label={ratingFormatted} rating={ratingFormatted as RatingEnum} size="xs" />
   );
 }

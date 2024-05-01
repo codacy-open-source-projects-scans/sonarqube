@@ -20,7 +20,7 @@
 import { BasicSeparator, CenteredLayout, PageContentFontWrapper, Spinner } from 'design-system';
 import { uniq } from 'lodash';
 import * as React from 'react';
-import { getBranchLikeQuery } from '../../../helpers/branch-like';
+import { getBranchLikeQuery } from '~sonar-aligned/helpers/branch-like';
 import { enhanceConditionWithMeasure, enhanceMeasuresWithMetrics } from '../../../helpers/measures';
 import { isDefined } from '../../../helpers/types';
 import { useBranchStatusQuery } from '../../../queries/branch';

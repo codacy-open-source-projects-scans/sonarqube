@@ -17,12 +17,14 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { getBranchLikeQuery } from '~sonar-aligned/helpers/branch-like';
+import { isPortfolioLike } from '~sonar-aligned/helpers/component';
+import { ComponentQualifier } from '~sonar-aligned/types/component';
+import { MetricKey } from '~sonar-aligned/types/metrics';
 import { getBreadcrumbs, getChildren, getComponent, getComponentData } from '../../api/components';
-import { getBranchLikeQuery, isPullRequest } from '../../helpers/branch-like';
+import { isPullRequest } from '../../helpers/branch-like';
 import { CCT_SOFTWARE_QUALITY_METRICS, OLD_TAXONOMY_METRICS } from '../../helpers/constants';
 import { BranchLike } from '../../types/branch-like';
-import { ComponentQualifier, isPortfolioLike } from '../../types/component';
-import { MetricKey } from '../../types/metrics';
 import { Breadcrumb, ComponentMeasure } from '../../types/types';
 import {
   addComponent,

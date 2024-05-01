@@ -19,12 +19,12 @@
  */
 import classNames from 'classnames';
 import * as React from 'react';
+import { getComponentSecurityHotspotsUrl } from '~sonar-aligned/helpers/urls';
+import { MetricKey } from '~sonar-aligned/types/metrics';
 import { getLeakValue } from '../../../components/measure/utils';
-import { getBranchLikeQuery } from '../../../helpers/branch-like';
 import { findMeasure } from '../../../helpers/measures';
-import { getComponentDrilldownUrl, getComponentSecurityHotspotsUrl } from '../../../helpers/urls';
+import { getComponentDrilldownUrl } from '../../../helpers/urls';
 import { PullRequest } from '../../../types/branch-like';
-import { MetricKey } from '../../../types/metrics';
 import { QualityGateStatusConditionEnhanced } from '../../../types/quality-gates';
 import { Component, MeasureEnhanced } from '../../../types/types';
 import MeasuresCardNumber from '../components/MeasuresCardNumber';
@@ -83,9 +83,7 @@ export default function MeasuresCardPanel(props: React.PropsWithChildren<Props>)
                 ? 'issue.type.SECURITY_HOTSPOT'
                 : 'issue.type.SECURITY_HOTSPOT.plural'
             }
-            url={getComponentSecurityHotspotsUrl(component.key, {
-              ...getBranchLikeQuery(pullRequest),
-            })}
+            url={getComponentSecurityHotspotsUrl(component.key, pullRequest)}
             value={newSecurityHotspots}
             metric={MetricKey.new_security_hotspots}
             conditions={conditions}

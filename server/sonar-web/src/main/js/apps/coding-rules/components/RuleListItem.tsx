@@ -29,8 +29,8 @@ import {
   themeBorder,
 } from 'design-system';
 import * as React from 'react';
+import DocHelpTooltip from '~sonar-aligned/components/controls/DocHelpTooltip';
 import { Profile, deactivateRule } from '../../../api/quality-profiles';
-import DocumentationTooltip from '../../../components/common/DocumentationTooltip';
 import ConfirmButton from '../../../components/controls/ConfirmButton';
 import Tooltip from '../../../components/controls/Tooltip';
 import { CleanCodeAttributePill } from '../../../components/shared/CleanCodeAttributePill';
@@ -245,7 +245,7 @@ export default class RuleListItem extends React.PureComponent<Props> {
 
               <SeparatorCircleIcon aria-hidden as="li" />
               <li>
-                <DocumentationTooltip
+                <DocHelpTooltip
                   content={
                     <div>
                       <p className="sw-mb-2">{translate('coding_rules.type.deprecation.title')}</p>
@@ -264,7 +264,7 @@ export default class RuleListItem extends React.PureComponent<Props> {
                     iconFill="iconTypeDisabled"
                     type={rule.type}
                   />
-                </DocumentationTooltip>
+                </DocHelpTooltip>
               </li>
 
               {rule.isTemplate && (

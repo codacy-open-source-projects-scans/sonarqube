@@ -20,18 +20,15 @@
 import { BasicSeparator, FlagMessage, Link } from 'design-system';
 import * as React from 'react';
 import { FormattedMessage } from 'react-intl';
+import { isBranch } from '~sonar-aligned/helpers/branch-like';
+import { ComponentQualifier } from '~sonar-aligned/types/component';
 import withAppStateContext from '../../../app/components/app-state/withAppStateContext';
-import { isBranch, isPullRequest } from '../../../helpers/branch-like';
+import { isPullRequest } from '../../../helpers/branch-like';
 import { translate } from '../../../helpers/l10n';
+import { isPortfolioLike } from '../../../sonar-aligned/helpers/component';
 import { AppState } from '../../../types/appstate';
 import { BranchLike } from '../../../types/branch-like';
-import {
-  ComponentQualifier,
-  isApplication,
-  isPortfolioLike,
-  isProject,
-  isView,
-} from '../../../types/component';
+import { isApplication, isProject, isView } from '../../../types/component';
 import {
   Facet,
   ReferencedComponent,

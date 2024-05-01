@@ -21,13 +21,14 @@
 import { HeadingDark, LargeCenteredLayout, PageContentFontWrapper, Spinner } from 'design-system';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Helmet } from 'react-helmet-async';
+import { isBranch } from '~sonar-aligned/helpers/branch-like';
 import withAppStateContext from '../../../app/components/app-state/withAppStateContext';
 import withAvailableFeatures, {
   WithAvailableFeaturesProps,
 } from '../../../app/components/available-features/withAvailableFeatures';
 import withComponentContext from '../../../app/components/componentContext/withComponentContext';
 import Suggestions from '../../../components/embed-docs-modal/Suggestions';
-import { isBranch, sortBranches } from '../../../helpers/branch-like';
+import { sortBranches } from '../../../helpers/branch-like';
 import { translate } from '../../../helpers/l10n';
 import {
   DEFAULT_NEW_CODE_DEFINITION_TYPE,

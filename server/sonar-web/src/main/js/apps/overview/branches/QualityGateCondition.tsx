@@ -20,6 +20,13 @@
 import { LinkBox, TextMuted } from 'design-system';
 import * as React from 'react';
 import { Path } from 'react-router-dom';
+import { getBranchLikeQuery } from '~sonar-aligned/helpers/branch-like';
+import { formatMeasure } from '~sonar-aligned/helpers/measures';
+import {
+  getComponentIssuesUrl,
+  getComponentSecurityHotspotsUrl,
+} from '~sonar-aligned/helpers/urls';
+import { MetricKey, MetricType } from '~sonar-aligned/types/metrics';
 import IssueTypeIcon from '../../../components/icon-mappers/IssueTypeIcon';
 import MeasureIndicator from '../../../components/measure/MeasureIndicator';
 import {
@@ -27,18 +34,12 @@ import {
   isIssueMeasure,
   propsToIssueParams,
 } from '../../../components/shared/utils';
-import { getBranchLikeQuery } from '../../../helpers/branch-like';
 import { translate } from '../../../helpers/l10n';
-import { formatMeasure, isDiffMetric, localizeMetric } from '../../../helpers/measures';
+import { isDiffMetric, localizeMetric } from '../../../helpers/measures';
 import { getOperatorLabel } from '../../../helpers/qualityGates';
-import {
-  getComponentDrilldownUrl,
-  getComponentIssuesUrl,
-  getComponentSecurityHotspotsUrl,
-} from '../../../helpers/urls';
+import { getComponentDrilldownUrl } from '../../../helpers/urls';
 import { BranchLike } from '../../../types/branch-like';
 import { IssueType } from '../../../types/issues';
-import { MetricKey, MetricType } from '../../../types/metrics';
 import { QualityGateStatusConditionEnhanced } from '../../../types/quality-gates';
 import { Component, Dict } from '../../../types/types';
 import { RATING_TO_SEVERITIES_MAPPING } from '../utils';
@@ -63,13 +64,11 @@ export default class QualityGateCondition extends React.PureComponent<Props> {
   };
 
   getUrlForSecurityHotspot(inNewCodePeriod: boolean) {
-    const query: Dict<string | undefined> = {
-      ...getBranchLikeQuery(this.props.branchLike),
-    };
-    if (inNewCodePeriod) {
-      Object.assign(query, { inNewCodePeriod: 'true' });
-    }
-    return getComponentSecurityHotspotsUrl(this.props.component.key, query);
+    return getComponentSecurityHotspotsUrl(
+      this.props.component.key,
+      this.props.branchLike,
+      inNewCodePeriod ? { inNewCodePeriod: 'true' } : {},
+    );
   }
 
   getUrlForCodeSmells(inNewCodePeriod: boolean) {
@@ -91,7 +90,7 @@ export default class QualityGateCondition extends React.PureComponent<Props> {
 
     const metricKey = condition.measure.metric.key;
 
-    const METRICS_TO_URL_MAPPING: Dict<() => Path> = {
+    const METRICS_TO_URL_MAPPING: Dict<() => Partial<Path>> = {
       [MetricKey.reliability_rating]: () =>
         this.getUrlForBugsOrVulnerabilities(IssueType.Bug, false),
       [MetricKey.new_reliability_rating]: () =>
@@ -139,7 +138,7 @@ export default class QualityGateCondition extends React.PureComponent<Props> {
     if (metric.type !== MetricType.Rating) {
       const actual = (condition.period ? measure.period?.value : measure.value) as string;
       const formattedValue = formatMeasure(actual, metric.type, {
-        decimal: 2,
+        decimals: 1,
         omitExtraDecimalZeros: metric.type === MetricType.Percent,
       });
       return `${formattedValue} ${subText}`;

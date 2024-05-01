@@ -20,12 +20,12 @@
 import { Link } from 'design-system';
 import * as React from 'react';
 import { FormattedMessage } from 'react-intl';
+import { queryToSearchString } from '~sonar-aligned/helpers/urls';
+import { ComponentQualifier } from '~sonar-aligned/types/component';
 import withCurrentUserContext from '../../../app/components/current-user/withCurrentUserContext';
 import DismissableAlert from '../../../components/ui/DismissableAlert';
 import { translate } from '../../../helpers/l10n';
-import { queryToSearch } from '../../../helpers/urls';
 import { useProjectBindingQuery } from '../../../queries/devops-integration';
-import { ComponentQualifier } from '../../../types/component';
 import { Component } from '../../../types/types';
 import { CurrentUser, isLoggedIn } from '../../../types/users';
 import { PULL_REQUEST_DECORATION_BINDING_CATEGORY } from '../../settings/constants';
@@ -62,7 +62,7 @@ export function FirstAnalysisNextStepsNotif(props: FirstAnalysisNextStepsNotifPr
     <Link
       to={{
         pathname: '/tutorials',
-        search: queryToSearch({ id: component.key }),
+        search: queryToSearchString({ id: component.key }),
       }}
     >
       {translate('overview.project.next_steps.links.set_up_ci')}
@@ -72,7 +72,7 @@ export function FirstAnalysisNextStepsNotif(props: FirstAnalysisNextStepsNotifPr
     <Link
       to={{
         pathname: '/project/settings',
-        search: queryToSearch({
+        search: queryToSearchString({
           id: component.key,
           category: PULL_REQUEST_DECORATION_BINDING_CATEGORY,
         }),

@@ -18,8 +18,9 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 import axios from 'axios';
-import { throwGlobalError } from '../helpers/error';
-import { HttpStatus, axiosToCatch, getJSON, parseJSON, post } from '../helpers/request';
+import { throwGlobalError } from '~sonar-aligned/helpers/error';
+import { getJSON } from '~sonar-aligned/helpers/request';
+import { HttpStatus, axiosToCatch, parseJSON, post } from '../helpers/request';
 import { IdentityProvider, Paging } from '../types/types';
 import {
   ChangePasswordResults,
@@ -33,7 +34,7 @@ import {
 const USERS_ENDPOINT = '/api/v2/users-management/users';
 
 export function getCurrentUser(): Promise<CurrentUser> {
-  return getJSON('/api/users/current', undefined, true);
+  return getJSON('/api/users/current', undefined, { bypassRedirect: true });
 }
 
 export function dismissNotice(notice: NoticeType) {

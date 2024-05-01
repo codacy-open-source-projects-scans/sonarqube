@@ -17,21 +17,18 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-
 import { LinkHighlight, LinkStandalone } from '@sonarsource/echoes-react';
 import { Badge, BranchIcon, LightLabel, Note, QualifierIcon } from 'design-system';
 import * as React from 'react';
-import { getBranchLikeQuery } from '../../../helpers/branch-like';
+import { getBranchLikeQuery } from '~sonar-aligned/helpers/branch-like';
+import { queryToSearchString } from '~sonar-aligned/helpers/urls';
+import { ComponentQualifier } from '~sonar-aligned/types/component';
 import { translate } from '../../../helpers/l10n';
 import { isDefined } from '../../../helpers/types';
-import { CodeScope, getComponentOverviewUrl, queryToSearch } from '../../../helpers/urls';
+import { CodeScope, getComponentOverviewUrl } from '../../../helpers/urls';
+import { isPortfolioLike } from '../../../sonar-aligned/helpers/component';
 import { BranchLike } from '../../../types/branch-like';
-import {
-  ComponentQualifier,
-  isApplication,
-  isPortfolioLike,
-  isProject,
-} from '../../../types/component';
+import { isApplication, isProject } from '../../../types/component';
 import { ComponentMeasure } from '../../../types/types';
 import { mostCommonPrefix } from '../utils';
 
@@ -173,7 +170,7 @@ function renderNameWithIcon(
       <LinkStandalone
         highlight={LinkHighlight.CurrentColor}
         iconLeft={showIcon && <QualifierIcon className="sw-mr-2" qualifier={component.qualifier} />}
-        to={{ pathname: '/code', search: queryToSearch(query) }}
+        to={{ pathname: '/code', search: queryToSearchString(query) }}
       >
         {name}
       </LinkStandalone>

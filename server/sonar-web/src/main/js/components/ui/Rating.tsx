@@ -19,9 +19,9 @@
  */
 import classNames from 'classnames';
 import * as React from 'react';
+import { formatMeasure } from '~sonar-aligned/helpers/measures';
+import { MetricType } from '~sonar-aligned/types/metrics';
 import { translate, translateWithParameters } from '../../helpers/l10n';
-import { formatMeasure } from '../../helpers/measures';
-import { MetricType } from '../../types/metrics';
 import './Rating.css';
 
 interface Props extends React.AriaAttributes {

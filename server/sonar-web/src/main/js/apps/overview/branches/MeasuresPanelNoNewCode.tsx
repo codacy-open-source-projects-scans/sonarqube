@@ -17,18 +17,18 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-
 import { Link } from '@sonarsource/echoes-react';
 import { Note, getTabPanelId } from 'design-system';
 import * as React from 'react';
 import { FormattedMessage } from 'react-intl';
+import { getBranchLikeQuery } from '~sonar-aligned/helpers/branch-like';
+import { queryToSearchString } from '~sonar-aligned/helpers/urls';
+import { ComponentQualifier } from '~sonar-aligned/types/component';
 import DocumentationLink from '../../../components/common/DocumentationLink';
 import { Image } from '../../../components/common/Image';
-import { getBranchLikeQuery } from '../../../helpers/branch-like';
 import { translate } from '../../../helpers/l10n';
-import { CodeScope, queryToSearch } from '../../../helpers/urls';
+import { CodeScope } from '../../../helpers/urls';
 import { Branch } from '../../../types/branch-like';
-import { ComponentQualifier } from '../../../types/component';
 import { NewCodeDefinitionType } from '../../../types/new-code-definition';
 import { Component, Period } from '../../../types/types';
 
@@ -89,7 +89,10 @@ export default function MeasuresPanelNoNewCode(props: MeasuresPanelNoNewCodeProp
                     <Link
                       to={{
                         pathname: '/project/baseline',
-                        search: queryToSearch({ id: component.key, ...getBranchLikeQuery(branch) }),
+                        search: queryToSearchString({
+                          id: component.key,
+                          ...getBranchLikeQuery(branch),
+                        }),
                       }}
                     >
                       {translate('settings.new_code_period.category')}

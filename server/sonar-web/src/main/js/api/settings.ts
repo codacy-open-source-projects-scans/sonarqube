@@ -18,10 +18,11 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 import { omitBy } from 'lodash';
+import { throwGlobalError } from '~sonar-aligned/helpers/error';
+import { getJSON } from '~sonar-aligned/helpers/request';
+import { BranchParameters } from '~sonar-aligned/types/branch-like';
 import { isCategoryDefinition } from '../apps/settings/utils';
-import { throwGlobalError } from '../helpers/error';
-import { getJSON, post, postJSON, RequestData } from '../helpers/request';
-import { BranchParameters } from '../types/branch-like';
+import { post, postJSON, RequestData } from '../helpers/request';
 import {
   ExtendedSettingDefinition,
   SettingDefinition,

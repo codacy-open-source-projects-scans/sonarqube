@@ -18,8 +18,9 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 import axios from 'axios';
-import { throwGlobalError } from '../helpers/error';
-import { getJSON, post, postJSON } from '../helpers/request';
+import { throwGlobalError } from '~sonar-aligned/helpers/error';
+import { getJSON } from '~sonar-aligned/helpers/request';
+import { post, postJSON } from '../helpers/request';
 import { GitHubConfigurationStatus, GitHubMapping, GithubStatus } from '../types/provisioning';
 
 const GITHUB_PERMISSION_MAPPINGS = '/api/v2/dop-translation/github-permission-mappings';

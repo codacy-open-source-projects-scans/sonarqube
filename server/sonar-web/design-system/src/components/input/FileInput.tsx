@@ -19,8 +19,8 @@
  */
 import classNames from 'classnames';
 import { useCallback, useRef, useState } from 'react';
-import { Note } from '../Text';
-import { ButtonSecondary } from '../buttons/ButtonSecondary';
+import { ButtonSecondary } from '../../sonar-aligned/components/buttons/ButtonSecondary';
+import { Note } from '../../sonar-aligned/components/typography';
 
 interface Props {
   chooseLabel: string;

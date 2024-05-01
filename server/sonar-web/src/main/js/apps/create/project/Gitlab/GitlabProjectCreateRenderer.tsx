@@ -19,60 +19,84 @@
  */
 import { Link, Spinner } from '@sonarsource/echoes-react';
 import { LightPrimary, Title } from 'design-system';
-import * as React from 'react';
+import React, { useContext, useEffect, useState } from 'react';
 import { FormattedMessage } from 'react-intl';
+import { queryToSearchString } from '~sonar-aligned/helpers/urls';
 import { AvailableFeaturesContext } from '../../../../app/components/available-features/AvailableFeaturesContext';
 import { translate } from '../../../../helpers/l10n';
-import { queryToSearch } from '../../../../helpers/urls';
 import { GitlabProject } from '../../../../types/alm-integration';
 import { AlmInstanceBase, AlmKeys, AlmSettingsInstance } from '../../../../types/alm-settings';
 import { Feature } from '../../../../types/features';
 import { Paging } from '../../../../types/types';
 import AlmSettingsInstanceDropdown from '../components/AlmSettingsInstanceDropdown';
+import RepositoryList from '../components/RepositoryList';
 import WrongBindingCountAlert from '../components/WrongBindingCountAlert';
 import { CreateProjectModes } from '../types';
 import GitlabPersonalAccessTokenForm from './GItlabPersonalAccessTokenForm';
-import GitlabProjectSelectionForm from './GitlabProjectSelectionForm';
 
 export interface GitlabProjectCreateRendererProps {
-  canAdmin?: boolean;
+  almInstances?: AlmSettingsInstance[];
   loading: boolean;
-  loadingMore: boolean;
-  onImport: (gitlabProjectId: string) => void;
+  onImport: (id: string[]) => void;
   onLoadMore: () => void;
   onPersonalAccessTokenCreated: () => void;
   onSearch: (searchQuery: string) => void;
   projects?: GitlabProject[];
   projectsPaging: Paging;
   resetPat: boolean;
-  searching: boolean;
   searchQuery: string;
-  almInstances?: AlmSettingsInstance[];
   selectedAlmInstance?: AlmSettingsInstance;
-  showPersonalAccessTokenForm?: boolean;
   onSelectedAlmInstanceChange: (instance: AlmInstanceBase) => void;
+  showPersonalAccessTokenForm?: boolean;
 }
 
 export default function GitlabProjectCreateRenderer(
   props: Readonly<GitlabProjectCreateRendererProps>,
 ) {
-  const isMonorepoSupported = React.useContext(AvailableFeaturesContext).includes(
+  const isMonorepoSupported = useContext(AvailableFeaturesContext).includes(
     Feature.MonoRepositoryPullRequestDecoration,
   );
 
   const {
-    canAdmin,
+    almInstances,
     loading,
-    loadingMore,
+    onLoadMore,
+    onSearch,
     projects,
     projectsPaging,
     resetPat,
-    searching,
     searchQuery,
     selectedAlmInstance,
-    almInstances,
     showPersonalAccessTokenForm,
   } = props;
+
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  const handleCheck = (id: string) => {
+    setSelected((prev) => new Set(prev.delete(id) ? prev : prev.add(id)));
+  };
+
+  const handleCheckAll = () => {
+    setSelected(
+      new Set(projects?.filter((r) => r.sqProjectKey === undefined).map((r) => r.id) ?? []),
+    );
+  };
+
+  const handleImport = () => {
+    props.onImport(Array.from(selected));
+  };
+
+  const handleUncheckAll = () => {
+    setSelected(new Set());
+  };
+
+  useEffect(() => {
+    const selectedIds = Array.from(selected).filter((id) => projects?.find((r) => r.id === id));
+    setSelected(new Set(selectedIds));
+    // We want to update only when `projects` changes.
+    // If we subscribe to `selected` changes we will enter an infinite loop.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projects]);
 
   return (
     <>
@@ -87,7 +111,7 @@ export default function GitlabProjectCreateRenderer(
                   <Link
                     to={{
                       pathname: '/projects/create',
-                      search: queryToSearch({
+                      search: queryToSearchString({
                         mode: CreateProjectModes.GitLab,
                         mono: true,
                       }),
@@ -113,8 +137,8 @@ export default function GitlabProjectCreateRenderer(
 
       <Spinner isLoading={loading} />
 
-      {!loading && !selectedAlmInstance && (
-        <WrongBindingCountAlert alm={AlmKeys.GitLab} canAdmin={!!canAdmin} />
+      {!loading && almInstances && almInstances.length === 0 && !selectedAlmInstance && (
+        <WrongBindingCountAlert alm={AlmKeys.GitLab} />
       )}
 
       {!loading &&
@@ -126,15 +150,19 @@ export default function GitlabProjectCreateRenderer(
             onPersonalAccessTokenCreated={props.onPersonalAccessTokenCreated}
           />
         ) : (
-          <GitlabProjectSelectionForm
-            loadingMore={loadingMore}
-            onImport={props.onImport}
-            onLoadMore={props.onLoadMore}
-            onSearch={props.onSearch}
-            projects={projects}
-            projectsPaging={projectsPaging}
-            searching={searching}
+          <RepositoryList
+            almKey={AlmKeys.GitLab}
+            checkAll={handleCheckAll}
+            loadingRepositories={loading}
+            onCheck={handleCheck}
+            onImport={handleImport}
+            onLoadMore={onLoadMore}
+            onSearch={onSearch}
+            repositories={projects}
+            repositoryPaging={projectsPaging}
             searchQuery={searchQuery}
+            selected={selected}
+            uncheckAll={handleUncheckAll}
           />
         ))}
     </>

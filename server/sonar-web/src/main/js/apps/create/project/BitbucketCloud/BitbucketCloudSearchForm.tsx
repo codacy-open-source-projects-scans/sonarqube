@@ -20,13 +20,13 @@
 import { FlagMessage, InputSearch, LightPrimary, Link } from 'design-system';
 import * as React from 'react';
 import { FormattedMessage } from 'react-intl';
+import { queryToSearchString } from '~sonar-aligned/helpers/urls';
 import ListFooter from '../../../../components/controls/ListFooter';
 import { translate } from '../../../../helpers/l10n';
 import { getBaseUrl } from '../../../../helpers/system';
-import { queryToSearch } from '../../../../helpers/urls';
 import { BitbucketCloudRepository } from '../../../../types/alm-integration';
 import AlmRepoItem from '../components/AlmRepoItem';
-import { BITBUCKET_CLOUD_PROJECTS_PAGESIZE } from '../constants';
+import { REPOSITORY_PAGE_SIZE } from '../constants';
 import { CreateProjectModes } from '../types';
 
 export interface BitbucketCloudSearchFormProps {
@@ -59,7 +59,10 @@ export default function BitbucketCloudSearchForm(props: BitbucketCloudSearchForm
                 <Link
                   to={{
                     pathname: '/projects/create',
-                    search: queryToSearch({ mode: CreateProjectModes.BitbucketCloud, resetPat: 1 }),
+                    search: queryToSearchString({
+                      mode: CreateProjectModes.BitbucketCloud,
+                      resetPat: 1,
+                    }),
                   }}
                 >
                   {translate('onboarding.create_project.update_your_token')}
@@ -112,7 +115,7 @@ export default function BitbucketCloudSearchForm(props: BitbucketCloudSearchForm
         count={repositories.length}
         // we don't know the total, so only provide when we've reached the last page
         total={isLastPage ? repositories.length : undefined}
-        pageSize={BITBUCKET_CLOUD_PROJECTS_PAGESIZE}
+        pageSize={REPOSITORY_PAGE_SIZE}
         loadMore={props.onLoadMore}
         loading={loadingMore}
       />

@@ -20,7 +20,7 @@
 import { FlagMessage, Link } from 'design-system';
 import * as React from 'react';
 import { FormattedMessage } from 'react-intl';
-import HelpTooltip from '../../../components/controls/HelpTooltip';
+import HelpTooltip from '~sonar-aligned/components/controls/HelpTooltip';
 import { translate, translateWithParameters } from '../../../helpers/l10n';
 import { getRulesUrl } from '../../../helpers/urls';
 

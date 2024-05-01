@@ -18,6 +18,10 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 import React from 'react';
+import { useLocation, useRouter } from '~sonar-aligned/components/hoc/withRouter';
+import { getBranchLikeQuery } from '~sonar-aligned/helpers/branch-like';
+import { isPortfolioLike } from '~sonar-aligned/helpers/component';
+import { MetricKey } from '~sonar-aligned/types/metrics';
 import {
   useComponent,
   useTopLevelComponentKey,
@@ -29,15 +33,12 @@ import {
   getHistoryMetrics,
   isCustomGraph,
 } from '../../../components/activity-graph/utils';
-import { useLocation, useRouter } from '../../../components/hoc/withRouter';
-import { getBranchLikeQuery } from '../../../helpers/branch-like';
 import { parseDate } from '../../../helpers/dates';
 import useApplicationLeakQuery from '../../../queries/applications';
 import { useBranchesQuery } from '../../../queries/branch';
 import { useAllMeasuresHistoryQuery } from '../../../queries/measures';
 import { useAllProjectAnalysesQuery } from '../../../queries/project-analyses';
-import { isApplication, isPortfolioLike, isProject } from '../../../types/component';
-import { MetricKey } from '../../../types/metrics';
+import { isApplication, isProject } from '../../../types/component';
 import { MeasureHistory, ParsedAnalysis } from '../../../types/project-activity';
 import { Query, parseQuery, serializeUrlQuery } from '../utils';
 import ProjectActivityAppRenderer from './ProjectActivityAppRenderer';

@@ -19,9 +19,9 @@
  */
 import { ActionsDropdown, ItemButton, ItemLink, PopupZLevel, Spinner } from 'design-system';
 import React, { useState } from 'react';
+import { throwGlobalError } from '~sonar-aligned/helpers/error';
 import { getComponentNavigation } from '../../api/navigation';
 import { Project } from '../../api/project-management';
-import { throwGlobalError } from '../../helpers/error';
 import { translate, translateWithParameters } from '../../helpers/l10n';
 import { getComponentPermissionsUrl } from '../../helpers/urls';
 import { useGithubProvisioningEnabledQuery } from '../../queries/identity-provider/github';

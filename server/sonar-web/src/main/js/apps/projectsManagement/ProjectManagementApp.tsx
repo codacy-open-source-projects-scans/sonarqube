@@ -21,6 +21,7 @@ import { LargeCenteredLayout, PageContentFontWrapper } from 'design-system';
 import { debounce, uniq } from 'lodash';
 import * as React from 'react';
 import { Helmet } from 'react-helmet-async';
+import { throwGlobalError } from '~sonar-aligned/helpers/error';
 import {
   Project,
   changeProjectDefaultVisibility,
@@ -31,7 +32,6 @@ import withCurrentUserContext from '../../app/components/current-user/withCurren
 import ListFooter from '../../components/controls/ListFooter';
 import Suggestions from '../../components/embed-docs-modal/Suggestions';
 import { toShortISO8601String } from '../../helpers/dates';
-import { throwGlobalError } from '../../helpers/error';
 import { translate } from '../../helpers/l10n';
 import { hasGlobalPermission } from '../../helpers/users';
 import { Visibility } from '../../types/component';

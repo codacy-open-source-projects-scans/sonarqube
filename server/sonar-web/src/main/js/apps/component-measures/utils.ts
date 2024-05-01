@@ -18,8 +18,12 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 import { groupBy, memoize, sortBy, toPairs } from 'lodash';
+import { isBranch } from '~sonar-aligned/helpers/branch-like';
+import { ComponentQualifier } from '~sonar-aligned/types/component';
+import { MetricKey, MetricType } from '~sonar-aligned/types/metrics';
+import { RawQuery } from '~sonar-aligned/types/router';
 import { enhanceMeasure } from '../../components/measure/utils';
-import { isBranch, isPullRequest } from '../../helpers/branch-like';
+import { isPullRequest } from '../../helpers/branch-like';
 import {
   CCT_SOFTWARE_QUALITY_METRICS,
   HIDDEN_METRICS,
@@ -43,9 +47,7 @@ import {
   serializeString,
 } from '../../helpers/query';
 import { BranchLike } from '../../types/branch-like';
-import { ComponentQualifier } from '../../types/component';
 import { Domain, MeasurePageView } from '../../types/measures';
-import { MetricKey, MetricType } from '../../types/metrics';
 import {
   ComponentMeasure,
   ComponentMeasureEnhanced,
@@ -53,7 +55,6 @@ import {
   Measure,
   MeasureEnhanced,
   Metric,
-  RawQuery,
 } from '../../types/types';
 import { bubbles } from './config/bubbles';
 import { domains } from './config/domains';

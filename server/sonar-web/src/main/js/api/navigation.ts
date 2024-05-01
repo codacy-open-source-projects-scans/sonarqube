@@ -17,10 +17,10 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { throwGlobalError } from '../helpers/error';
-import { getJSON } from '../helpers/request';
+import { throwGlobalError } from '~sonar-aligned/helpers/error';
+import { getJSON } from '~sonar-aligned/helpers/request';
+import { BranchParameters } from '~sonar-aligned/types/branch-like';
 import { AppState } from '../types/appstate';
-import { BranchParameters } from '../types/branch-like';
 import { Extension, NavigationComponent } from '../types/types';
 
 export function getComponentNavigation(
@@ -41,5 +41,5 @@ export function getSettingsNavigation(): Promise<{
 }
 
 export function getGlobalNavigation(): Promise<AppState> {
-  return getJSON('/api/navigation/global', undefined, true);
+  return getJSON('/api/navigation/global', undefined, { bypassRedirect: true });
 }

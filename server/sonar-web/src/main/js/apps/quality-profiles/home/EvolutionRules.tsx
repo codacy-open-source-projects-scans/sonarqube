@@ -21,12 +21,12 @@ import { DiscreetLink, Link, Note } from 'design-system';
 import { noop, sortBy } from 'lodash';
 import * as React from 'react';
 import { useIntl } from 'react-intl';
+import { formatMeasure } from '~sonar-aligned/helpers/measures';
+import { MetricType } from '~sonar-aligned/types/metrics';
 import { listRules } from '../../../api/rules';
 import { toShortISO8601String } from '../../../helpers/dates';
 import { translateWithParameters } from '../../../helpers/l10n';
-import { formatMeasure } from '../../../helpers/measures';
 import { getRulesUrl } from '../../../helpers/urls';
-import { MetricType } from '../../../types/metrics';
 import { Rule, RuleActivation } from '../../../types/types';
 
 const RULES_LIMIT = 10;

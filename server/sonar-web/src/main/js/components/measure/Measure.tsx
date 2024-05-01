@@ -17,18 +17,18 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { MetricsLabel, MetricsRatingBadge, QualityGateIndicator } from 'design-system';
+import { MetricsRatingBadge, QualityGateIndicator, RatingLabel } from 'design-system';
 import * as React from 'react';
+import { formatMeasure } from '~sonar-aligned/helpers/measures';
+import { MetricType } from '~sonar-aligned/types/metrics';
 import Tooltip from '../../components/controls/Tooltip';
 import { translate, translateWithParameters } from '../../helpers/l10n';
-import { formatMeasure } from '../../helpers/measures';
-import { MetricType } from '../../types/metrics';
 import { Status } from '../../types/types';
 import RatingTooltipContent from './RatingTooltipContent';
 
 interface Props {
   className?: string;
-  decimals?: number | null;
+  decimals?: number;
   metricKey: string;
   metricType: string;
   small?: boolean;
@@ -83,7 +83,7 @@ export default function Measure({
           ? translateWithParameters('metric.has_rating_X', formatMeasure(value, MetricType.Rating))
           : translate('metric.no_rating')
       }
-      rating={formatMeasure(value, MetricType.Rating) as MetricsLabel}
+      rating={formatMeasure(value, MetricType.Rating) as RatingLabel}
     />
   );
 

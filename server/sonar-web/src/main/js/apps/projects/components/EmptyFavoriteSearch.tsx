@@ -20,8 +20,8 @@
 import { FishVisual, Highlight, StandoutLink } from 'design-system';
 import * as React from 'react';
 import { FormattedMessage } from 'react-intl';
+import { queryToSearchString } from '~sonar-aligned/helpers/urls';
 import { translate } from '../../../helpers/l10n';
-import { queryToSearch } from '../../../helpers/urls';
 import { Dict } from '../../../types/types';
 import { Query } from '../query';
 
@@ -41,7 +41,7 @@ export default function EmptyFavoriteSearch({ query }: { query: Query }) {
               <StandoutLink
                 to={{
                   pathname: '/projects',
-                  search: queryToSearch(query as Dict<string | undefined | number>),
+                  search: queryToSearchString(query as Dict<string | undefined | number>),
                 }}
               >
                 {translate('all')}

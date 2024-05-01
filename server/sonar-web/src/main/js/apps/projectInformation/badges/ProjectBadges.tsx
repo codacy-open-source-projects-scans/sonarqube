@@ -33,8 +33,9 @@ import {
 import { isEmpty } from 'lodash';
 import * as React from 'react';
 import { useState } from 'react';
+import { getBranchLikeQuery } from '~sonar-aligned/helpers/branch-like';
+import { MetricKey } from '~sonar-aligned/types/metrics';
 import { Image } from '../../../components/common/Image';
-import { getBranchLikeQuery } from '../../../helpers/branch-like';
 import { translate, translateWithParameters } from '../../../helpers/l10n';
 import { localizeMetric } from '../../../helpers/measures';
 import {
@@ -44,7 +45,6 @@ import {
   useRenewBagdeTokenMutation,
 } from '../../../queries/badges';
 import { BranchLike } from '../../../types/branch-like';
-import { MetricKey } from '../../../types/metrics';
 import { Component } from '../../../types/types';
 import { BadgeFormats, BadgeOptions, BadgeType, getBadgeSnippet, getBadgeUrl } from './utils';
 

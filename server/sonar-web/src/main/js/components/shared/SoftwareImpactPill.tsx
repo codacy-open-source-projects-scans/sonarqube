@@ -21,9 +21,9 @@ import classNames from 'classnames';
 import { Pill } from 'design-system';
 import React from 'react';
 import { FormattedMessage } from 'react-intl';
+import DocHelpTooltip from '~sonar-aligned/components/controls/DocHelpTooltip';
 import { translate } from '../../helpers/l10n';
 import { SoftwareImpactSeverity } from '../../types/clean-code-taxonomy';
-import DocumentationTooltip from '../common/DocumentationTooltip';
 import SoftwareImpactSeverityIcon from '../icon-mappers/SoftwareImpactSeverityIcon';
 
 export interface Props {
@@ -43,7 +43,7 @@ export default function SoftwareImpactPill(props: Props) {
   }[severity] as 'danger' | 'warning' | 'info';
 
   return (
-    <DocumentationTooltip
+    <DocHelpTooltip
       content={
         <FormattedMessage
           id={`${type}.impact.severity.tooltip`}
@@ -65,6 +65,6 @@ export default function SoftwareImpactPill(props: Props) {
         {quality}
         <SoftwareImpactSeverityIcon severity={severity} data-guiding-id="issue-3" />
       </Pill>
-    </DocumentationTooltip>
+    </DocHelpTooltip>
   );
 }

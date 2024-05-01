@@ -29,14 +29,11 @@ import { isEmpty, orderBy } from 'lodash';
 import * as React from 'react';
 import { useState } from 'react';
 import { FormattedMessage } from 'react-intl';
+import { isMainBranch } from '~sonar-aligned/helpers/branch-like';
 import { getBranches } from '../../../api/branches';
 import { getRegulatoryReportUrl } from '../../../api/regulatory-report';
 import DocumentationLink from '../../../components/common/DocumentationLink';
-import {
-  getBranchLikeDisplayName,
-  getBranchLikeKey,
-  isMainBranch,
-} from '../../../helpers/branch-like';
+import { getBranchLikeDisplayName, getBranchLikeKey } from '../../../helpers/branch-like';
 import { translate } from '../../../helpers/l10n';
 import { LabelValueSelectOption } from '../../../helpers/search';
 import { BranchLike } from '../../../types/branch-like';

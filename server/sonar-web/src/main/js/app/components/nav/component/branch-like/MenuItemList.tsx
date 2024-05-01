@@ -19,7 +19,7 @@
  */
 import { HelperHintIcon, ItemDivider, ItemHeader } from 'design-system';
 import * as React from 'react';
-import HelpTooltip from '../../../../../components/controls/HelpTooltip';
+import HelpTooltip from '~sonar-aligned/components/controls/HelpTooltip';
 import { getBranchLikeKey, isSameBranchLike } from '../../../../../helpers/branch-like';
 import { translate } from '../../../../../helpers/l10n';
 import { isDefined } from '../../../../../helpers/types';

@@ -31,9 +31,9 @@ import {
 import { sortBy } from 'lodash';
 import * as React from 'react';
 import { OptionProps, SingleValueProps, components } from 'react-select';
+import HelpTooltip from '~sonar-aligned/components/controls/HelpTooltip';
 import { Project } from '../../api/project-management';
 import withAppStateContext from '../../app/components/app-state/withAppStateContext';
-import HelpTooltip from '../../components/controls/HelpTooltip';
 import { translate } from '../../helpers/l10n';
 import { LabelValueSelectOption } from '../../helpers/search';
 import { AppState } from '../../types/appstate';

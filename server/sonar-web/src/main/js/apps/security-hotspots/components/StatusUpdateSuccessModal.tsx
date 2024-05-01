@@ -20,8 +20,8 @@
 import { ButtonPrimary, ButtonSecondary, Checkbox, Modal, Note } from 'design-system';
 import * as React from 'react';
 import { FormattedMessage } from 'react-intl';
+import { formatMeasure } from '~sonar-aligned/helpers/measures';
 import { translate, translateWithParameters } from '../../../helpers/l10n';
-import { formatMeasure } from '../../../helpers/measures';
 import { save } from '../../../helpers/storage';
 import { HotspotStatusOption } from '../../../types/security-hotspots';
 import { SHOW_STATUS_DIALOG_STORAGE_KEY } from '../constants';

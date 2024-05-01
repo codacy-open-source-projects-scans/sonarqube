@@ -19,18 +19,20 @@
  */
 import { DropdownMenu, InputSearch, ItemDivider, Link } from 'design-system';
 import * as React from 'react';
-import { Router, withRouter } from '../../../../../components/hoc/withRouter';
+import { withRouter } from '~sonar-aligned/components/hoc/withRouter';
+import { isBranch } from '~sonar-aligned/helpers/branch-like';
+import { queryToSearchString } from '~sonar-aligned/helpers/urls';
+import { ComponentQualifier } from '~sonar-aligned/types/component';
+import { Router } from '~sonar-aligned/types/router';
 import {
   getBrancheLikesAsTree,
-  isBranch,
   isPullRequest,
   isSameBranchLike,
 } from '../../../../../helpers/branch-like';
 import { KeyboardKeys } from '../../../../../helpers/keycodes';
 import { translate } from '../../../../../helpers/l10n';
-import { getBranchLikeUrl, queryToSearch } from '../../../../../helpers/urls';
+import { getBranchLikeUrl } from '../../../../../helpers/urls';
 import { BranchLike, BranchLikeTree } from '../../../../../types/branch-like';
-import { ComponentQualifier } from '../../../../../types/component';
 import { Component } from '../../../../../types/types';
 import MenuItemList from './MenuItemList';
 
@@ -187,7 +189,10 @@ export class Menu extends React.PureComponent<Props, State> {
                 onClick={() => {
                   onClose();
                 }}
-                to={{ pathname: '/project/branches', search: queryToSearch({ id: component.key }) }}
+                to={{
+                  pathname: '/project/branches',
+                  search: queryToSearchString({ id: component.key }),
+                }}
               >
                 {translate('branch_like_navigation.manage')}
               </Link>

@@ -20,11 +20,11 @@
 import { Banner, Link } from 'design-system';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { FormattedMessage, useIntl } from 'react-intl';
+import { queryToSearchString } from '~sonar-aligned/helpers/urls';
 import { MessageTypes, checkMessageDismissed, setMessageDismissed } from '../../api/messages';
 import { CurrentUserContextInterface } from '../../app/components/current-user/CurrentUserContext';
 import withCurrentUserContext from '../../app/components/current-user/withCurrentUserContext';
 import { NEW_CODE_PERIOD_CATEGORY } from '../../apps/settings/constants';
-import { queryToSearch } from '../../helpers/urls';
 import { useNewCodeDefinitionQuery } from '../../queries/newCodeDefinition';
 import { Component } from '../../types/types';
 import {
@@ -60,13 +60,13 @@ function NCDAutoUpdateMessage(props: Readonly<NCDAutoUpdateMessageProps>) {
       isGlobalBanner
         ? {
             pathname: '/admin/settings',
-            search: queryToSearch({
+            search: queryToSearchString({
               category: NEW_CODE_PERIOD_CATEGORY,
             }),
           }
         : {
             pathname: '/project/baseline',
-            search: queryToSearch({
+            search: queryToSearchString({
               id: component.key,
             }),
           },

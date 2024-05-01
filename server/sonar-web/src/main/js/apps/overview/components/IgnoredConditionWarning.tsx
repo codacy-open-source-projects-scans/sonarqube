@@ -19,7 +19,7 @@
  */
 import { FlagMessage, HelperHintIcon } from 'design-system';
 import React from 'react';
-import HelpTooltip from '../../../components/controls/HelpTooltip';
+import HelpTooltip from '~sonar-aligned/components/controls/HelpTooltip';
 import { translate } from '../../../helpers/l10n';
 
 export default function IgnoredConditionWarning() {

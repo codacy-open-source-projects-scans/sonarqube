@@ -28,16 +28,17 @@ import {
   PageContentFontWrapper,
 } from 'design-system';
 import * as React from 'react';
+import { getBranchLikeQuery } from '~sonar-aligned/helpers/branch-like';
+import { getComponentIssuesUrl } from '~sonar-aligned/helpers/urls';
 import { setIssueAssignee } from '../../../api/issues';
 import { updateIssue } from '../../../components/issue/actions';
 import IssueActionsBar from '../../../components/issue/components/IssueActionsBar';
 import { WorkspaceContext } from '../../../components/workspace/context';
-import { getBranchLikeQuery } from '../../../helpers/branch-like';
 import { isInput, isShortcut } from '../../../helpers/keyboardEventHelpers';
 import { KeyboardKeys } from '../../../helpers/keycodes';
 import { translate } from '../../../helpers/l10n';
 import { getKeyboardShortcutEnabled } from '../../../helpers/preferences';
-import { getComponentIssuesUrl, getPathUrlAsString, getRuleUrl } from '../../../helpers/urls';
+import { getPathUrlAsString, getRuleUrl } from '../../../helpers/urls';
 import { BranchLike } from '../../../types/branch-like';
 import { IssueActions, IssueType } from '../../../types/issues';
 import { Issue, RuleDetails } from '../../../types/types';

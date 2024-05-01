@@ -20,19 +20,19 @@
 import {
   CoverageIndicator,
   DuplicationsIndicator,
-  MetricsLabel,
   MetricsRatingBadge,
   Note,
   PageContentFontWrapper,
+  RatingLabel,
 } from 'design-system';
 import * as React from 'react';
+import { ComponentQualifier } from '~sonar-aligned/types/component';
+import { MetricKey, MetricType } from '~sonar-aligned/types/metrics';
 import Measure from '../../../../components/measure/Measure';
 import { duplicationRatingConverter } from '../../../../components/measure/utils';
 import { translate } from '../../../../helpers/l10n';
 import { formatRating } from '../../../../helpers/measures';
 import { isDefined } from '../../../../helpers/types';
-import { ComponentQualifier } from '../../../../types/component';
-import { MetricKey, MetricType } from '../../../../types/metrics';
 import { Dict } from '../../../../types/types';
 import ProjectCardMeasure from './ProjectCardMeasure';
 
@@ -178,7 +178,7 @@ function renderRatings(props: ProjectCardMeasuresProps) {
 
     return (
       <ProjectCardMeasure key={metricKey} metricKey={metricKey} label={iconLabel}>
-        <MetricsRatingBadge label={metricKey} rating={value as MetricsLabel} />
+        <MetricsRatingBadge label={metricKey} rating={value as RatingLabel} />
         <Measure
           metricKey={metricKey}
           metricType={metricType}

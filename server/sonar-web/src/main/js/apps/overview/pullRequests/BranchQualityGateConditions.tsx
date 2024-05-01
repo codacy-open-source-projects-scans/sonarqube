@@ -21,22 +21,23 @@ import styled from '@emotion/styled';
 import { Badge, ButtonSecondary, themeBorder, themeColor } from 'design-system';
 import React from 'react';
 import { useIntl } from 'react-intl';
+import { getBranchLikeQuery } from '~sonar-aligned/helpers/branch-like';
+import { formatMeasure } from '~sonar-aligned/helpers/measures';
+import {
+  getComponentIssuesUrl,
+  getComponentSecurityHotspotsUrl,
+} from '~sonar-aligned/helpers/urls';
+import { MetricType } from '~sonar-aligned/types/metrics';
 import {
   DEFAULT_ISSUES_QUERY,
   isIssueMeasure,
   propsToIssueParams,
 } from '../../../components/shared/utils';
-import { getBranchLikeQuery } from '../../../helpers/branch-like';
 import { getLocalizedMetricName, translate } from '../../../helpers/l10n';
-import { formatMeasure, getShortType, isDiffMetric } from '../../../helpers/measures';
-import {
-  getComponentDrilldownUrl,
-  getComponentIssuesUrl,
-  getComponentSecurityHotspotsUrl,
-} from '../../../helpers/urls';
+import { getShortType, isDiffMetric } from '../../../helpers/measures';
+import { getComponentDrilldownUrl } from '../../../helpers/urls';
 import { BranchLike } from '../../../types/branch-like';
 import { IssueType } from '../../../types/issues';
-import { MetricType } from '../../../types/metrics';
 import { QualityGateStatusConditionEnhanced } from '../../../types/quality-gates';
 import { Component } from '../../../types/types';
 import {
@@ -181,8 +182,7 @@ function getQGConditionUrl(
 
   if (ratingIssueType) {
     if (ratingIssueType === IssueType.SecurityHotspot) {
-      return getComponentSecurityHotspotsUrl(componentKey, {
-        ...getBranchLikeQuery(branchLike),
+      return getComponentSecurityHotspotsUrl(componentKey, branchLike, {
         ...(sinceLeakPeriod ? { sinceLeakPeriod: 'true' } : {}),
       });
     }

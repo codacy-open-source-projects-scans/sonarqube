@@ -29,10 +29,10 @@ import {
 } from 'design-system';
 import React, { useEffect, useMemo, useState } from 'react';
 import { Helmet } from 'react-helmet-async';
+import HelpTooltip from '~sonar-aligned/components/controls/HelpTooltip';
 import { getIdentityProviders } from '../../api/users';
 import GitHubSynchronisationWarning from '../../app/components/GitHubSynchronisationWarning';
 import GitLabSynchronisationWarning from '../../app/components/GitLabSynchronisationWarning';
-import HelpTooltip from '../../components/controls/HelpTooltip';
 import ListFooter from '../../components/controls/ListFooter';
 import { ManagedFilter } from '../../components/controls/ManagedFilter';
 import Suggestions from '../../components/embed-docs-modal/Suggestions';

@@ -21,13 +21,16 @@ import classNames from 'classnames';
 import { InputSearch, Spinner, ToggleButton } from 'design-system';
 import { isEmpty, omit } from 'lodash';
 import * as React from 'react';
+import { withRouter } from '~sonar-aligned/components/hoc/withRouter';
+import { getBranchLikeQuery } from '~sonar-aligned/helpers/branch-like';
+import { ComponentQualifier } from '~sonar-aligned/types/component';
+import { Location, Router } from '~sonar-aligned/types/router';
 import { getTree } from '../../../api/components';
-import { Location, Router, withRouter } from '../../../components/hoc/withRouter';
-import { getBranchLikeQuery } from '../../../helpers/branch-like';
 import { KeyboardKeys } from '../../../helpers/keycodes';
 import { translate } from '../../../helpers/l10n';
+import { isPortfolioLike } from '../../../sonar-aligned/helpers/component';
 import { BranchLike } from '../../../types/branch-like';
-import { ComponentQualifier, isPortfolioLike, isView } from '../../../types/component';
+import { isView } from '../../../types/component';
 import { ComponentMeasure } from '../../../types/types';
 
 interface Props {

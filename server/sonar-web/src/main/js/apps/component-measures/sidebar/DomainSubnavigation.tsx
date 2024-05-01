@@ -25,7 +25,7 @@ import {
   SubnavigationSubheading,
 } from 'design-system';
 import React from 'react';
-import HelpTooltip from '../../../components/controls/HelpTooltip';
+import HelpTooltip from '~sonar-aligned/components/controls/HelpTooltip';
 import {
   getLocalizedCategoryMetricName,
   getLocalizedMetricDomain,

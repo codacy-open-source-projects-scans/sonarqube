@@ -21,9 +21,9 @@ import styled from '@emotion/styled';
 import classNames from 'classnames';
 import { ButtonSecondary, Spinner, themeColor } from 'design-system';
 import * as React from 'react';
+import { formatMeasure } from '~sonar-aligned/helpers/measures';
+import { MetricType } from '~sonar-aligned/types/metrics';
 import { translate, translateWithParameters } from '../../helpers/l10n';
-import { formatMeasure } from '../../helpers/measures';
-import { MetricType } from '../../types/metrics';
 
 export interface ListFooterProps {
   loadMoreAriaLabel?: string;

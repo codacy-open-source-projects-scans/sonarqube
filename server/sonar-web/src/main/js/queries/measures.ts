@@ -19,8 +19,8 @@
  */
 
 import { useQuery } from '@tanstack/react-query';
+import { BranchParameters } from '~sonar-aligned/types/branch-like';
 import { getAllTimeMachineData } from '../api/time-machine';
-import { BranchParameters } from '../types/branch-like';
 
 export function useAllMeasuresHistoryQuery(
   component: string | undefined,

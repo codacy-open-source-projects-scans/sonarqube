@@ -33,13 +33,14 @@ import {
 } from 'design-system';
 import * as React from 'react';
 import { useIntl } from 'react-intl';
+import { getBranchLikeQuery } from '~sonar-aligned/helpers/branch-like';
+import { formatMeasure } from '~sonar-aligned/helpers/measures';
+import { getComponentIssuesUrl } from '~sonar-aligned/helpers/urls';
+import { MetricKey, MetricType } from '~sonar-aligned/types/metrics';
 import { getLeakValue } from '../../../components/measure/utils';
 import { DEFAULT_ISSUES_QUERY } from '../../../components/shared/utils';
-import { getBranchLikeQuery } from '../../../helpers/branch-like';
-import { findMeasure, formatMeasure } from '../../../helpers/measures';
-import { getComponentIssuesUrl } from '../../../helpers/urls';
+import { findMeasure } from '../../../helpers/measures';
 import { PullRequest } from '../../../types/branch-like';
-import { MetricKey, MetricType } from '../../../types/metrics';
 import { QualityGateStatusConditionEnhanced } from '../../../types/quality-gates';
 import { Component, MeasureEnhanced } from '../../../types/types';
 import { IssueMeasuresCardInner } from '../components/IssueMeasuresCardInner';

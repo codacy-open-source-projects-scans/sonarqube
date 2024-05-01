@@ -32,7 +32,7 @@ import { sortBy } from 'lodash';
 import { OpenAPIV3 } from 'openapi-types';
 import React, { Fragment, useContext, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import HelpTooltip from '../../../components/controls/HelpTooltip';
+import HelpTooltip from '~sonar-aligned/components/controls/HelpTooltip';
 import { translate } from '../../../helpers/l10n';
 import { Dict } from '../../../types/types';
 import { InternalExtension } from '../types';

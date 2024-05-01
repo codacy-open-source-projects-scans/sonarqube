@@ -22,9 +22,9 @@ import { BlueGreySeparator, ButtonPrimary, ButtonSecondary } from 'design-system
 import React, { useEffect, useRef } from 'react';
 import { FormattedMessage } from 'react-intl';
 import { GroupBase } from 'react-select';
+import { useLocation, useRouter } from '~sonar-aligned/components/hoc/withRouter';
+import { throwGlobalError } from '~sonar-aligned/helpers/error';
 import { getComponents } from '../../../../api/project-management';
-import { useLocation, useRouter } from '../../../../components/hoc/withRouter';
-import { throwGlobalError } from '../../../../helpers/error';
 import { LabelValueSelectOption } from '../../../../helpers/search';
 import { useProjectBindingsQuery } from '../../../../queries/dop-translation';
 import { AlmKeys } from '../../../../types/alm-settings';
@@ -38,7 +38,6 @@ import { MonorepoProjectHeader } from './MonorepoProjectHeader';
 import { MonorepoProjectsList } from './MonorepoProjectsList';
 
 interface MonorepoProjectCreateProps {
-  canAdmin: boolean;
   dopSettings: DopSetting[];
   error: boolean;
   loadingBindings: boolean;

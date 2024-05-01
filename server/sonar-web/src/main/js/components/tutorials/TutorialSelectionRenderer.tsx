@@ -29,8 +29,8 @@ import {
   Title,
 } from 'design-system';
 import * as React from 'react';
+import { isMainBranch } from '~sonar-aligned/helpers/branch-like';
 import { AnalysisStatus } from '../../apps/overview/components/AnalysisStatus';
-import { isMainBranch } from '../../helpers/branch-like';
 import { translate } from '../../helpers/l10n';
 import { getProjectTutorialLocation } from '../../helpers/urls';
 import { useBranchesQuery } from '../../queries/branch';

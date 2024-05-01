@@ -21,16 +21,15 @@ import classNames from 'classnames';
 import { LargeCenteredLayout } from 'design-system';
 import * as React from 'react';
 import { Helmet } from 'react-helmet-async';
+import A11ySkipTarget from '~sonar-aligned/components/a11y/A11ySkipTarget';
+import { withRouter } from '~sonar-aligned/components/hoc/withRouter';
+import { Location, Router } from '~sonar-aligned/types/router';
 import { getDopSettings } from '../../../api/dop-translation';
-import withAppStateContext from '../../../app/components/app-state/withAppStateContext';
 import withAvailableFeatures, {
   WithAvailableFeaturesProps,
 } from '../../../app/components/available-features/withAvailableFeatures';
-import A11ySkipTarget from '../../../components/a11y/A11ySkipTarget';
-import { Location, Router, withRouter } from '../../../components/hoc/withRouter';
 import { translate } from '../../../helpers/l10n';
 import { AlmKeys, AlmSettingsInstance } from '../../../types/alm-settings';
-import { AppState } from '../../../types/appstate';
 import { DopSetting } from '../../../types/dop-translation';
 import { Feature } from '../../../types/features';
 import AlmBindingDefinitionForm from '../../settings/components/almIntegration/AlmBindingDefinitionForm';
@@ -45,7 +44,6 @@ import ManualProjectCreate from './manual/ManualProjectCreate';
 import { CreateProjectModes } from './types';
 
 export interface CreateProjectPageProps extends WithAvailableFeaturesProps {
-  appState: AppState;
   location: Location;
   router: Router;
 }
@@ -53,7 +51,7 @@ export interface CreateProjectPageProps extends WithAvailableFeaturesProps {
 interface State {
   azureSettings: DopSetting[];
   bitbucketSettings: AlmSettingsInstance[];
-  bitbucketCloudSettings: AlmSettingsInstance[];
+  bitbucketCloudSettings: DopSetting[];
   githubSettings: DopSetting[];
   gitlabSettings: DopSetting[];
   loading: boolean;
@@ -197,9 +195,7 @@ export class CreateProjectPage extends React.PureComponent<CreateProjectPageProp
           bitbucketSettings: dopSettings
             .filter(({ type }) => type === AlmKeys.BitbucketServer)
             .map(({ key, type, url }) => ({ alm: type, key, url })),
-          bitbucketCloudSettings: dopSettings
-            .filter(({ type }) => type === AlmKeys.BitbucketCloud)
-            .map(({ key, type, url }) => ({ alm: type, key, url })),
+          bitbucketCloudSettings: dopSettings.filter(({ type }) => type === AlmKeys.BitbucketCloud),
           githubSettings: dopSettings.filter(({ type }) => type === AlmKeys.GitHub),
           gitlabSettings: dopSettings.filter(({ type }) => type === AlmKeys.GitLab),
           loading: false,
@@ -254,11 +250,7 @@ export class CreateProjectPage extends React.PureComponent<CreateProjectPageProp
   };
 
   renderProjectCreation(mode?: CreateProjectModes) {
-    const {
-      appState: { canAdmin },
-      location,
-      router,
-    } = this.props;
+    const { location, router } = this.props;
     const {
       azureSettings,
       bitbucketSettings,
@@ -274,7 +266,6 @@ export class CreateProjectPage extends React.PureComponent<CreateProjectPageProp
       case CreateProjectModes.AzureDevOps: {
         return (
           <AzureProjectCreate
-            canAdmin={!!canAdmin}
             dopSettings={azureSettings}
             isLoadingBindings={loading}
             onProjectSetupDone={this.handleProjectSetupDone}
@@ -284,7 +275,6 @@ export class CreateProjectPage extends React.PureComponent<CreateProjectPageProp
       case CreateProjectModes.BitbucketServer: {
         return (
           <BitbucketProjectCreate
-            canAdmin={!!canAdmin}
             almInstances={bitbucketSettings}
             loadingBindings={loading}
             location={location}
@@ -296,19 +286,15 @@ export class CreateProjectPage extends React.PureComponent<CreateProjectPageProp
       case CreateProjectModes.BitbucketCloud: {
         return (
           <BitbucketCloudProjectCreate
-            canAdmin={!!canAdmin}
-            loadingBindings={loading}
-            location={location}
+            dopSettings={bitbucketCloudSettings}
+            isLoadingBindings={loading}
             onProjectSetupDone={this.handleProjectSetupDone}
-            router={router}
-            almInstances={bitbucketCloudSettings}
           />
         );
       }
       case CreateProjectModes.GitHub: {
         return (
           <GitHubProjectCreate
-            canAdmin={!!canAdmin}
             isLoadingBindings={loading}
             onProjectSetupDone={this.handleProjectSetupDone}
             dopSettings={githubSettings}
@@ -318,7 +304,6 @@ export class CreateProjectPage extends React.PureComponent<CreateProjectPageProp
       case CreateProjectModes.GitLab: {
         return (
           <GitlabProjectCreate
-            canAdmin={!!canAdmin}
             dopSettings={gitlabSettings}
             isLoadingBindings={loading}
             onProjectSetupDone={this.handleProjectSetupDone}
@@ -397,4 +382,4 @@ export class CreateProjectPage extends React.PureComponent<CreateProjectPageProp
   }
 }
 
-export default withRouter(withAvailableFeatures(withAppStateContext(CreateProjectPage)));
+export default withRouter(withAvailableFeatures(CreateProjectPage));

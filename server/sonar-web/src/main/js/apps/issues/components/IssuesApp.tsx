@@ -17,7 +17,6 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-
 import styled from '@emotion/styled';
 import { Checkbox, Spinner } from '@sonarsource/echoes-react';
 import classNames from 'classnames';
@@ -35,11 +34,15 @@ import { keyBy, omit, without } from 'lodash';
 import * as React from 'react';
 import { Helmet } from 'react-helmet-async';
 import { FormattedMessage } from 'react-intl';
+import A11ySkipTarget from '~sonar-aligned/components/a11y/A11ySkipTarget';
+import { withRouter } from '~sonar-aligned/components/hoc/withRouter';
+import { getBranchLikeQuery } from '~sonar-aligned/helpers/branch-like';
+import { ComponentQualifier } from '~sonar-aligned/types/component';
+import { Location, RawQuery, Router } from '~sonar-aligned/types/router';
 import { listIssues, searchIssues } from '../../../api/issues';
 import { getRuleDetails } from '../../../api/rules';
 import withComponentContext from '../../../app/components/componentContext/withComponentContext';
 import withCurrentUserContext from '../../../app/components/current-user/withCurrentUserContext';
-import A11ySkipTarget from '../../../components/a11y/A11ySkipTarget';
 import EmptySearch from '../../../components/common/EmptySearch';
 import ScreenPositionHelper from '../../../components/common/ScreenPositionHelper';
 import ListFooter from '../../../components/controls/ListFooter';
@@ -48,16 +51,10 @@ import withIndexationContext, {
   WithIndexationContextProps,
 } from '../../../components/hoc/withIndexationContext';
 import withIndexationGuard from '../../../components/hoc/withIndexationGuard';
-import { Location, Router, withRouter } from '../../../components/hoc/withRouter';
 import IssueTabViewer from '../../../components/rules/IssueTabViewer';
 import '../../../components/search-navigator.css';
 import { DEFAULT_ISSUES_QUERY } from '../../../components/shared/utils';
-import {
-  fillBranchLike,
-  getBranchLikeQuery,
-  isPullRequest,
-  isSameBranchLike,
-} from '../../../helpers/branch-like';
+import { fillBranchLike, isPullRequest, isSameBranchLike } from '../../../helpers/branch-like';
 import handleRequiredAuthentication from '../../../helpers/handleRequiredAuthentication';
 import { parseIssueFromResponse } from '../../../helpers/issues';
 import { isInput, isShortcut } from '../../../helpers/keyboardEventHelpers';
@@ -65,8 +62,9 @@ import { KeyboardKeys } from '../../../helpers/keycodes';
 import { translate, translateWithParameters } from '../../../helpers/l10n';
 import { serializeDate } from '../../../helpers/query';
 import { withBranchLikes } from '../../../queries/branch';
+import { isPortfolioLike } from '../../../sonar-aligned/helpers/component';
 import { BranchLike } from '../../../types/branch-like';
-import { ComponentQualifier, isPortfolioLike, isProject } from '../../../types/component';
+import { isProject } from '../../../types/component';
 import {
   ASSIGNEE_ME,
   Facet,
@@ -76,7 +74,7 @@ import {
   ReferencedRule,
 } from '../../../types/issues';
 import { SecurityStandard } from '../../../types/security';
-import { Component, Dict, Issue, Paging, RawQuery, RuleDetails } from '../../../types/types';
+import { Component, Dict, Issue, Paging, RuleDetails } from '../../../types/types';
 import { CurrentUser, UserBase } from '../../../types/users';
 import * as actions from '../actions';
 import SubnavigationIssuesList from '../issues-subnavigation/SubnavigationIssuesList';

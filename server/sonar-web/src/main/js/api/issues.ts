@@ -17,17 +17,10 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { throwGlobalError } from '~sonar-aligned/helpers/error';
+import { getJSON } from '~sonar-aligned/helpers/request';
 import getCoverageStatus from '../components/SourceViewer/helpers/getCoverageStatus';
-import { throwGlobalError } from '../helpers/error';
-import {
-  get,
-  getJSON,
-  HttpStatus,
-  parseJSON,
-  post,
-  postJSON,
-  RequestData,
-} from '../helpers/request';
+import { get, HttpStatus, parseJSON, post, postJSON, RequestData } from '../helpers/request';
 import { FacetName, IssueResponse, ListIssuesResponse, RawIssuesResponse } from '../types/issues';
 import { Dict, FacetValue, IssueChangelog, SnippetsByComponent, SourceLine } from '../types/types';
 

@@ -19,13 +19,15 @@
  */
 import {
   ContentCell,
-  MetricsEnum,
   MetricsRatingBadge,
   NumericalCell,
   QualityGateIndicator,
   RatingCell,
+  RatingEnum,
 } from 'design-system';
 import * as React from 'react';
+import { formatMeasure } from '~sonar-aligned/helpers/measures';
+import { MetricKey, MetricType } from '~sonar-aligned/types/metrics';
 import Measure from '../../../components/measure/Measure';
 import { getLeakValue } from '../../../components/measure/utils';
 import {
@@ -35,11 +37,9 @@ import {
 import { translateWithParameters } from '../../../helpers/l10n';
 import {
   areCCTMeasuresComputed as areCCTMeasuresComputedFn,
-  formatMeasure,
   isDiffMetric,
 } from '../../../helpers/measures';
 import { isApplication, isProject } from '../../../types/component';
-import { MetricKey, MetricType } from '../../../types/metrics';
 import { Metric, Status, ComponentMeasure as TypeComponentMeasure } from '../../../types/types';
 
 interface Props {
@@ -96,7 +96,7 @@ export default function ComponentMeasure(props: Props) {
         <RatingCell className="sw-whitespace-nowrap">
           <MetricsRatingBadge
             label={value ?? '—'}
-            rating={formatMeasure(value, MetricType.Rating) as MetricsEnum}
+            rating={formatMeasure(value, MetricType.Rating) as RatingEnum}
           />
         </RatingCell>
       );

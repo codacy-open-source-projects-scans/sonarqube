@@ -17,12 +17,13 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { MetricsLabel, MetricsRatingBadge, Note } from 'design-system';
+import { MetricsRatingBadge, Note, RatingLabel } from 'design-system';
 import React from 'react';
+import { formatMeasure } from '~sonar-aligned/helpers/measures';
+import { MetricType } from '~sonar-aligned/types/metrics';
 import Measure from '../../../components/measure/Measure';
 import { translate, translateWithParameters } from '../../../helpers/l10n';
-import { formatMeasure, isDiffMetric } from '../../../helpers/measures';
-import { MetricType } from '../../../types/metrics';
+import { isDiffMetric } from '../../../helpers/measures';
 import { MeasureEnhanced } from '../../../types/types';
 
 interface Props {
@@ -48,7 +49,7 @@ export default function SubnavigationMeasureValue({ measure }: Readonly<Props>) 
                 ? translateWithParameters('metric.has_rating_X', formatted)
                 : translate('metric.no_rating')
             }
-            rating={formatted as MetricsLabel}
+            rating={formatted as RatingLabel}
           />
         }
         metricKey={measure.metric.key}

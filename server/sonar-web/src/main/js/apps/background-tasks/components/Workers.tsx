@@ -25,8 +25,8 @@ import {
   Spinner,
 } from 'design-system';
 import * as React from 'react';
+import HelpTooltip from '~sonar-aligned/components/controls/HelpTooltip';
 import { getWorkers } from '../../../api/ce';
-import HelpTooltip from '../../../components/controls/HelpTooltip';
 import Tooltip from '../../../components/controls/Tooltip';
 import { translate } from '../../../helpers/l10n';
 import NoWorkersSupportPopup from './NoWorkersSupportPopup';

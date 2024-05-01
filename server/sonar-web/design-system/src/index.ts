@@ -19,5 +19,6 @@
  */
 export * from './components';
 export * from './helpers';
+export * from './sonar-aligned';
 export * from './theme';
 export * from './types';

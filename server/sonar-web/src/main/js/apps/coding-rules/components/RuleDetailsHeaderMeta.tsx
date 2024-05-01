@@ -19,7 +19,7 @@
  */
 import { Badge, HelperHintIcon, Link, Note, SeparatorCircleIcon } from 'design-system';
 import React from 'react';
-import HelpTooltip from '../../../components/controls/HelpTooltip';
+import HelpTooltip from '~sonar-aligned/components/controls/HelpTooltip';
 import Tooltip from '../../../components/controls/Tooltip';
 import { translate, translateWithParameters } from '../../../helpers/l10n';
 import { getRuleUrl } from '../../../helpers/urls';

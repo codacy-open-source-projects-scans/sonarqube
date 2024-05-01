@@ -17,28 +17,25 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { CoverageIndicator, DuplicationsIndicator, MetricsRatingBadge } from 'design-system';
+import {
+  CoverageIndicator,
+  DuplicationsIndicator,
+  MetricsRatingBadge,
+  RatingEnum,
+} from 'design-system';
 import * as React from 'react';
-import { formatMeasure } from '../../helpers/measures';
-import { MetricKey, MetricType } from '../../types/metrics';
+import { formatMeasure } from '~sonar-aligned/helpers/measures';
+import { MetricKey, MetricType } from '~sonar-aligned/types/metrics';
 import Measure from './Measure';
 import { duplicationRatingConverter } from './utils';
 
 interface Props {
   className?: string;
-  decimals?: number | null;
+  decimals?: number;
   metricKey: string;
   metricType: string;
   small?: boolean;
   value: string | undefined;
-}
-
-enum MetricsEnum {
-  A = 'A',
-  B = 'B',
-  C = 'C',
-  D = 'D',
-  E = 'E',
 }
 
 export default function MeasureIndicator(props: Props) {
@@ -66,7 +63,7 @@ export default function MeasureIndicator(props: Props) {
 
   const ratingFormatted = formatMeasure(value, MetricType.Rating);
   const ratingComponent = (
-    <MetricsRatingBadge rating={ratingFormatted as MetricsEnum} label={ratingFormatted} />
+    <MetricsRatingBadge rating={ratingFormatted as RatingEnum} label={ratingFormatted} />
   );
 
   return <Measure {...props} ratingComponent={ratingComponent} />;

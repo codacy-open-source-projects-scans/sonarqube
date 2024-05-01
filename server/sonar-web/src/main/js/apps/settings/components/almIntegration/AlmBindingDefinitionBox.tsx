@@ -29,8 +29,8 @@ import {
 } from 'design-system';
 import * as React from 'react';
 import { FormattedMessage } from 'react-intl';
+import HelpTooltip from '~sonar-aligned/components/controls/HelpTooltip';
 import DocumentationLink from '../../../../components/common/DocumentationLink';
-import HelpTooltip from '../../../../components/controls/HelpTooltip';
 import Tooltip from '../../../../components/controls/Tooltip';
 import { ALM_DOCUMENTATION_PATHS, IMPORT_COMPATIBLE_ALMS } from '../../../../helpers/constants';
 import { getEdition, getEditionUrl } from '../../../../helpers/editions';

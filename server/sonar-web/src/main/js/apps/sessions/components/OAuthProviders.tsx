@@ -19,7 +19,7 @@
  */
 import { BasicSeparator, ThirdPartyButton } from 'design-system';
 import * as React from 'react';
-import HelpTooltip from '../../../components/controls/HelpTooltip';
+import HelpTooltip from '~sonar-aligned/components/controls/HelpTooltip';
 import { translateWithParameters } from '../../../helpers/l10n';
 import { getBaseUrl } from '../../../helpers/system';
 import { IdentityProvider } from '../../../types/types';

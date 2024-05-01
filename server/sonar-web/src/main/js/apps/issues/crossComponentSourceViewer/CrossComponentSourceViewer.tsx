@@ -22,6 +22,8 @@ import { Spinner } from '@sonarsource/echoes-react';
 import { FlagMessage } from 'design-system';
 import { findLastIndex, keyBy } from 'lodash';
 import * as React from 'react';
+import { getBranchLikeQuery } from '~sonar-aligned/helpers/branch-like';
+import { throwGlobalError } from '~sonar-aligned/helpers/error';
 import { getComponentForSourceViewer, getDuplications, getSources } from '../../../api/components';
 import { getIssueFlowSnippets } from '../../../api/issues';
 import { SourceViewerContext } from '../../../components/SourceViewer/SourceViewerContext';
@@ -36,8 +38,6 @@ import {
   issuesByComponentAndLine,
 } from '../../../components/SourceViewer/helpers/indexing';
 import { WorkspaceContext } from '../../../components/workspace/context';
-import { getBranchLikeQuery } from '../../../helpers/branch-like';
-import { throwGlobalError } from '../../../helpers/error';
 import { translate } from '../../../helpers/l10n';
 import { HttpStatus } from '../../../helpers/request';
 import { BranchLike } from '../../../types/branch-like';

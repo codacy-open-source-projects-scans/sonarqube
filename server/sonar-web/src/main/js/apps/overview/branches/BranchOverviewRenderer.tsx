@@ -25,15 +25,16 @@ import {
   PageContentFontWrapper,
 } from 'design-system';
 import * as React from 'react';
-import A11ySkipTarget from '../../../components/a11y/A11ySkipTarget';
-import { useLocation, useRouter } from '../../../components/hoc/withRouter';
+import A11ySkipTarget from '~sonar-aligned/components/a11y/A11ySkipTarget';
+import { useLocation, useRouter } from '~sonar-aligned/components/hoc/withRouter';
+import { ComponentQualifier } from '~sonar-aligned/types/component';
 import AnalysisMissingInfoMessage from '../../../components/shared/AnalysisMissingInfoMessage';
 import { parseDate } from '../../../helpers/dates';
 import { areCCTMeasuresComputed, isDiffMetric } from '../../../helpers/measures';
 import { CodeScope } from '../../../helpers/urls';
+import { isPortfolioLike } from '../../../sonar-aligned/helpers/component';
 import { ApplicationPeriod } from '../../../types/application';
 import { Branch } from '../../../types/branch-like';
-import { ComponentQualifier, isPortfolioLike } from '../../../types/component';
 import { Analysis, GraphType, MeasureHistory } from '../../../types/project-activity';
 import { QualityGateStatus } from '../../../types/quality-gates';
 import { Component, MeasureEnhanced, Metric, Period, QualityGate } from '../../../types/types';

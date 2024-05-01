@@ -19,12 +19,14 @@
  */
 import { omit } from 'lodash';
 import { To } from 'react-router-dom';
+import { ComponentQualifier } from '~sonar-aligned/types/component';
+import { MetricKey, MetricType } from '~sonar-aligned/types/metrics';
+import { Location, Router } from '~sonar-aligned/types/router';
 import { CompareResponse } from '../api/quality-profiles';
 import { RuleDescriptionSections } from '../apps/coding-rules/rule';
 import { REST_RULE_KEYS_TO_OLD_KEYS } from '../apps/coding-rules/utils';
 import { Exporter, Profile, ProfileChangelogEvent } from '../apps/quality-profiles/types';
 import { LogsLevels } from '../apps/system/utils';
-import { Location, Router } from '../components/hoc/withRouter';
 import { AppState } from '../types/appstate';
 import {
   CleanCodeAttribute,
@@ -33,7 +35,6 @@ import {
   SoftwareQuality,
 } from '../types/clean-code-taxonomy';
 import { RuleRepository } from '../types/coding-rules';
-import { ComponentQualifier } from '../types/component';
 import { EditionKey } from '../types/editions';
 import {
   IssueDeprecatedStatus,
@@ -44,7 +45,6 @@ import {
   RawIssue,
 } from '../types/issues';
 import { Language } from '../types/languages';
-import { MetricKey, MetricType } from '../types/metrics';
 import { Notification } from '../types/notifications';
 import { DumpStatus, DumpTask } from '../types/project-dump';
 import { TaskStatuses } from '../types/tasks';
@@ -592,9 +592,12 @@ export function mockRouter(
     goBack: jest.fn(),
     goForward: jest.fn(),
     isActive: jest.fn(),
+    navigate: jest.fn(),
     push: jest.fn(),
     replace: jest.fn(),
+    searchParams: new URLSearchParams(),
     setRouteLeaveHook: jest.fn(),
+    setSearchParams: jest.fn(),
     ...overrides,
   } as Router;
 }
