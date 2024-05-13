@@ -18,7 +18,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 import { screen } from '@testing-library/react';
-import { byLabelText, byRole, byText } from '../../helpers/testSelector';
+import { byLabelText, byRole, byText } from '~sonar-aligned/helpers/testSelector';
 import { BuildTools, GradleBuildDSL, OSs, TutorialModes } from './types';
 
 const CI_TRANSLATE_MAP: Partial<Record<TutorialModes, string>> = {
@@ -50,7 +50,7 @@ export function getCommonNodes(ci: TutorialModes) {
     linkToRepo: byRole('link', {
       name: `onboarding.tutorial.with.${CI_TRANSLATE_MAP[ci]}.${
         ci === TutorialModes.GitHubActions ? 'secret' : 'variables'
-      }.intro.link open_in_new_window`,
+      }.intro.link open_in_new_tab`,
     }),
     allSetSentence: byText('onboarding.tutorial.ci_outro.done'),
   };

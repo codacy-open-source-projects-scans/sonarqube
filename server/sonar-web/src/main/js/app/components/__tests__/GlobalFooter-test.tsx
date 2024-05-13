@@ -19,10 +19,10 @@
  */
 import { addDays, subDays } from 'date-fns';
 import * as React from 'react';
+import { byRole, byText } from '~sonar-aligned/helpers/testSelector';
 import SystemServiceMock from '../../../api/mocks/SystemServiceMock';
 import { mockAppState } from '../../../helpers/testMocks';
 import { renderComponent } from '../../../helpers/testReactTestingUtils';
-import { byRole, byText } from '../../../helpers/testSelector';
 import { AppState } from '../../../types/appstate';
 import { EditionKey } from '../../../types/editions';
 import { FCProps } from '../../../types/misc';
@@ -132,9 +132,9 @@ const ui = {
   pluginsLink: byRole('link', { name: 'opens_in_new_window footer.plugins' }),
   apiLink: byRole('link', { name: 'footer.web_api' }),
   ltaDocumentationLinkActive: byRole('link', {
-    name: `footer.version.status.active open_in_new_window`,
+    name: `footer.version.status.active open_in_new_tab`,
   }),
   ltaDocumentationLinkInactive: byRole('link', {
-    name: `footer.version.status.inactive open_in_new_window`,
+    name: `footer.version.status.inactive open_in_new_tab`,
   }),
 };

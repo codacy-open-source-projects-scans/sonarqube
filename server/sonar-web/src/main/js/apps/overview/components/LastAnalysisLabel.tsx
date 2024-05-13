@@ -30,7 +30,7 @@ export default function LastAnalysisLabel({ analysisDate }: Readonly<Props>) {
   const intl = useIntl();
 
   return analysisDate ? (
-    <span>
+    <span className="sw-pl-4" data-spotlight-id="cayc-promotion-2">
       {intl.formatMessage(
         {
           id: 'overview.last_analysis_x',

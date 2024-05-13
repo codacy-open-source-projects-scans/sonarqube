@@ -22,6 +22,8 @@ export * from './Card';
 export { DismissableFlagMessage, FlagMessage } from './FlagMessage';
 export * from './MetricsRatingBadge';
 export * from './Table';
+export * from './Text';
 export * from './ToggleButton';
 export * from './buttons';
+export * from './input';
 export * from './typography';

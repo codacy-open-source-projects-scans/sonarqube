@@ -20,9 +20,9 @@
 import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { first } from 'lodash';
+import { byRole, byText } from '~sonar-aligned/helpers/testSelector';
 import SystemServiceMock from '../../../../api/mocks/SystemServiceMock';
 import { renderAppRoutes } from '../../../../helpers/testReactTestingUtils';
-import { byRole, byText } from '../../../../helpers/testSelector';
 import { AppState } from '../../../../types/appstate';
 import routes from '../../routes';
 import { LogsLevels } from '../../utils';
@@ -151,7 +151,7 @@ function getPageObjects() {
     versionLabel: (version?: string) =>
       version ? byText(/footer\.version\s*(\d.\d)/) : byText(/footer\.version/),
     ltaDocumentationLinkActive: byRole('link', {
-      name: `footer.version.status.active open_in_new_window`,
+      name: `footer.version.status.active open_in_new_tab`,
     }),
   };
 

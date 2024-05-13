@@ -34,5 +34,5 @@ public interface MigrationStepsExecutor {
   /**
    * @throws MigrationStepExecutionException at the first failing migration step execution
    */
-  void execute(List<RegisteredMigrationStep> steps);
+  void execute(List<RegisteredMigrationStep> steps, MigrationStatusListener listener);
 }

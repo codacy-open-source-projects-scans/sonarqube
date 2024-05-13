@@ -26,7 +26,6 @@ export * from './FormField';
 export * from './InputField';
 export * from './InputMultiSelect';
 export * from './InputSearch';
-export * from './InputSelect';
 export * from './MultiSelectMenu';
 export * from './RadioButton';
 export * from './SearchSelect';

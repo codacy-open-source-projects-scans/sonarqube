@@ -19,7 +19,7 @@
  */
 package org.sonar.server.platform.db.migration;
 
-import java.util.Date;
+import java.time.Instant;
 import java.util.concurrent.Semaphore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -27,6 +27,7 @@ import org.sonar.core.util.logs.Profiler;
 import org.sonar.server.platform.Platform;
 import org.sonar.server.platform.db.migration.DatabaseMigrationState.Status;
 import org.sonar.server.platform.db.migration.engine.MigrationEngine;
+import org.sonar.server.platform.db.migration.step.MigrationStatusListenerImpl;
 import org.sonar.server.platform.db.migration.step.MigrationStepExecutionException;
 
 /**
@@ -72,7 +73,7 @@ public class DatabaseMigrationImpl implements DatabaseMigration {
 
   private void doDatabaseMigration() {
     migrationState.setStatus(Status.RUNNING);
-    migrationState.setStartedAt(new Date());
+    migrationState.setStartedAt(Instant.now());
     migrationState.setError(null);
     Profiler profiler = Profiler.create(LOGGER);
     try {
@@ -102,7 +103,7 @@ public class DatabaseMigrationImpl implements DatabaseMigration {
   private void doUpgradeDb() {
     Profiler profiler = Profiler.createIfTrace(LOGGER);
     profiler.startTrace("Starting DB Migration");
-    migrationEngine.execute();
+    migrationEngine.execute(new MigrationStatusListenerImpl(migrationState));
     profiler.stopTrace("DB Migration ended");
   }
 

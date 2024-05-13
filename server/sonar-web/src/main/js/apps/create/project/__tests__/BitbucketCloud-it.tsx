@@ -22,12 +22,12 @@ import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import * as React from 'react';
 import selectEvent from 'react-select-event';
+import { byLabelText, byRole, byText } from '~sonar-aligned/helpers/testSelector';
 import { searchForBitbucketCloudRepositories } from '../../../../api/alm-integrations';
 import AlmIntegrationsServiceMock from '../../../../api/mocks/AlmIntegrationsServiceMock';
 import DopTranslationServiceMock from '../../../../api/mocks/DopTranslationServiceMock';
 import NewCodeDefinitionServiceMock from '../../../../api/mocks/NewCodeDefinitionServiceMock';
 import { renderApp } from '../../../../helpers/testReactTestingUtils';
-import { byLabelText, byRole, byText } from '../../../../helpers/testSelector';
 import { Feature } from '../../../../types/features';
 import CreateProjectPage from '../CreateProjectPage';
 import { REPOSITORY_PAGE_SIZE } from '../constants';
@@ -41,28 +41,28 @@ let dopTranslationHandler: DopTranslationServiceMock;
 let newCodePeriodHandler: NewCodeDefinitionServiceMock;
 
 const ui = {
-  cancelButton: byRole('button', { name: 'cancel' }),
   bitbucketCloudCreateProjectButton: byText(
     'onboarding.create_project.select_method.bitbucketcloud',
   ),
   bitbucketCloudOnboardingTitle: byRole('heading', {
     name: 'onboarding.create_project.bitbucketcloud.title',
   }),
+  cancelButton: byRole('button', { name: 'cancel' }),
+  instanceSelector: byLabelText(/alm.configuration.selector.label/),
   monorepoSetupLink: byRole('link', {
     name: 'onboarding.create_project.subtitle_monorepo_setup_link',
   }),
   monorepoTitle: byRole('heading', {
     name: 'onboarding.create_project.monorepo.titlealm.bitbucketcloud',
   }),
+  password: byRole('textbox', {
+    name: /onboarding\.create_project\.bitbucket_cloud\.enter_password/,
+  }),
   personalAccessTokenInput: byRole('textbox', {
     name: /onboarding.create_project.enter_pat/,
   }),
-  instanceSelector: byLabelText(/alm.configuration.selector.label/),
   userName: byRole('textbox', {
     name: /onboarding\.create_project\.bitbucket_cloud\.enter_username/,
-  }),
-  password: byRole('textbox', {
-    name: /onboarding\.create_project\.bitbucket_cloud\.enter_password/,
   }),
 };
 

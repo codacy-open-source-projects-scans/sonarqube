@@ -20,8 +20,8 @@
 import { QualityGateIndicator, TextError } from 'design-system';
 import React from 'react';
 import { useIntl } from 'react-intl';
+import { Status } from '~sonar-aligned/types/common';
 import { translate } from '../../../helpers/l10n';
-import { Status } from '../../../types/types';
 
 interface Props {
   status: Status;
@@ -33,7 +33,7 @@ export default function QualityGateStatusHeader(props: Props) {
   const intl = useIntl();
 
   return (
-    <div className="sw-flex sw-items-center sw-mb-4">
+    <div className="sw-flex sw-items-center sw-mb-4" data-spotlight-id="cayc-promotion-3">
       <QualityGateIndicator status={status} className="sw-mr-2" size="xl" />
       <div className="sw-flex sw-flex-col">
         <span className="sw-heading-lg">{translate('metric.level', status)}</span>
