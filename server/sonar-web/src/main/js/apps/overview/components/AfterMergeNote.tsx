@@ -17,28 +17,26 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-
+import { Note } from 'design-system';
 import React from 'react';
-import { useIntl } from 'react-intl';
-import DateFromNow from '../../../components/intl/DateFromNow';
+import { FormattedMessage } from 'react-intl';
+import { formatMeasure } from '~sonar-aligned/helpers/measures';
+import { MetricKey, MetricType } from '~sonar-aligned/types/metrics';
+import { findMeasure } from '../../../helpers/measures';
+import { MeasureEnhanced } from '../../../types/types';
 
 interface Props {
-  analysisDate?: string;
+  measures: MeasureEnhanced[];
+  overallMetric: MetricKey;
 }
 
-export default function LastAnalysisLabel({ analysisDate }: Readonly<Props>) {
-  const intl = useIntl();
+export default function AfterMergeNote({ measures, overallMetric }: Readonly<Props>) {
+  const afterMergeValue = findMeasure(measures, overallMetric)?.value;
 
-  return analysisDate ? (
-    <span>
-      {intl.formatMessage(
-        {
-          id: 'overview.last_analysis_x',
-        },
-        {
-          date: <DateFromNow className="sw-body-sm-highlight" date={analysisDate} />,
-        },
-      )}
-    </span>
+  return afterMergeValue ? (
+    <Note className="sw-mt-2 sw-body-xs sw-inline-block">
+      <strong className="sw-mr-1">{formatMeasure(afterMergeValue, MetricType.Percent)}</strong>
+      <FormattedMessage id="component_measures.facet_category.overall_category.estimated" />
+    </Note>
   ) : null;
 }
