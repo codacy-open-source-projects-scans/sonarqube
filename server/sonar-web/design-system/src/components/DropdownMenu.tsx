@@ -20,7 +20,7 @@
 import { css } from '@emotion/react';
 import styled from '@emotion/styled';
 import classNames from 'classnames';
-import React from 'react';
+import React, { ForwardedRef, forwardRef } from 'react';
 import tw from 'twin.macro';
 import { INPUT_SIZES } from '../helpers/constants';
 import { themeBorder, themeColor, themeContrast } from '../helpers/theme';
@@ -138,22 +138,26 @@ interface ItemButtonProps extends ListItemProps {
   onClick: React.MouseEventHandler<HTMLButtonElement>;
 }
 
-export function ItemButton(props: ItemButtonProps) {
-  const { children, className, disabled, icon, innerRef, onClick, selected, ...liProps } = props;
-  return (
-    <li ref={innerRef} role="none" {...liProps}>
-      <ItemButtonStyled
-        className={classNames(className, { disabled, selected })}
-        disabled={disabled}
-        onClick={onClick}
-        role="menuitem"
-      >
-        {icon}
-        {children}
-      </ItemButtonStyled>
-    </li>
-  );
-}
+export const ItemButton = forwardRef(
+  (props: ItemButtonProps, ref: ForwardedRef<HTMLButtonElement>) => {
+    const { children, className, disabled, icon, innerRef, onClick, selected, ...liProps } = props;
+    return (
+      <li ref={innerRef} role="none" {...liProps}>
+        <ItemButtonStyled
+          className={classNames(className, { disabled, selected })}
+          disabled={disabled}
+          onClick={onClick}
+          ref={ref}
+          role="menuitem"
+        >
+          {icon}
+          {children}
+        </ItemButtonStyled>
+      </li>
+    );
+  },
+);
+ItemButton.displayName = 'ItemButton';
 
 export const ItemDangerButton = styled(ItemButton)`
   --color: ${themeContrast('dropdownMenuDanger')};
@@ -209,7 +213,7 @@ export function ItemCopy(props: ItemCopyProps) {
   return (
     <ClipboardBase>
       {({ setCopyButton, copySuccess }) => (
-        <Tooltip overlay={tooltipOverlay} visible={copySuccess}>
+        <Tooltip content={tooltipOverlay} visible={copySuccess}>
           <li role="none">
             <ItemButtonStyled
               className={className}

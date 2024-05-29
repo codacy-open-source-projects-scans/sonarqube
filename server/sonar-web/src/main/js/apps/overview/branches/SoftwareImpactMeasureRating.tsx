@@ -17,12 +17,13 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { MetricsRatingBadge, Tooltip } from 'design-system';
+import { Tooltip } from '@sonarsource/echoes-react';
+import { MetricsRatingBadge } from 'design-system';
 import * as React from 'react';
 import { useIntl } from 'react-intl';
 import { formatRating } from '../../../helpers/measures';
 import { SoftwareQuality } from '../../../types/clean-code-taxonomy';
-import SoftwareImpactRatingTooltip from './SoftwareImpactRatingTooltip';
+import SoftwareImpactRatingTooltipContent from './SoftwareImpactRatingTooltip';
 
 export interface SoftwareImpactMeasureRatingProps {
   softwareQuality: SoftwareQuality;
@@ -36,28 +37,31 @@ export function SoftwareImpactMeasureRating(props: Readonly<SoftwareImpactMeasur
 
   const rating = formatRating(value);
 
+  const additionalInfo = (
+    <SoftwareImpactRatingTooltipContent rating={rating} softwareQuality={softwareQuality} />
+  );
+
   return (
-    <Tooltip
-      overlay={SoftwareImpactRatingTooltip({
-        rating,
-        softwareQuality,
-      })}
-    >
-      <MetricsRatingBadge
-        size="md"
-        className="sw-text-sm"
-        rating={rating}
-        label={intl.formatMessage(
-          {
-            id: 'overview.project.software_impact.has_rating',
-          },
-          {
-            softwareQuality: intl.formatMessage({ id: `software_quality.${softwareQuality}` }),
-            rating,
-          },
-        )}
-      />
-    </Tooltip>
+    <>
+      <Tooltip content={additionalInfo}>
+        <MetricsRatingBadge
+          size="md"
+          className="sw-text-sm"
+          rating={rating}
+          label={intl.formatMessage(
+            {
+              id: 'overview.project.software_impact.has_rating',
+            },
+            {
+              softwareQuality: intl.formatMessage({ id: `software_quality.${softwareQuality}` }),
+              rating,
+            },
+          )}
+        />
+      </Tooltip>
+      {/* The badge is not interactive, so show the tooltip content for screen-readers only */}
+      <span className="sw-sr-only">{additionalInfo}</span>
+    </>
   );
 }
 
