@@ -17,6 +17,7 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+
 import {
   ButtonPrimary,
   FlagMessage,
@@ -27,13 +28,17 @@ import {
   LabelValueSelectOption,
   Modal,
   Note,
+  Switch,
 } from 'design-system';
 import * as React from 'react';
+import { useIntl } from 'react-intl';
 import { Profile } from '../../../api/quality-profiles';
+import { useAvailableFeatures } from '../../../app/components/available-features/withAvailableFeatures';
 import DocumentationLink from '../../../components/common/DocumentationLink';
-import { translate } from '../../../helpers/l10n';
+import { DocLink } from '../../../helpers/doc-links';
 import { sanitizeString } from '../../../helpers/sanitize';
 import { useActivateRuleMutation } from '../../../queries/quality-profiles';
+import { Feature } from '../../../types/features';
 import { IssueSeverity } from '../../../types/issues';
 import { Dict, Rule, RuleActivation, RuleDetails } from '../../../types/types';
 import { sortProfiles } from '../../quality-profiles/utils';
@@ -43,7 +48,7 @@ interface Props {
   activation?: RuleActivation;
   modalHeader: string;
   onClose: () => void;
-  onDone?: (severity: string) => Promise<void> | void;
+  onDone?: (severity: string, prioritizedRule: boolean) => Promise<void> | void;
   profiles: Profile[];
   rule: Rule | RuleDetails;
 }
@@ -58,9 +63,14 @@ const FORM_ID = 'rule-activation-modal-form';
 export default function ActivationFormModal(props: Readonly<Props>) {
   const { activation, rule, profiles, modalHeader } = props;
   const { mutate: activateRule, isPending: submitting } = useActivateRuleMutation((data) => {
-    props.onDone?.(data.severity as string);
+    props.onDone?.(data.severity as string, data.prioritizedRule as boolean);
     props.onClose();
   });
+  const { hasFeature } = useAvailableFeatures();
+  const intl = useIntl();
+  const [prioritizedRule, setPrioritizedRule] = React.useState(
+    activation ? activation.prioritizedRule : false,
+  );
 
   const profilesWithDepth = getQualityProfilesWithDepth(profiles, rule.lang);
   const [profile, setProfile] = React.useState(profilesWithDepth[0]);
@@ -81,6 +91,7 @@ export default function ActivationFormModal(props: Readonly<Props>) {
       params,
       rule: rule.key,
       severity,
+      prioritizedRule,
     };
     activateRule(data);
   };
@@ -103,31 +114,23 @@ export default function ActivationFormModal(props: Readonly<Props>) {
       isScrollable={makeScrollable}
       primaryButton={
         <ButtonPrimary disabled={submitting || activeInAllProfiles} form={FORM_ID} type="submit">
-          {isUpdateMode ? translate('save') : translate('coding_rules.activate')}
+          {isUpdateMode
+            ? intl.formatMessage({ id: 'save' })
+            : intl.formatMessage({ id: 'coding_rules.activate' })}
         </ButtonPrimary>
       }
-      secondaryButtonLabel={translate('cancel')}
+      secondaryButtonLabel={intl.formatMessage({ id: 'cancel' })}
       body={
         <form className="sw-pb-10" id={FORM_ID} onSubmit={handleFormSubmit}>
           {!isUpdateMode && activeInAllProfiles && (
             <FlagMessage className="sw-mb-2" variant="info">
-              {translate('coding_rules.active_in_all_profiles')}
+              {intl.formatMessage({ id: 'coding_rules.active_in_all_profiles' })}
             </FlagMessage>
           )}
 
-          <FlagMessage className="sw-mb-4" variant="info">
-            {translate('coding_rules.severity_deprecated')}
-            <DocumentationLink
-              className="sw-ml-2 sw-whitespace-nowrap"
-              to="/user-guide/clean-code/introduction/"
-            >
-              {translate('learn_more')}
-            </DocumentationLink>
-          </FlagMessage>
-
           <FormField
-            ariaLabel={translate('coding_rules.quality_profile')}
-            label={translate('coding_rules.quality_profile')}
+            ariaLabel={intl.formatMessage({ id: 'coding_rules.quality_profile' })}
+            label={intl.formatMessage({ id: 'coding_rules.quality_profile' })}
             htmlFor="coding-rules-quality-profile-select-input"
           >
             <InputSelect
@@ -146,9 +149,54 @@ export default function ActivationFormModal(props: Readonly<Props>) {
             />
           </FormField>
 
+          {hasFeature(Feature.PrioritizedRules) && (
+            <FormField
+              ariaLabel={intl.formatMessage({ id: 'coding_rules.prioritized_rule.title' })}
+              label={intl.formatMessage({ id: 'coding_rules.prioritized_rule.title' })}
+              description={
+                <div className="sw-text-xs">
+                  {intl.formatMessage({ id: 'coding_rules.prioritized_rule.note' })}
+                  <DocumentationLink
+                    className="sw-ml-2 sw-whitespace-nowrap"
+                    to={DocLink.InstanceAdminQualityProfilesPrioritizingRules}
+                  >
+                    {intl.formatMessage({ id: 'learn_more' })}
+                  </DocumentationLink>
+                </div>
+              }
+            >
+              <label
+                id="coding-rules-prioritized-rule"
+                className="sw-flex sw-items-center sw-gap-2"
+              >
+                <Switch
+                  labels={{
+                    on: intl.formatMessage(
+                      {
+                        id: 'coding_rules.prioritized_rule.label',
+                      },
+                      { state: 'on' },
+                    ),
+                    off: intl.formatMessage(
+                      {
+                        id: 'coding_rules.prioritized_rule.label',
+                      },
+                      { state: 'off' },
+                    ),
+                  }}
+                  onChange={setPrioritizedRule}
+                  value={prioritizedRule}
+                />
+                <span className="sw-text-xs">
+                  {intl.formatMessage({ id: 'coding_rules.prioritized_rule.switch_label' })}
+                </span>
+              </label>
+            </FormField>
+          )}
+
           <FormField
-            ariaLabel={translate('severity')}
-            label={translate('severity')}
+            ariaLabel={intl.formatMessage({ id: 'severity_deprecated' })}
+            label={intl.formatMessage({ id: 'severity_deprecated' })}
             htmlFor="coding-rules-severity-select"
           >
             <SeveritySelect
@@ -158,11 +206,22 @@ export default function ActivationFormModal(props: Readonly<Props>) {
               }}
               severity={severity}
             />
+            <FlagMessage className="sw-mb-4 sw-mt-2" variant="info">
+              <div>
+                {intl.formatMessage({ id: 'coding_rules.severity_deprecated' })}
+                <DocumentationLink
+                  className="sw-ml-2 sw-whitespace-nowrap"
+                  to={DocLink.CleanCodeIntroduction}
+                >
+                  {intl.formatMessage({ id: 'learn_more' })}
+                </DocumentationLink>
+              </div>
+            </FlagMessage>
           </FormField>
 
           {isCustomRule ? (
             <Note as="p" className="sw-my-4">
-              {translate('coding_rules.custom_rule.activation_notice')}
+              {intl.formatMessage({ id: 'coding_rules.custom_rule.activation_notice' })}
             </Note>
           ) : (
             rule.params?.map((param) => (

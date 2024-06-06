@@ -21,7 +21,7 @@ import { fireEvent, screen, within } from '@testing-library/react';
 import selectEvent from 'react-select-event';
 import CodingRulesServiceMock, { RULE_TAGS_MOCK } from '../../../api/mocks/CodingRulesServiceMock';
 import SettingsServiceMock from '../../../api/mocks/SettingsServiceMock';
-import { QP_2, RULE_1 } from '../../../api/mocks/data/ids';
+import { QP_2, RULE_1, RULE_10, RULE_9 } from '../../../api/mocks/data/ids';
 import { CLEAN_CODE_CATEGORIES, SOFTWARE_QUALITIES } from '../../../helpers/constants';
 import { mockCurrentUser, mockLoggedInUser } from '../../../helpers/testMocks';
 import {
@@ -29,6 +29,7 @@ import {
   CleanCodeAttributeCategory,
   SoftwareQuality,
 } from '../../../types/clean-code-taxonomy';
+import { Feature } from '../../../types/features';
 import { SettingsKey } from '../../../types/settings';
 import { getPageObjects, renderCodingRulesApp } from '../utils-tests';
 
@@ -142,7 +143,7 @@ describe('Rules app list', () => {
       expect(ui.getAllRuleListItems()).toHaveLength(1);
     });
 
-    it('filter by quality profile, tag and search by tag', async () => {
+    it('filter by quality profile, tag and search by tag, does not show prioritized rule', async () => {
       const { ui, user } = getPageObjects();
       renderCodingRulesApp(mockCurrentUser());
       await ui.appLoaded();
@@ -153,6 +154,8 @@ describe('Rules app list', () => {
       await user.click(ui.qpFacet.get());
       await user.click(ui.facetItem('QP Foo Java').get());
       expect(ui.getAllRuleListItems()).toHaveLength(1);
+
+      expect(ui.prioritizedRuleFacet.query()).not.toBeInTheDocument();
 
       // Filter by tag
       await user.click(ui.facetClear('clear-coding_rules.facet.qprofile').get()); // Clear quality profile facet
@@ -231,6 +234,34 @@ describe('Rules app list', () => {
       await user.type(ui.searchInput.get(), 'Hot hotspot');
       expect(ui.getAllRuleListItems()).toHaveLength(1);
     });
+
+    it('filter by quality profileand prioritizedRule', async () => {
+      const { ui, user } = getPageObjects();
+      renderCodingRulesApp(mockCurrentUser(), undefined, [Feature.PrioritizedRules]);
+      await ui.appLoaded();
+
+      expect(ui.getAllRuleListItems()).toHaveLength(11);
+
+      expect(ui.prioritizedRuleFacet.get()).toHaveAttribute('aria-disabled', 'true');
+
+      // Filter by quality profile
+      await user.click(ui.qpFacet.get());
+      await user.click(ui.facetItem('QP Bar Python').get());
+      expect(ui.getAllRuleListItems()).toHaveLength(4);
+
+      // Filter by prioritized rule
+      expect(ui.prioritizedRuleFacet.get()).not.toHaveAttribute('aria-disabled', 'true');
+      await user.click(ui.prioritizedRuleFacet.get());
+      await user.click(ui.facetItem('coding_rules.filters.prioritizedRule.true').get());
+      expect(ui.getAllRuleListItems()).toHaveLength(1);
+
+      // Filter by non-prioritized rule
+      await user.click(ui.facetItem('coding_rules.filters.prioritizedRule.false').get());
+      expect(ui.getAllRuleListItems()).toHaveLength(3);
+
+      await user.click(ui.facetClear('clear-coding_rules.facet.prioritizedRule').get());
+      expect(ui.getAllRuleListItems()).toHaveLength(4);
+    });
   });
 
   describe('bulk change', () => {
@@ -298,10 +329,10 @@ describe('Rules app list', () => {
     });
   });
 
-  it('can activate/deactivate specific rule for quality profile', async () => {
+  it('can activate/change/deactivate specific rule for quality profile', async () => {
     const { ui, user } = getPageObjects();
     rulesHandler.setIsAdmin();
-    renderCodingRulesApp(mockLoggedInUser());
+    renderCodingRulesApp(mockLoggedInUser(), undefined, [Feature.PrioritizedRules]);
     await ui.appLoaded();
 
     await user.click(ui.qpFacet.get());
@@ -314,20 +345,126 @@ describe('Rules app list', () => {
     await user.click(ui.qpInactiveRadio.get(ui.facetItem('QP Bar Python').get()));
     expect(ui.getAllRuleListItems()).toHaveLength(2);
     expect(ui.activateButton.getAll()).toHaveLength(2);
+    expect(ui.changeButton(QP_2).query()).not.toBeInTheDocument();
 
     // Activate Rule for qp
     await user.click(ui.activateButton.getAll()[0]);
+    expect(ui.selectValue.get(ui.activateQPDialog.get())).toHaveTextContent('severity.MAJOR');
+    expect(ui.prioritizedSwitch.get(ui.activateQPDialog.get())).not.toBeChecked();
     await selectEvent.select(ui.oldSeveritySelect.get(), 'severity.MINOR');
+    await user.click(ui.prioritizedSwitch.get(ui.activateQPDialog.get()));
     await user.click(ui.activateButton.get(ui.activateQPDialog.get()));
 
     expect(ui.activateButton.getAll()).toHaveLength(1);
+    expect(ui.changeButton('QP Bar').get()).toBeInTheDocument();
     expect(ui.deactivateButton.getAll()).toHaveLength(1);
+
+    // Change Rule for qp
+    await user.click(ui.changeButton('QP Bar').get());
+    expect(ui.selectValue.get(ui.changeQPDialog.get())).toHaveTextContent('severity.MINOR');
+    expect(ui.prioritizedSwitch.get(ui.changeQPDialog.get())).toBeChecked();
+    await selectEvent.select(ui.oldSeveritySelect.get(), 'severity.BLOCKER');
+    await user.click(ui.prioritizedSwitch.get(ui.changeQPDialog.get()));
+    await user.click(ui.saveButton.get(ui.changeQPDialog.get()));
+
+    // Check that new severity is saved
+    await user.click(ui.changeButton('QP Bar').get());
+    expect(ui.selectValue.get(ui.changeQPDialog.get())).toHaveTextContent('severity.BLOCKER');
+    expect(ui.prioritizedSwitch.get(ui.changeQPDialog.get())).not.toBeChecked();
+    await user.click(ui.cancelButton.get(ui.changeQPDialog.get()));
 
     // Deactivate activated rule
     await user.click(ui.deactivateButton.get());
     await user.click(ui.yesButton.get());
     expect(ui.deactivateButton.query()).not.toBeInTheDocument();
     expect(ui.activateButton.getAll()).toHaveLength(2);
+  });
+
+  it('can revert to parent definition specific rule for quality profile', async () => {
+    const { ui, user } = getPageObjects();
+    settingsHandler.set(SettingsKey.QPAdminCanDisableInheritedRules, 'false');
+    rulesHandler.setIsAdmin();
+    renderCodingRulesApp(mockLoggedInUser(), undefined, [Feature.PrioritizedRules]);
+    await ui.appLoaded();
+
+    await user.click(ui.qpFacet.get());
+    await user.click(ui.facetItem('QP Bar Python').get());
+
+    // Only 4 rules are activated in selected QP
+    expect(ui.getAllRuleListItems()).toHaveLength(4);
+
+    // 3 rules have deactivate button and 1 rule has revert to parent definition button
+    expect(ui.deactivateButton.getAll()).toHaveLength(3);
+    expect(ui.revertToParentDefinitionButton.get()).toBeInTheDocument();
+
+    await user.type(ui.searchInput.get(), RULE_10);
+
+    // Only 1 rule left after search
+    expect(ui.getAllRuleListItems()).toHaveLength(1);
+    expect(ui.revertToParentDefinitionButton.get()).toBeInTheDocument();
+    expect(ui.changeButton('QP Bar').get()).toBeInTheDocument();
+
+    // Check that severity is reflected correctly
+    await user.click(ui.changeButton('QP Bar').get());
+    expect(ui.selectValue.get(ui.changeQPDialog.get())).toHaveTextContent('severity.MAJOR');
+    expect(ui.prioritizedSwitch.get(ui.changeQPDialog.get())).toBeChecked();
+    await user.click(ui.cancelButton.get(ui.changeQPDialog.get()));
+
+    await user.click(ui.revertToParentDefinitionButton.get());
+    await user.click(ui.yesButton.get());
+
+    expect(ui.getAllRuleListItems()).toHaveLength(1);
+    expect(ui.revertToParentDefinitionButton.query()).not.toBeInTheDocument();
+    expect(ui.deactivateButton.get()).toBeInTheDocument();
+    expect(ui.deactivateButton.get()).toBeDisabled();
+    expect(ui.changeButton('QP Bar').get()).toBeInTheDocument();
+
+    // Check that severity is reflected correctly
+    await user.click(ui.changeButton('QP Bar').get());
+    expect(ui.selectValue.get(ui.changeQPDialog.get())).toHaveTextContent('severity.MINOR');
+    expect(ui.prioritizedSwitch.get(ui.changeQPDialog.get())).not.toBeChecked();
+    await user.click(ui.cancelButton.get(ui.changeQPDialog.get()));
+  });
+
+  it('should not make rule overriden if no changes were done', async () => {
+    const { ui, user } = getPageObjects();
+    settingsHandler.set(SettingsKey.QPAdminCanDisableInheritedRules, 'false');
+    rulesHandler.setIsAdmin();
+    renderCodingRulesApp(mockLoggedInUser(), undefined, [Feature.PrioritizedRules]);
+    await ui.appLoaded();
+
+    await user.click(ui.qpFacet.get());
+    await user.click(ui.facetItem('QP Bar Python').get());
+
+    // filter out everything except INHERITED rule
+    await user.type(ui.searchInput.get(), RULE_9);
+
+    // Only 1 rule left after search
+    expect(ui.getAllRuleListItems()).toHaveLength(1);
+    expect(ui.deactivateButton.get()).toBeInTheDocument();
+    expect(ui.deactivateButton.get()).toBeDisabled();
+    expect(ui.changeButton('QP Bar').get()).toBeInTheDocument();
+
+    // Check that severity is reflected correctly
+    await user.click(ui.changeButton('QP Bar').get());
+    expect(ui.selectValue.get(ui.changeQPDialog.get())).toHaveTextContent('severity.MAJOR');
+    expect(ui.prioritizedSwitch.get(ui.changeQPDialog.get())).not.toBeChecked();
+    await user.click(ui.saveButton.get(ui.changeQPDialog.get()));
+
+    expect(ui.revertToParentDefinitionButton.query()).not.toBeInTheDocument();
+  });
+
+  it('should not show prioritized rule switcher if feature is not enabled', async () => {
+    const { ui, user } = getPageObjects();
+    rulesHandler.setIsAdmin();
+    renderCodingRulesApp(mockLoggedInUser());
+    await ui.appLoaded();
+
+    await user.click(ui.qpFacet.get());
+    await user.click(ui.facetItem('QP Bar Python').get());
+
+    await user.click(ui.changeButton('QP Bar').getAll()[0]);
+    expect(ui.prioritizedSwitch.query()).not.toBeInTheDocument();
   });
 
   it('can not deactivate rules for quality profile if setting is false', async () => {
@@ -494,16 +631,18 @@ describe('Rule app details', () => {
   it('can activate/change/deactivate rule in quality profile', async () => {
     const { ui, user } = getPageObjects();
     rulesHandler.setIsAdmin();
-    renderCodingRulesApp(mockLoggedInUser(), 'coding_rules?open=rule1');
+    renderCodingRulesApp(mockLoggedInUser(), 'coding_rules?open=rule1', [Feature.PrioritizedRules]);
     await ui.detailsloaded();
     expect(ui.qpLink('QP Foo').get()).toBeInTheDocument();
 
     // Activate rule in quality profile
+    expect(ui.prioritizedYesCell.query()).not.toBeInTheDocument();
     await user.click(ui.activateButton.get());
     await selectEvent.select(ui.qualityProfileSelect.get(), 'QP FooBar');
-
+    await user.click(ui.prioritizedSwitch.get());
     await user.click(ui.activateButton.get(ui.activateQPDialog.get()));
     expect(ui.qpLink('QP FooBar').get()).toBeInTheDocument();
+    expect(ui.prioritizedYesCell.get()).toBeInTheDocument();
 
     // Activate last java rule
     await user.click(ui.activateButton.get());

@@ -22,11 +22,12 @@ import { Note } from 'design-system';
 import * as React from 'react';
 import DocumentationLink from '../../../components/common/DocumentationLink';
 import { Image } from '../../../components/common/Image';
+import { DocLink } from '../../../helpers/doc-links';
 import { translate } from '../../../helpers/l10n';
 
 export interface EmptyHotspotsPageProps {
-  filtered: boolean;
   filterByFile: boolean;
+  filtered: boolean;
   isStaticListOfHotspots: boolean;
 }
 
@@ -59,7 +60,7 @@ export default function EmptyHotspotsPage(props: EmptyHotspotsPageProps) {
         {translate(`hotspots.${translationRoot}.description`)}
       </Note>
       {!(filtered || isStaticListOfHotspots) && (
-        <DocumentationLink className="sw-mt-4" to="/user-guide/security-hotspots/">
+        <DocumentationLink className="sw-mt-4" to={DocLink.SecurityHotspots}>
           {translate('hotspots.learn_more')}
         </DocumentationLink>
       )}

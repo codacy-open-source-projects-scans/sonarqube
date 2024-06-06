@@ -28,6 +28,7 @@ import {
   parseAsArray,
   parseAsBoolean,
   parseAsDate,
+  parseAsOptionalBoolean,
   parseAsString,
   queriesEqual,
   serializeDateShort,
@@ -56,6 +57,7 @@ import { RestUser } from '../../types/users';
 const OWASP_ASVS_4_0 = 'owaspAsvs-4.0';
 
 export interface Query {
+  [OWASP_ASVS_4_0]: string[];
   assigned: boolean;
   assignees: string[];
   author: string[];
@@ -71,25 +73,25 @@ export interface Query {
   fixedInPullRequest: string;
   impactSeverities: SoftwareImpactSeverity[];
   impactSoftwareQualities: SoftwareQuality[];
+  inNewCodePeriod: boolean;
+  issueStatuses: IssueStatus[];
   issues: string[];
   languages: string[];
+  owaspAsvsLevel: string;
   owaspTop10: string[];
   'owaspTop10-2021': string[];
   'pciDss-3.2': string[];
   'pciDss-4.0': string[];
-  [OWASP_ASVS_4_0]: string[];
-  owaspAsvsLevel: string;
+  prioritizedRule?: boolean;
   projects: string[];
+  resolved?: boolean;
   rules: string[];
   scopes: string[];
   severities: string[];
-  inNewCodePeriod: boolean;
   sonarsourceSecurity: string[];
   sort: string;
-  issueStatuses: IssueStatus[];
   tags: string[];
   types: string[];
-  resolved?: boolean;
 }
 
 export const STANDARDS = 'standards';
@@ -139,6 +141,7 @@ export function parseQuery(query: RawQuery, needIssueSync = false): Query {
     types: parseAsArray(query.types, parseAsString),
     codeVariants: parseAsArray(query.codeVariants, parseAsString),
     fixedInPullRequest: parseAsString(query.fixedInPullRequest),
+    prioritizedRule: parseAsOptionalBoolean(query.prioritizedRule),
     // While reindexing, we need to use resolved param for issues/list endpoint
     // False is used to show unresolved issues only
     resolved: needIssueSync ? false : undefined,
@@ -253,6 +256,7 @@ export function serializeQuery(query: Query): RawQuery {
     types: serializeStringArray(query.types),
     codeVariants: serializeStringArray(query.codeVariants),
     resolved: serializeOptionalBoolean(query.resolved),
+    prioritizedRule: serializeOptionalBoolean(query.prioritizedRule),
   };
 
   return cleanQuery(filter);

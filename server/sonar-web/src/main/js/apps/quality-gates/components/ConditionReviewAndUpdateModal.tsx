@@ -17,10 +17,12 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+
 import { ButtonPrimary, Link, Modal, SubHeading, Title } from 'design-system';
 import { sortBy } from 'lodash';
 import * as React from 'react';
 import { FormattedMessage } from 'react-intl';
+import { DocLink } from '../../../helpers/doc-links';
 import { useDocUrl } from '../../../helpers/docs';
 import { translate, translateWithParameters } from '../../../helpers/l10n';
 import { useFixQualityGateMutation } from '../../../queries/quality-gates';
@@ -30,13 +32,13 @@ import ConditionsTable from './ConditionsTable';
 
 interface Props {
   canEdit: boolean;
-  metrics: Dict<Metric>;
   conditions: Condition[];
-  scope: 'new' | 'overall' | 'new-cayc';
-  onClose: () => void;
-  lockEditing: () => void;
-  qualityGate: QualityGate;
   isOptimizing?: boolean;
+  lockEditing: () => void;
+  metrics: Dict<Metric>;
+  onClose: () => void;
+  qualityGate: QualityGate;
+  scope: 'new' | 'overall' | 'new-cayc';
 }
 
 export default function CaycReviewUpdateConditionsModal(props: Readonly<Props>) {
@@ -54,7 +56,7 @@ export default function CaycReviewUpdateConditionsModal(props: Readonly<Props>) 
     (condition) => metrics[condition.metric]?.name,
   );
 
-  const getDocUrl = useDocUrl();
+  const docUrl = useDocUrl(DocLink.CaYC);
 
   const updateCaycQualityGate = React.useCallback(async () => {
     await fixQualityGate({ weakConditions, missingConditions });
@@ -71,11 +73,7 @@ export default function CaycReviewUpdateConditionsModal(props: Readonly<Props>) 
               : 'quality_gates.cayc.review_update_modal.description1'
           }
           values={{
-            cayc_link: (
-              <Link to={getDocUrl('/user-guide/clean-as-you-code/')}>
-                {translate('quality_gates.cayc')}
-              </Link>
-            ),
+            cayc_link: <Link to={docUrl}>{translate('quality_gates.cayc')}</Link>,
           }}
         />
       </SubHeading>

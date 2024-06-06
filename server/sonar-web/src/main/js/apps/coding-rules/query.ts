@@ -36,7 +36,7 @@ import {
   SoftwareImpactSeverity,
   SoftwareQuality,
 } from '../../types/clean-code-taxonomy';
-import { Dict, RuleInheritance } from '../../types/types';
+import { Dict, RuleActivation, RuleInheritance } from '../../types/types';
 
 export interface Query {
   activation: boolean | undefined;
@@ -50,6 +50,7 @@ export interface Query {
   languages: string[];
   owaspTop10: string[];
   'owaspTop10-2021': string[];
+  prioritizedRule: boolean | undefined;
   profile: string | undefined;
   repositories: string[];
   ruleKey: string | undefined;
@@ -72,14 +73,9 @@ export type Facets = { [F in FacetKey]?: Facet };
 
 export type OpenFacets = Dict<boolean>;
 
-export interface Activation {
-  inherit: RuleInheritance;
-  severity: string;
-}
-
 export interface Actives {
   [rule: string]: {
-    [profile: string]: Activation;
+    [profile: string]: RuleActivation;
   };
 }
 
@@ -112,6 +108,7 @@ export function parseQuery(query: RawQuery): Query {
     tags: parseAsArray(query.tags, parseAsString),
     template: parseAsOptionalBoolean(query.is_template),
     types: parseAsArray(query.types, parseAsString),
+    prioritizedRule: parseAsOptionalBoolean(query.prioritizedRule),
   };
 }
 
@@ -138,6 +135,7 @@ export function serializeQuery(query: Query): RawQuery {
     statuses: serializeStringArray(query.statuses),
     tags: serializeStringArray(query.tags),
     types: serializeStringArray(query.types),
+    prioritizedRule: serializeOptionalBoolean(query.prioritizedRule),
   });
 }
 

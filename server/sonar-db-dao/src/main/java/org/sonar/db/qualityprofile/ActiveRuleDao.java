@@ -24,7 +24,10 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
+import org.sonar.api.rule.RuleKey;
 import org.sonar.core.util.UuidFactory;
 import org.sonar.db.Dao;
 import org.sonar.db.DatabaseUtils;
@@ -67,6 +70,11 @@ public class ActiveRuleDao implements Dao {
 
   public List<OrgActiveRuleDto> selectByRuleUuids(DbSession dbSession, List<String> uuids) {
     return executeLargeInputs(uuids, chunk -> mapper(dbSession).selectByRuleUuids(chunk));
+  }
+
+  public Set<RuleKey> selectPrioritizedRules(DbSession dbSession, Set<String> qprofileUuids) {
+    List<OrgActiveRuleDto> orgActiveDtos = mapper(dbSession).selectPrioritizedRules(qprofileUuids);
+    return orgActiveDtos.stream().map(ActiveRuleDto::getRuleKey).collect(Collectors.toSet());
   }
 
   /**

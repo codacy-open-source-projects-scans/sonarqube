@@ -32,9 +32,9 @@ import MonorepoDocLinkFallback from './MonorepoDocLinkFallback';
 
 export interface CFamilyProps {
   branchesEnabled?: boolean;
+  component: Component;
   mainBranchName: string;
   monorepo?: boolean;
-  component: Component;
 }
 
 const STEPS = {
@@ -52,7 +52,7 @@ const STEPS = {
           SONAR_TOKEN: \${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: \${{secrets.SONAR_HOST_URL}}
         run: |
-          sonar-scanner --define sonar.cfamily.build-wrapper-output="\${{ env.BUILD_WRAPPER_OUT_DIR }}"`,
+          sonar-scanner --define sonar.cfamily.compile-commands="\${{ env.BUILD_WRAPPER_OUT_DIR }}/compile_commands.json"`,
   [OSs.MacOS]: `
       - name: Install sonar-scanner and build-wrapper
         env:
@@ -67,7 +67,7 @@ const STEPS = {
           SONAR_TOKEN: \${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: \${{secrets.SONAR_HOST_URL}}
         run: |
-          sonar-scanner --define sonar.cfamily.build-wrapper-output="\${{ env.BUILD_WRAPPER_OUT_DIR }}"`,
+          sonar-scanner --define sonar.cfamily.compile-commands="\${{ env.BUILD_WRAPPER_OUT_DIR }}/compile_commands.json"`,
   [OSs.Windows]: `
       - name: Install sonar-scanner and build-wrapper
         env:
@@ -82,7 +82,7 @@ const STEPS = {
           SONAR_TOKEN: \${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: \${{secrets.SONAR_HOST_URL}}
         run: |
-          sonar-scanner --define sonar.cfamily.build-wrapper-output="\${{ env.BUILD_WRAPPER_OUT_DIR }}"`,
+          sonar-scanner --define sonar.cfamily.compile-commands="\${{ env.BUILD_WRAPPER_OUT_DIR }}/compile_commands.json"`,
 };
 
 export default function CFamily(props: CFamilyProps) {

@@ -43,6 +43,7 @@ import { FormattedMessage } from 'react-intl';
 import { SingleValue } from 'react-select';
 import DocHelpTooltip from '~sonar-aligned/components/controls/DocHelpTooltip';
 import { generateToken, getTokens, revokeToken } from '../../../api/user-tokens';
+import { DocLink } from '../../../helpers/doc-links';
 import { translate } from '../../../helpers/l10n';
 import {
   EXPIRATION_OPTIONS,
@@ -57,24 +58,24 @@ import { getUniqueTokenName } from '../utils';
 
 interface Props {
   currentUser: Pick<LoggedInUser, 'login'>;
-  projectKey: string;
   finished: boolean;
   initialTokenName?: string;
-  stepNumber: number;
-  open: boolean;
   onContinue: (token: string) => void;
   onOpen: VoidFunction;
+  open: boolean;
+  projectKey: string;
+  stepNumber: number;
 }
 
 interface State {
   existingToken: string;
   loading: boolean;
   selection: string;
-  tokenName?: string;
   token?: string;
-  tokens?: UserToken[];
   tokenExpiration: TokenExpiration;
-  tokenExpirationOptions: { value: TokenExpiration; label: string }[];
+  tokenExpirationOptions: { label: string; value: TokenExpiration }[];
+  tokenName?: string;
+  tokens?: UserToken[];
 }
 
 const TOKEN_FORMAT_REGEX = /^[_a-z0-9]+$/;
@@ -218,7 +219,7 @@ export default class TokenStep extends React.PureComponent<Props, State> {
                 content={translate('onboarding.token.name.help')}
                 links={[
                   {
-                    href: '/user-guide/user-account/generating-and-using-tokens/',
+                    href: DocLink.AccountTokens,
                     label: translate('learn_more'),
                   },
                 ]}
@@ -281,7 +282,7 @@ export default class TokenStep extends React.PureComponent<Props, State> {
                 content={translate('onboarding.token.use_existing_token.help')}
                 links={[
                   {
-                    href: '/user-guide/user-account/generating-and-using-tokens/',
+                    href: DocLink.AccountTokens,
                     label: translate('learn_more'),
                   },
                 ]}

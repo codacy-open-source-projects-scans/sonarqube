@@ -23,6 +23,7 @@ import { keyBy } from 'lodash';
 import * as React from 'react';
 import { FormattedMessage } from 'react-intl';
 import DocumentationLink from '../../../../components/common/DocumentationLink';
+import { DocLink } from '../../../../helpers/doc-links';
 import { translate } from '../../../../helpers/l10n';
 import {
   useCreateGitLabConfigurationMutation,
@@ -30,7 +31,6 @@ import {
 } from '../../../../queries/identity-provider/gitlab';
 import { GitLabConfigurationCreateBody, GitlabConfiguration } from '../../../../types/provisioning';
 import { DefinitionV2, SettingType } from '../../../../types/settings';
-import { DOCUMENTATION_LINK_SUFFIXES } from './Authentication';
 import AuthenticationFormField from './AuthenticationFormField';
 
 interface Props {
@@ -44,9 +44,9 @@ interface ErrorValue {
 }
 
 interface FormData {
-  value: string | boolean | string[];
-  required: boolean;
   definition: DefinitionV2;
+  required: boolean;
+  value: string | boolean | string[];
 }
 
 const DEFAULT_URL = 'https://gitlab.com';
@@ -149,9 +149,7 @@ export default function GitLabConfigurationForm(props: Readonly<Props>) {
             id="settings.authentication.help"
             values={{
               link: (
-                <DocumentationLink
-                  to={`/instance-administration/authentication/${DOCUMENTATION_LINK_SUFFIXES.gitlab}/`}
-                >
+                <DocumentationLink to={DocLink.AlmGitLabAuth}>
                   {translate('settings.authentication.help.link')}
                 </DocumentationLink>
               ),

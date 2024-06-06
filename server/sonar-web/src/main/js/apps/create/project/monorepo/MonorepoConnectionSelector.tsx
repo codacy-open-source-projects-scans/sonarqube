@@ -17,7 +17,8 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { Title } from 'design-system/lib';
+
+import { Title } from 'design-system';
 import React from 'react';
 import { FormattedMessage } from 'react-intl';
 import { GroupBase } from 'react-select';
@@ -53,8 +54,8 @@ interface Props {
   selectedDopSetting?: DopSetting;
   selectedOrganization?: LabelValueSelectOption;
   selectedRepository?: LabelValueSelectOption;
-  showPersonalAccessToken?: boolean;
   showOrganizations?: boolean;
+  showPersonalAccessToken?: boolean;
 }
 
 export function MonorepoConnectionSelector({

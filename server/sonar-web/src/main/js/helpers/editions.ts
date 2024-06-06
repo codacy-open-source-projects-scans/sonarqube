@@ -43,7 +43,7 @@ const EDITIONS: { [x in EditionKey]: Edition } = {
   datacenter: {
     key: EditionKey.datacenter,
     name: 'Data Center Edition',
-    homeUrl: 'https://www.sonarsource.com/products/sonarqube/data-center/marketplace/',
+    homeUrl: 'https://www.sonarsource.com/products/sonarqube/data-center-edition/marketplace/',
     downloadProperty: 'downloadDatacenterUrl',
   },
 };
@@ -60,7 +60,7 @@ export function getAllEditionsAbove(currentEdition?: EditionKey) {
 
 export function getEditionUrl(
   edition: Edition,
-  data: { serverId?: string; ncloc?: number; sourceEdition?: EditionKey },
+  data: { ncloc?: number; serverId?: string; sourceEdition?: EditionKey },
 ) {
   let url = edition.homeUrl;
   const query = new URLSearchParams(omitNil(data)).toString();

@@ -17,6 +17,7 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+
 import styled from '@emotion/styled';
 import { Checkbox, Spinner } from '@sonarsource/echoes-react';
 import classNames from 'classnames';
@@ -47,7 +48,6 @@ import withCurrentUserContext from '../../../app/components/current-user/withCur
 import EmptySearch from '../../../components/common/EmptySearch';
 import ScreenPositionHelper from '../../../components/common/ScreenPositionHelper';
 import ListFooter from '../../../components/controls/ListFooter';
-import Suggestions from '../../../components/embed-docs-modal/Suggestions';
 import withIndexationContext, {
   WithIndexationContextProps,
 } from '../../../components/hoc/withIndexationContext';
@@ -125,13 +125,12 @@ export interface State {
   facets: Dict<Facet>;
   issues: Issue[];
   loading: boolean;
-  loadingRule: boolean;
   loadingFacets: Dict<boolean>;
   loadingMore: boolean;
+  loadingRule: boolean;
   locationsNavigator: boolean;
   myIssues: boolean;
   openFacets: Dict<boolean>;
-  showVariantsFilter: boolean;
   openIssue?: Issue;
   openPopup?: { issue: string; name: string };
   openRuleDetails?: RuleDetails;
@@ -145,6 +144,7 @@ export interface State {
   selected?: string;
   selectedFlowIndex?: number;
   selectedLocationIndex?: number;
+  showVariantsFilter: boolean;
 }
 
 // When opening a specific issue, number of issues to fetch through pagination before loading it specifically
@@ -1299,8 +1299,6 @@ export class App extends React.PureComponent<Props, State> {
         <LargeCenteredLayout>
           <PageContentFontWrapper className="sw-body-sm">
             <div className="sw-w-full sw-flex" id="issues-page">
-              <Suggestions suggestions="issues" />
-
               {openIssue ? (
                 <Helmet
                   defer={false}

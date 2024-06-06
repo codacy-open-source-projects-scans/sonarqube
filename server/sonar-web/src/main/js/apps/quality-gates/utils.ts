@@ -24,9 +24,9 @@ import { isDiffMetric } from '../../helpers/measures';
 import { CaycStatus, Condition, Dict, Metric, QualityGate } from '../../types/types';
 
 interface GroupedByMetricConditions {
-  overallCodeConditions: Condition[];
-  newCodeConditions: Condition[];
   caycConditions: Condition[];
+  newCodeConditions: Condition[];
+  overallCodeConditions: Condition[];
 }
 
 type CommonCaycMetricKeys =
@@ -141,9 +141,14 @@ const CAYC_CONDITIONS_WITH_FIXED_VALUE: AllCaycMetricKeys[] = [
   MetricKey.new_security_rating,
   MetricKey.new_maintainability_rating,
 ];
+const NON_EDITABLE_CONDITIONS: MetricKey[] = [MetricKey.prioritized_rule_issues];
 
 export function isConditionWithFixedValue(condition: Condition) {
   return CAYC_CONDITIONS_WITH_FIXED_VALUE.includes(condition.metric as OptimizedCaycMetricKeys);
+}
+
+export function isNonEditableMetric(metricKey: MetricKey) {
+  return NON_EDITABLE_CONDITIONS.includes(metricKey);
 }
 
 export function getCaycConditionMetadata(condition: Condition) {
@@ -176,8 +181,8 @@ function isWeakCondition(key: AllCaycMetricKeys, selectedCondition: Condition) {
 
 export function getWeakMissingAndNonCaycConditions(conditions: Condition[]) {
   const result: {
-    weakConditions: Condition[];
     missingConditions: Condition[];
+    weakConditions: Condition[];
   } = {
     weakConditions: [],
     missingConditions: [],

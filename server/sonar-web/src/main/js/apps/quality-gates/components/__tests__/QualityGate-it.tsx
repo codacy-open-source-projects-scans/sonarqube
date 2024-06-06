@@ -20,7 +20,7 @@
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import selectEvent from 'react-select-event';
-import { byRole, byTestId } from '~sonar-aligned/helpers/testSelector';
+import { byLabelText, byRole, byTestId } from '~sonar-aligned/helpers/testSelector';
 import { QualityGatesServiceMock } from '../../../../api/mocks/QualityGatesServiceMock';
 import UsersServiceMock from '../../../../api/mocks/UsersServiceMock';
 import { searchProjects, searchUsers } from '../../../../api/quality-gates';
@@ -199,7 +199,7 @@ it('should be able to set as default a quality gate which is CaYC compliant', as
   expect(await screen.findByRole('button', { name: /Sonar way default/ })).toBeInTheDocument();
 });
 
-it('should be able to add a condition', async () => {
+it('should be able to add a condition on new code', async () => {
   const user = userEvent.setup();
   qualityGateHandler.setIsAdmin(true);
   renderQualityGateApp();
@@ -222,9 +222,19 @@ it('should be able to add a condition', async () => {
   const newConditions = byTestId('quality-gates__conditions-new');
   expect(await newConditions.byRole('cell', { name: 'Issues' }).find()).toBeInTheDocument();
   expect(await newConditions.byRole('cell', { name: '12' }).find()).toBeInTheDocument();
+});
+
+it('should be able to add a condition on overall code', async () => {
+  const user = userEvent.setup();
+  qualityGateHandler.setIsAdmin(true);
+  renderQualityGateApp();
+
+  await user.click(await screen.findByText('SonarSource way - CFamily'));
 
   // On overall code
   await user.click(await screen.findByText('quality_gates.add_condition'));
+
+  const dialog = byRole('dialog');
 
   await selectEvent.select(dialog.byRole('combobox').get(), ['Info Issues']);
   await user.click(dialog.byRole('radio', { name: 'quality_gates.conditions.overall_code' }).get());
@@ -241,15 +251,27 @@ it('should be able to add a condition', async () => {
     await overallConditions.byRole('cell', { name: 'Info Issues' }).find(),
   ).toBeInTheDocument();
   expect(await overallConditions.byRole('cell', { name: '42' }).find()).toBeInTheDocument();
+});
+
+it('should be able to select a rating', async () => {
+  const user = userEvent.setup();
+  qualityGateHandler.setIsAdmin(true);
+  renderQualityGateApp();
+
+  await user.click(await screen.findByText('SonarSource way - CFamily'));
 
   // Select a rating
   await user.click(await screen.findByText('quality_gates.add_condition'));
+
+  const dialog = byRole('dialog');
 
   await user.click(dialog.byRole('radio', { name: 'quality_gates.conditions.overall_code' }).get());
   await selectEvent.select(dialog.byRole('combobox').get(), ['Maintainability Rating']);
   await user.click(dialog.byLabelText('quality_gates.conditions.value').get());
   await user.click(dialog.byText('B').get());
   await user.click(dialog.byRole('button', { name: 'quality_gates.add_condition' }).get());
+
+  const overallConditions = byTestId('quality-gates__conditions-overall');
 
   expect(
     await overallConditions.byRole('cell', { name: 'Maintainability Rating' }).find(),
@@ -532,6 +554,59 @@ it('should not display CaYC condition simplification tour for users who dismisse
   await user.click(qualityGate);
 
   expect(byRole('alertdialog').query()).not.toBeInTheDocument();
+});
+
+it('should not allow to change value of prioritized_rule_issues', async () => {
+  const user = userEvent.setup();
+  qualityGateHandler.setIsAdmin(true);
+  renderQualityGateApp({ featureList: [Feature.PrioritizedRules] });
+
+  await user.click(await screen.findByText('SonarSource way - CFamily'));
+
+  await user.click(await screen.findByText('quality_gates.add_condition'));
+
+  const dialog = byRole('dialog');
+
+  await user.click(dialog.byRole('radio', { name: 'quality_gates.conditions.overall_code' }).get());
+  await selectEvent.select(dialog.byRole('combobox').get(), ['Issues from prioritized rules']);
+
+  expect(dialog.byRole('textbox', { name: 'quality_gates.conditions.value' }).get()).toBeDisabled();
+  expect(dialog.byRole('textbox', { name: 'quality_gates.conditions.value' }).get()).toHaveValue(
+    '0',
+  );
+
+  await user.click(dialog.byRole('button', { name: 'quality_gates.add_condition' }).get());
+
+  const overallConditions = byTestId('quality-gates__conditions-overall');
+
+  expect(
+    await overallConditions.byRole('cell', { name: 'Issues from prioritized rules' }).find(),
+  ).toBeInTheDocument();
+
+  expect(
+    byLabelText('quality_gates.condition.edit.Issues from prioritized rules').query(),
+  ).not.toBeInTheDocument();
+  expect(
+    byLabelText('quality_gates.condition.delete.Issues from prioritized rules').get(),
+  ).toBeInTheDocument();
+});
+
+it('should not allow to add prioritized_rule_issues condition if feature is not enabled', async () => {
+  const user = userEvent.setup();
+  qualityGateHandler.setIsAdmin(true);
+  renderQualityGateApp();
+
+  await user.click(await screen.findByText('SonarSource way - CFamily'));
+
+  await user.click(await screen.findByText('quality_gates.add_condition'));
+
+  const dialog = byRole('dialog');
+
+  await user.click(dialog.byRole('radio', { name: 'quality_gates.conditions.overall_code' }).get());
+  await selectEvent.openMenu(dialog.byRole('combobox').get());
+  expect(
+    byRole('option', { name: 'Issues from prioritized rules' }).query(),
+  ).not.toBeInTheDocument();
 });
 
 describe('The Project section', () => {

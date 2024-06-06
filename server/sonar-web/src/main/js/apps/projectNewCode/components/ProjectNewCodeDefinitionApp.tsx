@@ -29,6 +29,7 @@ import withAvailableFeatures, {
 import withComponentContext from '../../../app/components/componentContext/withComponentContext';
 import Suggestions from '../../../components/embed-docs-modal/Suggestions';
 import { sortBranches } from '../../../helpers/branch-like';
+import { DocLink } from '../../../helpers/doc-links';
 import { translate } from '../../../helpers/l10n';
 import {
   DEFAULT_NEW_CODE_DEFINITION_TYPE,
@@ -50,10 +51,10 @@ import BranchList from './BranchList';
 import ProjectNewCodeDefinitionSelector from './ProjectNewCodeDefinitionSelector';
 
 interface ProjectNewCodeDefinitionAppProps extends WithAvailableFeaturesProps {
+  appState: AppState;
   branchLike: Branch;
   branchLikes: BranchLike[];
   component: Component;
-  appState: AppState;
 }
 
 function ProjectNewCodeDefinitionApp(props: Readonly<ProjectNewCodeDefinitionAppProps>) {
@@ -192,7 +193,7 @@ function ProjectNewCodeDefinitionApp(props: Readonly<ProjectNewCodeDefinitionApp
 
   return (
     <LargeCenteredLayout id="new-code-rules-page">
-      <Suggestions suggestions="project_baseline" />
+      <Suggestions suggestion={DocLink.NewCodeDefinition} />
 
       <Helmet defer={false} title={translate('project_baseline.page')} />
 

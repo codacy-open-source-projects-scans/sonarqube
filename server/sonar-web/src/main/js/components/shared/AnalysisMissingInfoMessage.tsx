@@ -17,15 +17,17 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+
 import { FlagMessage } from 'design-system';
 import * as React from 'react';
 import { FormattedMessage, useIntl } from 'react-intl';
+import { DocLink } from '../../helpers/doc-links';
 import DocumentationLink from '../common/DocumentationLink';
 
 interface AnalysisMissingInfoMessageProps {
+  className?: string;
   hide?: boolean;
   qualifier: string;
-  className?: string;
 }
 
 export default function AnalysisMissingInfoMessage({
@@ -47,10 +49,7 @@ export default function AnalysisMissingInfoMessage({
         values={{
           qualifier,
           learn_more: (
-            <DocumentationLink
-              className="sw-whitespace-nowrap"
-              to="/user-guide/clean-code/code-analysis/"
-            >
+            <DocumentationLink className="sw-whitespace-nowrap" to={DocLink.CodeAnalysis}>
               {intl.formatMessage({ id: 'learn_more' })}
             </DocumentationLink>
           ),

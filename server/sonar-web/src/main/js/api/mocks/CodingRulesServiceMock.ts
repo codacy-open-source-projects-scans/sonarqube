@@ -18,7 +18,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 import { HttpStatusCode } from 'axios';
-import { cloneDeep, countBy, pick, trim } from 'lodash';
+import { cloneDeep, countBy, isEqual, pick, trim } from 'lodash';
 import { ComponentQualifier, Visibility } from '~sonar-aligned/types/component';
 import { RuleDescriptionSections } from '../../apps/coding-rules/rule';
 import { mapRestRuleToRule } from '../../apps/coding-rules/utils';
@@ -95,6 +95,7 @@ type FacetFilter = Pick<
   | 'cwe'
   | 'is_template'
   | 'cleanCodeAttributeCategories'
+  | 'prioritizedRule'
 >;
 
 const FACET_RULE_MAP: { [key: string]: keyof Rule } = {
@@ -182,6 +183,7 @@ export default class CodingRulesServiceMock {
     'owaspTop10-2021': owasp2021Top10,
     cwe,
     activation,
+    prioritizedRule,
   }: FacetFilter) {
     let filteredRules = this.getRulesFilteredByRemovedStatus();
     if (cleanCodeAttributeCategories) {
@@ -251,10 +253,19 @@ export default class CodingRulesServiceMock {
       filteredRules = filteredRules.filter((r) => matchingRules.includes(r.key));
     }
     if (q && q.length > 2) {
-      filteredRules = filteredRules.filter((r) => r.name.includes(q));
+      filteredRules = filteredRules.filter((r) => r.name.includes(q) || r.key.includes(q));
     }
     if (tags) {
       filteredRules = filteredRules.filter((r) => r.tags && r.tags.some((t) => tags.includes(t)));
+    }
+    if (qprofile && prioritizedRule !== undefined) {
+      filteredRules = filteredRules.filter((r) => {
+        const qProfilesInRule = this.rulesActivations[r.key] ?? [];
+        const ruleHasQueriedProfile = qProfilesInRule.find((q) => q.qProfile === qprofile);
+        return prioritizedRule === 'true'
+          ? ruleHasQueriedProfile?.prioritizedRule
+          : !ruleHasQueriedProfile?.prioritizedRule;
+      });
     }
     return this.getRulesWithoutDetails(filteredRules);
   }
@@ -434,9 +445,10 @@ export default class CodingRulesServiceMock {
     is_template,
     activation,
     cleanCodeAttributeCategories,
+    prioritizedRule,
   }: SearchRulesQuery): Promise<SearchRulesResponse> => {
     const standards = await getStandards();
-    const facetCounts: Array<{ property: string; values: { val: string; count: number }[] }> = [];
+    const facetCounts: Array<{ property: string; values: { count: number; val: string }[] }> = [];
     for (const facet of facets?.split(',') ?? []) {
       // If we can count facet values from the list of rules
       if (FACET_RULE_MAP[facet]) {
@@ -493,6 +505,7 @@ export default class CodingRulesServiceMock {
         'owaspTop10-2021': owasp2021Top10,
         cwe,
         activation,
+        prioritizedRule,
       });
     }
 
@@ -531,13 +544,7 @@ export default class CodingRulesServiceMock {
     });
   };
 
-  handleActivateRule = (data: {
-    key: string;
-    params?: Dict<string>;
-    reset?: boolean;
-    rule: string;
-    severity?: string;
-  }) => {
+  handleActivateRule: typeof activateRule = (data) => {
     if (data.reset) {
       const parentQP = this.qualityProfile.find((p) => p.key === data.key)?.parentKey!;
       const parentActivation = this.rulesActivations[data.rule]?.find(
@@ -548,8 +555,25 @@ export default class CodingRulesServiceMock {
         ({ qProfile }) => qProfile === data.key,
       )!;
       activation.inherit = 'INHERITED';
+      activation.prioritizedRule = parentActivation?.prioritizedRule ?? false;
+      activation.severity = parentActivation?.severity ?? 'MAJOR';
       activation.params = parentParams;
 
+      return this.reply(undefined);
+    }
+
+    const currentActivation = this.rulesActivations[data.rule]?.find(
+      (a) => a.qProfile === data.key,
+    );
+    if (
+      currentActivation &&
+      isEqual(
+        currentActivation.params,
+        Object.entries(data.params ?? {}).map(([key, value]) => ({ key, value })),
+      ) &&
+      currentActivation.severity === data.severity &&
+      currentActivation.prioritizedRule === data.prioritizedRule
+    ) {
       return this.reply(undefined);
     }
 
@@ -557,6 +581,7 @@ export default class CodingRulesServiceMock {
       mockRuleActivation({
         qProfile: data.key,
         severity: data.severity,
+        prioritizedRule: data.prioritizedRule,
         params: Object.entries(data.params ?? {}).map(([key, value]) => ({ key, value })),
       }),
     ];
@@ -569,6 +594,7 @@ export default class CodingRulesServiceMock {
         mockRuleActivation({
           qProfile: profile.key,
           severity: data.severity,
+          prioritizedRule: data.prioritizedRule,
           inherit: 'INHERITED',
           params: Object.entries(data.params ?? {}).map(([key, value]) => ({ key, value })),
         }),

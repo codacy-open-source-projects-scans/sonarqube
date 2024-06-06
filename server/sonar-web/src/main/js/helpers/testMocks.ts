@@ -336,6 +336,7 @@ export function mockRawIssue(withLocations = false, overrides: Partial<RawIssue>
     impacts: [
       { softwareQuality: SoftwareQuality.Maintainability, severity: SoftwareImpactSeverity.Medium },
     ],
+    prioritizedRule: false,
     ...overrides,
   };
 
@@ -384,7 +385,7 @@ export function mockIssue(withLocations = false, overrides: Partial<Issue> = {})
     issueStatus: IssueStatus.Open,
     textRange: { startLine: 25, endLine: 26, startOffset: 0, endOffset: 15 },
     transitions: [],
-    type: 'BUG',
+    type: IssueType.Bug,
     cleanCodeAttributeCategory: CleanCodeAttributeCategory.Responsible,
     cleanCodeAttribute: CleanCodeAttribute.Respectful,
     impacts: [
@@ -624,6 +625,7 @@ export function mockRuleActivation(overrides: Partial<RuleActivation> = {}): Rul
     params: [{ key: 'foo', value: 'Bar' }],
     qProfile: 'baz',
     severity: 'MAJOR',
+    prioritizedRule: false,
     ...overrides,
   };
 }
@@ -797,7 +799,7 @@ export function mockUserGroupMember(overrides: Partial<UserGroupMember> = {}): U
 }
 
 export function mockDocumentationMarkdown(
-  overrides: Partial<{ content: string; title: string; key: string }> = {},
+  overrides: Partial<{ content: string; key: string; title: string }> = {},
 ): string {
   const content =
     overrides.content ||

@@ -24,6 +24,7 @@ import { Outlet } from 'react-router-dom';
 import { Actions, getExporters, searchQualityProfiles } from '../../../api/quality-profiles';
 import withLanguagesContext from '../../../app/components/languages/withLanguagesContext';
 import Suggestions from '../../../components/embed-docs-modal/Suggestions';
+import { DocLink } from '../../../helpers/doc-links';
 import { translate } from '../../../helpers/l10n';
 import { Languages } from '../../../types/languages';
 import { QualityProfilesContextProps } from '../qualityProfilesContext';
@@ -36,8 +37,8 @@ interface Props {
 
 interface State {
   actions?: Actions;
-  loading: boolean;
   exporters?: Exporter[];
+  loading: boolean;
   profiles?: Profile[];
 }
 
@@ -109,7 +110,7 @@ export class QualityProfilesApp extends React.PureComponent<Props, State> {
   render() {
     return (
       <LargeCenteredLayout className="sw-my-8">
-        <Suggestions suggestions="quality_profiles" />
+        <Suggestions suggestion={DocLink.InstanceAdminQualityProfiles} />
         <Helmet defer={false} title={translate('quality_profiles.page')} />
 
         {this.renderChild()}

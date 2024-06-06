@@ -17,6 +17,7 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+
 import styled from '@emotion/styled';
 import {
   Badge,
@@ -30,57 +31,102 @@ import {
 } from 'design-system';
 import * as React from 'react';
 import DocHelpTooltip from '~sonar-aligned/components/controls/DocHelpTooltip';
-import { Profile, deactivateRule } from '../../../api/quality-profiles';
-import ConfirmButton from '../../../components/controls/ConfirmButton';
+import { Profile } from '../../../api/quality-profiles';
 import Tooltip from '../../../components/controls/Tooltip';
 import { CleanCodeAttributePill } from '../../../components/shared/CleanCodeAttributePill';
 import SoftwareImpactPillList from '../../../components/shared/SoftwareImpactPillList';
 import TypeHelper from '../../../components/shared/TypeHelper';
 import TagsList from '../../../components/tags/TagsList';
+import { DocLink } from '../../../helpers/doc-links';
 import { translate, translateWithParameters } from '../../../helpers/l10n';
 import { getRuleUrl } from '../../../helpers/urls';
-import { Rule } from '../../../types/types';
-import { Activation } from '../query';
+import {
+  useActivateRuleMutation,
+  useDeactivateRuleMutation,
+} from '../../../queries/quality-profiles';
+import { useRuleDetailsQuery } from '../../../queries/rules';
+import { Rule, RuleActivation } from '../../../types/types';
+import ActivatedRuleActions from './ActivatedRuleActions';
 import ActivationButton from './ActivationButton';
 
 interface Props {
-  activation?: Activation;
-  isLoggedIn: boolean;
+  activation?: RuleActivation;
   canDeactivateInherited?: boolean;
-  onActivate: (profile: string, rule: string, activation: Activation) => void;
+  isLoggedIn: boolean;
+  onActivate: (profile: string, rule: string, activation: RuleActivation) => void;
   onDeactivate: (profile: string, rule: string) => void;
   onOpen: (ruleKey: string) => void;
   rule: Rule;
-  selected: boolean;
   selectRule: (key: string) => void;
+  selected: boolean;
   selectedProfile?: Profile;
 }
 
-export default class RuleListItem extends React.PureComponent<Props> {
-  handleDeactivate = () => {
-    if (this.props.selectedProfile) {
-      const data = {
-        key: this.props.selectedProfile.key,
-        rule: this.props.rule.key,
-      };
-      deactivateRule(data).then(
-        () => this.props.onDeactivate(data.key, data.rule),
-        () => {},
-      );
+export default function RuleListItem(props: Readonly<Props>) {
+  const {
+    activation: initialActivation,
+    rule,
+    selectedProfile,
+    isLoggedIn,
+    selected,
+    selectRule,
+    canDeactivateInherited,
+    onDeactivate,
+    onActivate,
+    onOpen,
+  } = props;
+  const [ruleIsChanged, setRuleIsChanged] = React.useState(false);
+  const { data } = useRuleDetailsQuery(
+    { key: rule.key, actives: true },
+    { enabled: ruleIsChanged },
+  );
+  const { mutate: activateRule } = useActivateRuleMutation(() => {
+    setRuleIsChanged(true);
+  });
+  const { mutate: deactivateRule } = useDeactivateRuleMutation((data) =>
+    onDeactivate(data.key, data.rule),
+  );
+
+  const activation =
+    data && ruleIsChanged
+      ? data.actives?.find((item) => item.qProfile === selectedProfile?.key)
+      : initialActivation;
+
+  React.useEffect(() => {
+    if (data && selectedProfile) {
+      const newActivation = data.actives?.find((item) => item.qProfile === selectedProfile?.key);
+      if (newActivation) {
+        onActivate(selectedProfile?.key, rule.key, newActivation);
+        setRuleIsChanged(false);
+      }
+    }
+  }, [data, rule.key, selectedProfile, onActivate]);
+
+  const handleDeactivate = () => {
+    if (selectedProfile) {
+      deactivateRule({
+        key: selectedProfile.key,
+        rule: rule.key,
+      });
     }
   };
 
-  handleActivate = (severity: string) => {
-    if (this.props.selectedProfile) {
-      this.props.onActivate(this.props.selectedProfile.key, this.props.rule.key, {
-        severity,
-        inherit: 'NONE',
-      });
-    }
+  const handleActivate = () => {
+    setRuleIsChanged(true);
     return Promise.resolve();
   };
 
-  handleNameClick = (event: React.MouseEvent<HTMLAnchorElement>) => {
+  const handleRevert = (key?: string) => {
+    if (key !== undefined) {
+      activateRule({
+        key,
+        rule: rule.key,
+        reset: true,
+      });
+    }
+  };
+
+  const handleNameClick = (event: React.MouseEvent<HTMLAnchorElement>) => {
     // cmd(ctrl) + click should open a rule permalink in a new tab
     const isLeftClickEvent = event.button === 0;
     const isModifiedEvent = !!(event.metaKey || event.altKey || event.ctrlKey || event.shiftKey);
@@ -90,12 +136,11 @@ export default class RuleListItem extends React.PureComponent<Props> {
 
     event.preventDefault();
     event.stopPropagation();
-    this.props.onOpen(this.props.rule.key);
+    onOpen(rule.key);
   };
 
-  renderActivation = () => {
-    const { activation, selectedProfile } = this.props;
-    if (!activation || !selectedProfile?.parentName) {
+  const renderActivation = () => {
+    if (!activation || selectedProfile?.parentName === undefined) {
       return null;
     }
 
@@ -131,9 +176,7 @@ export default class RuleListItem extends React.PureComponent<Props> {
     );
   };
 
-  renderActions = () => {
-    const { activation, isLoggedIn, canDeactivateInherited, rule, selectedProfile } = this.props;
-
+  const renderActions = () => {
     if (!selectedProfile || !isLoggedIn) {
       return null;
     }
@@ -158,28 +201,16 @@ export default class RuleListItem extends React.PureComponent<Props> {
 
     if (activation) {
       return (
-        <div className="sw-ml-4">
-          {activation.inherit === 'NONE' || canDeactivateInherited ? (
-            <ConfirmButton
-              confirmButtonText={translate('yes')}
-              modalBody={translate('coding_rules.deactivate.confirm')}
-              modalHeader={translate('coding_rules.deactivate')}
-              onConfirm={this.handleDeactivate}
-            >
-              {({ onClick }) => (
-                <DangerButtonSecondary onClick={onClick}>
-                  {translate('coding_rules.deactivate')}
-                </DangerButtonSecondary>
-              )}
-            </ConfirmButton>
-          ) : (
-            <Tooltip content={translate('coding_rules.can_not_deactivate')}>
-              <DangerButtonSecondary disabled>
-                {translate('coding_rules.deactivate')}
-              </DangerButtonSecondary>
-            </Tooltip>
-          )}
-        </div>
+        <ActivatedRuleActions
+          activation={activation}
+          profile={selectedProfile}
+          ruleDetails={rule}
+          onActivate={handleActivate}
+          handleDeactivate={handleDeactivate}
+          handleRevert={handleRevert}
+          showDeactivated
+          canDeactivateInherited={canDeactivateInherited}
+        />
       );
     }
 
@@ -189,7 +220,7 @@ export default class RuleListItem extends React.PureComponent<Props> {
           <ActivationButton
             buttonText={translate('coding_rules.activate')}
             modalHeader={translate('coding_rules.activate_in_quality_profile')}
-            onDone={this.handleActivate}
+            onDone={handleActivate}
             profiles={[selectedProfile]}
             rule={rule}
           />
@@ -198,118 +229,115 @@ export default class RuleListItem extends React.PureComponent<Props> {
     );
   };
 
-  render() {
-    const { rule, selected } = this.props;
-    const allTags = [...(rule.tags ?? []), ...(rule.sysTags ?? [])];
-    return (
-      <ListItemStyled
-        selected={selected}
-        className="it__coding-rule sw-p-3 sw-mb-4 sw-rounded-1 sw-bg-white"
-        aria-current={selected}
-        data-rule={rule.key}
-        onClick={() => this.props.selectRule(rule.key)}
-      >
-        <div className="sw-flex sw-flex-col sw-gap-3">
-          <div className="sw-flex sw-justify-between sw-items-center">
-            <div className="sw-flex sw-items-center">
-              {this.renderActivation()}
+  const allTags = [...(rule.tags ?? []), ...(rule.sysTags ?? [])];
+  return (
+    <ListItemStyled
+      selected={selected}
+      className="it__coding-rule sw-p-3 sw-mb-4 sw-rounded-1 sw-bg-white"
+      aria-current={selected}
+      data-rule={rule.key}
+      onClick={() => selectRule(rule.key)}
+    >
+      <div className="sw-flex sw-flex-col sw-gap-3">
+        <div className="sw-flex sw-justify-between sw-items-center">
+          <div className="sw-flex sw-items-center">
+            {renderActivation()}
 
-              <Link
-                className="sw-body-sm-highlight"
-                onClick={this.handleNameClick}
-                to={getRuleUrl(rule.key)}
-              >
-                {rule.name}
-              </Link>
-            </div>
-
-            <div>
-              {rule.cleanCodeAttributeCategory !== undefined && (
-                <CleanCodeAttributePill
-                  cleanCodeAttributeCategory={rule.cleanCodeAttributeCategory}
-                  type="rule"
-                />
-              )}
-            </div>
+            <Link
+              className="sw-body-sm-highlight"
+              onClick={handleNameClick}
+              to={getRuleUrl(rule.key)}
+            >
+              {rule.name}
+            </Link>
           </div>
 
-          <div className="sw-flex sw-items-center">
-            <div className="sw-grow sw-flex sw-gap-2 sw-items-center sw-body-xs">
-              {rule.impacts.length > 0 && (
-                <SoftwareImpactPillList softwareImpacts={rule.impacts} type="rule" />
-              )}
-            </div>
-
-            <TextSubdued as="ul" className="sw-flex sw-gap-1 sw-items-center sw-body-xs">
-              <li>{rule.langName}</li>
-
-              <SeparatorCircleIcon aria-hidden as="li" />
-              <li>
-                <DocHelpTooltip
-                  content={
-                    <div>
-                      <p className="sw-mb-2">{translate('coding_rules.type.deprecation.title')}</p>
-                      <p>{translate('coding_rules.type.deprecation.filter_by')}</p>
-                    </div>
-                  }
-                  links={[
-                    {
-                      href: '/user-guide/clean-code/introduction',
-                      label: translate('learn_more'),
-                    },
-                  ]}
-                >
-                  <TypeHelper
-                    className="sw-flex sw-items-center"
-                    iconFill="iconTypeDisabled"
-                    type={rule.type}
-                  />
-                </DocHelpTooltip>
-              </li>
-
-              {rule.isTemplate && (
-                <>
-                  <SeparatorCircleIcon aria-hidden as="li" />
-                  <li>
-                    <Tooltip content={translate('coding_rules.rule_template.title')}>
-                      <span>
-                        <Badge>{translate('coding_rules.rule_template')}</Badge>
-                      </span>
-                    </Tooltip>
-                  </li>
-                </>
-              )}
-
-              {rule.status !== 'READY' && (
-                <>
-                  <SeparatorCircleIcon aria-hidden as="li" />
-                  <li>
-                    <Badge variant="deleted">{translate('rules.status', rule.status)}</Badge>
-                  </li>
-                </>
-              )}
-
-              {allTags.length > 0 && (
-                <>
-                  <SeparatorCircleIcon aria-hidden as="li" />
-                  <li>
-                    <TagsList
-                      allowUpdate={false}
-                      className="sw-body-xs"
-                      tagsClassName="sw-body-xs"
-                      tags={allTags}
-                    />
-                  </li>
-                </>
-              )}
-            </TextSubdued>
-
-            <div className="sw-flex sw-items-center">{this.renderActions()}</div>
+          <div>
+            {rule.cleanCodeAttributeCategory !== undefined && (
+              <CleanCodeAttributePill
+                cleanCodeAttributeCategory={rule.cleanCodeAttributeCategory}
+                type="rule"
+              />
+            )}
           </div>
         </div>
-      </ListItemStyled>
-    );
-  }
+
+        <div className="sw-flex sw-items-center">
+          <div className="sw-grow sw-flex sw-gap-2 sw-items-center sw-body-xs">
+            {rule.impacts.length > 0 && (
+              <SoftwareImpactPillList softwareImpacts={rule.impacts} type="rule" />
+            )}
+          </div>
+
+          <TextSubdued as="ul" className="sw-flex sw-gap-1 sw-items-center sw-body-xs">
+            <li>{rule.langName}</li>
+
+            <SeparatorCircleIcon aria-hidden as="li" />
+            <li>
+              <DocHelpTooltip
+                content={
+                  <div>
+                    <p className="sw-mb-2">{translate('coding_rules.type.deprecation.title')}</p>
+                    <p>{translate('coding_rules.type.deprecation.filter_by')}</p>
+                  </div>
+                }
+                links={[
+                  {
+                    href: DocLink.CleanCodeIntroduction,
+                    label: translate('learn_more'),
+                  },
+                ]}
+              >
+                <TypeHelper
+                  className="sw-flex sw-items-center"
+                  iconFill="iconTypeDisabled"
+                  type={rule.type}
+                />
+              </DocHelpTooltip>
+            </li>
+
+            {rule.isTemplate && (
+              <>
+                <SeparatorCircleIcon aria-hidden as="li" />
+                <li>
+                  <Tooltip content={translate('coding_rules.rule_template.title')}>
+                    <span>
+                      <Badge>{translate('coding_rules.rule_template')}</Badge>
+                    </span>
+                  </Tooltip>
+                </li>
+              </>
+            )}
+
+            {rule.status !== 'READY' && (
+              <>
+                <SeparatorCircleIcon aria-hidden as="li" />
+                <li>
+                  <Badge variant="deleted">{translate('rules.status', rule.status)}</Badge>
+                </li>
+              </>
+            )}
+
+            {allTags.length > 0 && (
+              <>
+                <SeparatorCircleIcon aria-hidden as="li" />
+                <li>
+                  <TagsList
+                    allowUpdate={false}
+                    className="sw-body-xs"
+                    tagsClassName="sw-body-xs"
+                    tags={allTags}
+                  />
+                </li>
+              </>
+            )}
+          </TextSubdued>
+
+          <div className="sw-flex sw-items-center">{renderActions()}</div>
+        </div>
+      </div>
+    </ListItemStyled>
+  );
 }
 
 const ListItemStyled = styled.li<{ selected: boolean }>`

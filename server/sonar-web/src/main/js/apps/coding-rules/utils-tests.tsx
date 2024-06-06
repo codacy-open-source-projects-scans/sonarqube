@@ -33,6 +33,7 @@ import {
   CleanCodeAttributeCategory,
   SoftwareQuality,
 } from '../../types/clean-code-taxonomy';
+import { Feature } from '../../types/features';
 import { CurrentUser } from '../../types/users';
 import routes from './routes';
 
@@ -71,6 +72,7 @@ const selectors = {
   availableSinceFacet: byRole('button', { name: 'coding_rules.facet.available_since' }),
   templateFacet: byRole('button', { name: 'coding_rules.facet.template' }),
   qpFacet: byRole('button', { name: 'coding_rules.facet.qprofile' }),
+  prioritizedRuleFacet: byRole('button', { name: 'coding_rules.facet.prioritizedRule' }),
   facetClear: (name: string) => byTestId(name),
   facetSearchInput: (name: string) => byRole('searchbox', { name }),
   facetItem: (name: string | RegExp) => byRole('checkbox', { name }),
@@ -113,6 +115,7 @@ const selectors = {
   caycNotificationButton: byRole('button', { name: 'coding_rules.more_info.scroll_message' }),
   extendDescriptionButton: byRole('button', { name: 'coding_rules.extend_description' }),
   extendDescriptionTextbox: byRole('textbox', { name: 'coding_rules.extend_description' }),
+  prioritizedYesCell: byRole('cell', { name: 'yes' }),
   saveButton: byRole('button', { name: 'save' }),
   cancelButton: byRole('button', { name: 'cancel' }),
   removeButton: byRole('button', { name: 'remove' }),
@@ -147,9 +150,11 @@ const selectors = {
   // Rule Quality Profiles
   qpLink: (name: string) => byRole('link', { name }),
   activateButton: byRole('button', { name: 'coding_rules.activate' }),
-  deactivateButton: byRole('button', { name: 'coding_rules.deactivate' }),
+  deactivateButton: byRole('button', { name: /coding_rules.deactivate_in_quality_profile/ }),
   oldSeveritySelect: byRole('combobox', { name: 'severity' }),
   qualityProfileSelect: byRole('combobox', { name: 'coding_rules.quality_profile' }),
+  prioritizedSwitch: byRole('switch'),
+  selectValue: byText(/severity\./),
   activateQPDialog: byRole('dialog', { name: 'coding_rules.activate_in_quality_profile' }),
   changeButton: (profile: string) =>
     byRole('button', { name: `coding_rules.change_details_x.${profile}` }),
@@ -244,10 +249,15 @@ export function getPageObjects() {
   };
 }
 
-export function renderCodingRulesApp(currentUser?: CurrentUser, navigateTo?: string) {
+export function renderCodingRulesApp(
+  currentUser?: CurrentUser,
+  navigateTo?: string,
+  featureList?: Feature[],
+) {
   renderAppRoutes('coding_rules', routes, {
     navigateTo,
     currentUser,
+    featureList,
     languages: {
       js: { key: 'js', name: 'JavaScript' },
       java: { key: 'java', name: 'Java' },

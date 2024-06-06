@@ -132,6 +132,7 @@ import org.sonar.server.issue.AddTagsAction;
 import org.sonar.server.issue.AssignAction;
 import org.sonar.server.issue.CommentAction;
 import org.sonar.server.issue.IssueChangePostProcessorImpl;
+import org.sonar.server.issue.PrioritizedRulesFeature;
 import org.sonar.server.issue.RemoveTagsAction;
 import org.sonar.server.issue.SetSeverityAction;
 import org.sonar.server.issue.SetTypeAction;
@@ -154,6 +155,7 @@ import org.sonar.server.management.DelegatingManagedServices;
 import org.sonar.server.measure.index.ProjectsEsModule;
 import org.sonar.server.measure.live.LiveMeasureModule;
 import org.sonar.server.measure.ws.MeasuresWsModule;
+import org.sonar.server.metric.IssueCountMetrics;
 import org.sonar.server.metric.UnanalyzedLanguageMetrics;
 import org.sonar.server.metric.ws.MetricsWsModule;
 import org.sonar.server.monitoring.ComputeEngineMetricStatusTask;
@@ -380,6 +382,7 @@ public class PlatformLevel4 extends PlatformLevel {
       new MetricsWsModule(),
       new MeasuresWsModule(),
       UnanalyzedLanguageMetrics.class,
+      IssueCountMetrics.class,
 
       new QualityGateModule(),
       new QualityGateWsModule(),
@@ -470,6 +473,7 @@ public class PlatformLevel4 extends PlatformLevel {
       IssueIndexer.class,
       IssueIteratorFactory.class,
       PermissionIndexer.class,
+      PrioritizedRulesFeature.class,
       new IssueWsModule(),
       NewIssuesEmailTemplate.class,
       MyNewIssuesEmailTemplate.class,

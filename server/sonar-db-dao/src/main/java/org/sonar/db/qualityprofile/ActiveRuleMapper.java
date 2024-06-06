@@ -59,6 +59,8 @@ public interface ActiveRuleMapper {
     @Param("ruleUuids") Collection<String> ruleUuids,
     @Param("ruleProfileUuids") Collection<String> ruleProfileUuids);
 
+  List<OrgActiveRuleDto> selectPrioritizedRules(@Param("ruleProfileUuids") Collection<String> ruleProfileUuids);
+
   void insertParameter(ActiveRuleParamDto dto);
 
   void updateParameter(ActiveRuleParamDto dto);

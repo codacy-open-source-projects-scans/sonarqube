@@ -17,6 +17,7 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+
 import {
   ButtonSecondary,
   FlagMessage,
@@ -39,6 +40,7 @@ import { useAvailableFeatures } from '../../../app/components/available-features
 import { useMetrics } from '../../../app/components/metrics/withMetricsContext';
 import DocumentationLink from '../../../components/common/DocumentationLink';
 import ModalButton, { ModalProps } from '../../../components/controls/ModalButton';
+import { DocLink } from '../../../helpers/doc-links';
 import { useDocUrl } from '../../../helpers/docs';
 import { getLocalizedMetricName, translate } from '../../../helpers/l10n';
 import { Feature } from '../../../types/features';
@@ -54,8 +56,8 @@ import ConditionsTable from './ConditionsTable';
 import QGRecommendedIcon from './QGRecommendedIcon';
 
 interface Props {
-  qualityGate: QualityGate;
   isFetching?: boolean;
+  qualityGate: QualityGate;
 }
 
 const FORBIDDEN_METRIC_TYPES = ['DATA', 'DISTRIB', 'STRING', 'BOOL'];
@@ -107,7 +109,11 @@ export default function Conditions({ qualityGate, isFetching }: Readonly<Props>)
           (metric) =>
             !metric.hidden &&
             !FORBIDDEN_METRIC_TYPES.includes(metric.type) &&
-            !FORBIDDEN_METRICS.includes(metric.key),
+            !FORBIDDEN_METRICS.includes(metric.key) &&
+            !(
+              metric.key === MetricKey.prioritized_rule_issues &&
+              !hasFeature(Feature.PrioritizedRules)
+            ),
         ),
         conditions,
         (metric, condition) => metric.key === condition.metric,
@@ -119,7 +125,7 @@ export default function Conditions({ qualityGate, isFetching }: Readonly<Props>)
     [metrics, qualityGate],
   );
 
-  const getDocUrl = useDocUrl();
+  const docUrl = useDocUrl(DocLink.CaYC);
   const isCompliantCustomQualityGate =
     qualityGate.caycStatus !== CaycStatus.NonCompliant && !qualityGate.isBuiltIn;
   const isOptimizing = isCompliantCustomQualityGate && !isQualityGateOptimized(qualityGate);
@@ -157,7 +163,7 @@ export default function Conditions({ qualityGate, isFetching }: Readonly<Props>)
               id="quality_gates.is_built_in.cayc.description"
               values={{
                 link: (
-                  <DocumentationLink to="/user-guide/clean-as-you-code/">
+                  <DocumentationLink to={DocLink.CaYC}>
                     {translate('clean_as_you_code')}
                   </DocumentationLink>
                 ),
@@ -186,7 +192,7 @@ export default function Conditions({ qualityGate, isFetching }: Readonly<Props>)
               content={translate('quality_gates.conditions.help')}
               links={[
                 {
-                  href: '/user-guide/clean-as-you-code/',
+                  href: DocLink.CaYC,
                   label: translate('quality_gates.conditions.help.link'),
                 },
               ]}
@@ -311,11 +317,7 @@ export default function Conditions({ qualityGate, isFetching }: Readonly<Props>)
               id="quality_gates.cayc_unfollow.description"
               defaultMessage={translate('quality_gates.cayc_unfollow.description')}
               values={{
-                cayc_link: (
-                  <Link to={getDocUrl('/user-guide/clean-as-you-code/')}>
-                    {translate('quality_gates.cayc')}
-                  </Link>
-                ),
+                cayc_link: <Link to={docUrl}>{translate('quality_gates.cayc')}</Link>,
               }}
             />
           </SubHeading>
