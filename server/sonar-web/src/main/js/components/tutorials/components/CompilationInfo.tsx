@@ -18,7 +18,8 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 
-import { FlagMessage, Link } from 'design-system';
+import { LinkStandalone as Link } from '@sonarsource/echoes-react';
+import { FlagMessage } from 'design-system';
 import * as React from 'react';
 import { FormattedMessage } from 'react-intl';
 import { DocLink } from '../../../helpers/doc-links';
@@ -41,7 +42,7 @@ export function CompilationInfo({ className = 'sw-my-2' }: CompilationInfoProps)
             defaultMessage={translate('onboarding.tutorial.cfamilly.compilation_database_info')}
             values={{
               link: (
-                <Link to={docUrl(DocLink.CFamily)}>
+                <Link to={docUrl(DocLink.CFamilyCompilationDatabase)}>
                   {translate('onboarding.tutorial.cfamilly.compilation_database_info.link')}
                 </Link>
               ),

@@ -17,7 +17,25 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-@ParametersAreNonnullByDefault
-package org.sonarqube.ws.client.githubprovisioning;
+package org.sonar.server.common.github.config;
 
-import javax.annotation.ParametersAreNonnullByDefault;
+import java.util.Set;
+import org.sonar.server.common.gitlab.config.ProvisioningType;
+
+public record GithubConfiguration(
+  String id,
+  boolean enabled,
+  String clientId,
+  String clientSecret,
+  String applicationId,
+  String privateKey,
+  boolean synchronizeGroups,
+  String apiUrl,
+  String webUrl,
+  Set<String> allowedOrganizations,
+  ProvisioningType provisioningType,
+  boolean allowUsersToSignUp,
+  boolean provisionProjectVisibility,
+  boolean userConsentRequiredAfterUpgrade
+) {
+}

@@ -28,12 +28,12 @@ import { useComponentMeasuresWithMetricsQuery } from '../../../queries/component
 import { useComponentQualityGateQuery } from '../../../queries/quality-gates';
 import { PullRequest } from '../../../types/branch-like';
 import { Component } from '../../../types/types';
+import QGStatus from '../branches/QualityGateStatus';
 import { AnalysisStatus } from '../components/AnalysisStatus';
 import IgnoredConditionWarning from '../components/IgnoredConditionWarning';
-import ZeroNewIssuesSimplificationGuide from '../components/ZeroNewIssuesSimplificationGuide';
+import LastAnalysisLabel from '../components/LastAnalysisLabel';
 import '../styles.css';
-import { PR_METRICS, Status } from '../utils';
-import BranchQualityGate from './BranchQualityGate';
+import { PR_METRICS } from '../utils';
 import MeasuresCardPanel from './MeasuresCardPanel';
 import PullRequestMetaTopBar from './PullRequestMetaTopBar';
 import SonarLintAd from './SonarLintAd';
@@ -90,10 +90,6 @@ export default function PullRequestOverview(props: Readonly<Readonly<Props>>) {
     .map((c) => enhanceConditionWithMeasure(c, measures))
     .filter(isDefined);
 
-  const failedConditions = enhancedConditions.filter(
-    (condition) => condition.level === Status.ERROR,
-  );
-
   return (
     <CenteredLayout>
       <PageContentFontWrapper className="it__pr-overview sw-mt-12 sw-mb-8 sw-grid sw-grid-cols-12 sw-body-sm">
@@ -101,28 +97,22 @@ export default function PullRequestOverview(props: Readonly<Readonly<Props>>) {
           <PullRequestMetaTopBar pullRequest={pullRequest} measures={measures} />
           <BasicSeparator className="sw-my-4" />
 
-          <AnalysisStatus className="sw-mb-4" component={component} />
-
           {ignoredConditions && <IgnoredConditionWarning />}
 
-          {status && (
-            <BranchQualityGate
-              branchLike={pullRequest}
-              component={component}
-              status={status}
-              failedConditions={failedConditions}
-            />
-          )}
+          <div className="sw-flex sw-justify-between sw-items-start sw-my-6">
+            <QGStatus status={status} titleSize="extra-large" />
+            <LastAnalysisLabel analysisDate={pullRequest.analysisDate} />
+          </div>
+
+          <AnalysisStatus className="sw-mb-4" component={component} />
 
           <MeasuresCardPanel
-            className="sw-flex-1"
             pullRequest={pullRequest}
             component={component}
             conditions={enhancedConditions}
+            qualityGate={qualityGate}
             measures={measures}
           />
-
-          {qualityGate?.isBuiltIn && <ZeroNewIssuesSimplificationGuide qualityGate={qualityGate} />}
 
           <SonarLintAd status={status} />
         </div>

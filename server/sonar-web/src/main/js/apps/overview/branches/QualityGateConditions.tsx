@@ -17,7 +17,7 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { BasicSeparator, Link } from 'design-system';
+import { CardSeparator, Link } from 'design-system';
 import { sortBy } from 'lodash';
 import * as React from 'react';
 import { MetricKey } from '~sonar-aligned/types/metrics';
@@ -72,8 +72,8 @@ export function QualityGateConditions(props: Readonly<QualityGateConditionsProps
   }
 
   return (
-    <ul id="overview-quality-gate-conditions-list" className="sw-mb-2">
-      {renderConditions.map((condition) => (
+    <ul id="overview-quality-gate-conditions-list">
+      {renderConditions.map((condition, idx) => (
         <div key={condition.measure.metric.key}>
           {isSimplifiedCondition(condition) ? (
             <QualityGateSimplifiedCondition
@@ -88,7 +88,7 @@ export function QualityGateConditions(props: Readonly<QualityGateConditionsProps
               condition={condition}
             />
           )}
-          <BasicSeparator />
+          {idx !== renderConditions.length - 1 && <CardSeparator />}
         </div>
       ))}
       {renderCollapsed && (

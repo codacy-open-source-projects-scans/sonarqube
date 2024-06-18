@@ -22,6 +22,7 @@ package org.sonar.server.v2.api.gitlab.config.resource;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;
 import javax.annotation.Nullable;
+import org.sonar.server.v2.api.model.ProvisioningType;
 
 public record GitlabConfigurationResource(
 

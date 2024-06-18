@@ -17,26 +17,8 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-package org.sonarqube.ws.client.githubprovisioning;
+package org.sonar.server.v2.api.model;
 
-import org.sonarqube.ws.client.BaseService;
-import org.sonarqube.ws.client.PostRequest;
-import org.sonarqube.ws.client.WsConnector;
-
-public class GithubProvisioningService extends BaseService {
-  public GithubProvisioningService(WsConnector wsConnector) {
-    super(wsConnector, "api/github_provisioning");
-  }
-
-  public void enable() {
-    call(
-      new PostRequest(path("enable"))
-    );
-  }
-
-  public void disable() {
-    call(
-      new PostRequest(path("disable"))
-    );
-  }
+public enum ProvisioningType {
+  JIT, AUTO_PROVISIONING
 }

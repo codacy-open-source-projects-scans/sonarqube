@@ -72,7 +72,8 @@ export function getTutorialBuildButtons() {
     gradleBuildButton: byRole('radio', { name: `onboarding.build.${BuildTools.Gradle}` }),
     gradleDSLButton: (name: GradleBuildDSL) => byRole('radio', { name }),
     dotnetBuildButton: byRole('radio', { name: `onboarding.build.${BuildTools.DotNet}` }),
-    cFamilyBuildButton: byRole('radio', { name: `onboarding.build.${BuildTools.CFamily}` }),
+    cppBuildButton: byRole('radio', { name: `onboarding.build.${BuildTools.Cpp}` }),
+    objCBuildButton: byRole('radio', { name: `onboarding.build.${BuildTools.ObjectiveC}` }),
     otherBuildButton: byRole('radio', { name: `onboarding.build.${BuildTools.Other}` }),
     windowsDotnetCoreButton: byRole('radio', {
       name: `onboarding.build.${BuildTools.DotNet}.win_core`,
@@ -92,5 +93,9 @@ export function getTutorialBuildButtons() {
     linuxButton: byRole('radio', { name: `onboarding.build.other.os.${OSs.Linux}` }),
     windowsButton: byRole('radio', { name: `onboarding.build.other.os.${OSs.Windows}` }),
     macosButton: byRole('radio', { name: `onboarding.build.other.os.${OSs.MacOS}` }),
+    arm64Button: byRole('radio', { name: `onboarding.build.other.architecture.arm64` }),
+    x86_64Button: byRole('radio', { name: `onboarding.build.other.architecture.x86_64` }),
+    autoConfigAutomatic: byRole('radio', { name: 'onboarding.build.cpp.autoconfig.automatic' }),
+    autoConfigManual: byRole('radio', { name: 'onboarding.build.cpp.autoconfig.manual' }),
   };
 }

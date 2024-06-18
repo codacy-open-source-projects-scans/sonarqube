@@ -17,47 +17,197 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { IconQuestionMark, Tooltip, TooltipSide } from '@sonarsource/echoes-react';
 import classNames from 'classnames';
+import {
+  Card,
+  LightLabel,
+  SnoozeCircleIcon,
+  TextError,
+  TextSubdued,
+  TrendDownCircleIcon,
+  TrendUpCircleIcon,
+} from 'design-system';
 import * as React from 'react';
-import { getComponentSecurityHotspotsUrl } from '~sonar-aligned/helpers/urls';
-import { MetricKey } from '~sonar-aligned/types/metrics';
+import { useIntl } from 'react-intl';
+import {
+  getComponentIssuesUrl,
+  getComponentSecurityHotspotsUrl,
+} from '~sonar-aligned/helpers/urls';
+import { MetricKey, MetricType } from '~sonar-aligned/types/metrics';
 import { getLeakValue } from '../../../components/measure/utils';
+import { DEFAULT_ISSUES_QUERY } from '../../../components/shared/utils';
 import { findMeasure } from '../../../helpers/measures';
 import { getComponentDrilldownUrl } from '../../../helpers/urls';
+import { getBranchLikeQuery } from '../../../sonar-aligned/helpers/branch-like';
+import { formatMeasure } from '../../../sonar-aligned/helpers/measures';
 import { PullRequest } from '../../../types/branch-like';
 import { QualityGateStatusConditionEnhanced } from '../../../types/quality-gates';
-import { Component, MeasureEnhanced } from '../../../types/types';
+import { Component, MeasureEnhanced, QualityGate } from '../../../types/types';
+import {
+  GridContainer,
+  StyleMeasuresCard,
+  StyleMeasuresCardRightBorder,
+  StyledConditionsCard,
+} from '../branches/BranchSummaryStyles';
+import FailedConditions from '../branches/FailedConditions';
+import { IssueMeasuresCardInner } from '../components/IssueMeasuresCardInner';
 import MeasuresCardNumber from '../components/MeasuresCardNumber';
 import MeasuresCardPercent from '../components/MeasuresCardPercent';
-import { MeasurementType, getMeasurementMetricKey } from '../utils';
-import IssueMeasuresCard from './IssueMeasuresCard';
+import {
+  MeasurementType,
+  Status,
+  getConditionRequiredLabel,
+  getMeasurementMetricKey,
+} from '../utils';
 
 interface Props {
-  className?: string;
   component: Component;
   conditions: QualityGateStatusConditionEnhanced[];
   measures: MeasureEnhanced[];
   pullRequest: PullRequest;
+  qualityGate?: QualityGate;
 }
 
 export default function MeasuresCardPanel(props: React.PropsWithChildren<Props>) {
-  const { pullRequest, component, measures, conditions, className } = props;
+  const { pullRequest, component, measures, conditions, qualityGate } = props;
 
   const newSecurityHotspots = getLeakValue(
     findMeasure(measures, MetricKey.new_security_hotspots),
   ) as string;
 
-  return (
-    <>
-      <IssueMeasuresCard
-        conditions={conditions}
-        measures={measures}
-        component={component}
-        pullRequest={pullRequest}
-      />
+  const intl = useIntl();
 
-      <div className={classNames('sw-w-full sw-flex sw-flex-row sw-gap-4 sw-mt-4', className)}>
-        <div className="sw-flex-1 sw-flex sw-flex-col sw-gap-4">
+  const issuesCount = getLeakValue(findMeasure(measures, MetricKey.new_violations));
+  const issuesCondition = conditions.find((c) => c.metric === MetricKey.new_violations);
+  const isIssuesConditionFailed = issuesCondition?.level === Status.ERROR;
+  const fixedCount = findMeasure(measures, MetricKey.pull_request_fixed_issues)?.value;
+  const acceptedCount = getLeakValue(findMeasure(measures, MetricKey.new_accepted_issues));
+
+  const issuesUrl = getComponentIssuesUrl(component.key, {
+    ...getBranchLikeQuery(pullRequest),
+    ...DEFAULT_ISSUES_QUERY,
+  });
+  const fixedUrl = getComponentIssuesUrl(component.key, {
+    fixedInPullRequest: pullRequest.key,
+  });
+  const acceptedUrl = getComponentIssuesUrl(component.key, {
+    ...getBranchLikeQuery(pullRequest),
+    ...DEFAULT_ISSUES_QUERY,
+    issueStatuses: 'ACCEPTED',
+  });
+
+  const totalFailedConditions = conditions.filter((condition) => condition.level === Status.ERROR);
+
+  return (
+    <Card className="sw-py-8 sw-px-6">
+      <GridContainer
+        className={classNames('sw-relative sw-overflow-hidden js-summary', {
+          'sw-grid-cols-3': totalFailedConditions.length === 0,
+          'sw-grid-cols-4': totalFailedConditions.length > 0,
+        })}
+      >
+        {totalFailedConditions.length > 0 && (
+          <StyledConditionsCard className="sw-row-span-3">
+            <FailedConditions
+              qualityGate={qualityGate}
+              branchLike={pullRequest}
+              failedConditions={totalFailedConditions}
+              isNewCode
+              component={component}
+            />
+          </StyledConditionsCard>
+        )}
+        <StyleMeasuresCard>
+          <IssueMeasuresCardInner
+            header={intl.formatMessage({ id: 'overview.new_issues' })}
+            data-testid={`overview__measures-${MetricKey.new_violations}`}
+            metric={MetricKey.new_violations}
+            value={formatMeasure(issuesCount, MetricType.ShortInteger)}
+            url={issuesUrl}
+            failed={isIssuesConditionFailed}
+            icon={isIssuesConditionFailed && <TrendUpCircleIcon />}
+            footer={
+              issuesCondition &&
+              (isIssuesConditionFailed ? (
+                <TextError
+                  className="sw-font-regular sw-body-xs sw-inline"
+                  text={getConditionRequiredLabel(issuesCondition, intl, true)}
+                />
+              ) : (
+                <LightLabel className="sw-body-xs">
+                  {getConditionRequiredLabel(issuesCondition, intl)}
+                </LightLabel>
+              ))
+            }
+          />
+        </StyleMeasuresCard>
+        <StyleMeasuresCard>
+          <IssueMeasuresCardInner
+            header={intl.formatMessage({ id: 'overview.accepted_issues' })}
+            data-testid={`overview__measures-${MetricKey.new_accepted_issues}`}
+            metric={MetricKey.new_accepted_issues}
+            value={formatMeasure(acceptedCount, MetricType.ShortInteger)}
+            disabled={component.needIssueSync}
+            url={acceptedUrl}
+            icon={
+              acceptedCount !== undefined && (
+                <SnoozeCircleIcon
+                  color={
+                    acceptedCount === '0' ? 'overviewCardDefaultIcon' : 'overviewCardWarningIcon'
+                  }
+                />
+              )
+            }
+            footer={
+              <TextSubdued className="sw-body-xs">
+                {intl.formatMessage({ id: 'overview.accepted_issues.help' })}
+              </TextSubdued>
+            }
+          />
+        </StyleMeasuresCard>
+        <StyleMeasuresCard>
+          <IssueMeasuresCardInner
+            header={
+              <>
+                {intl.formatMessage({ id: 'overview.pull_request.fixed_issues' })}
+                <Tooltip
+                  content={
+                    <div className="sw-flex sw-flex-col sw-gap-4">
+                      <span>
+                        {intl.formatMessage({
+                          id: 'overview.pull_request.fixed_issues.disclaimer',
+                        })}
+                      </span>
+                      <span>
+                        {intl.formatMessage({
+                          id: 'overview.pull_request.fixed_issues.disclaimer.2',
+                        })}
+                      </span>
+                    </div>
+                  }
+                  side={TooltipSide.Top}
+                >
+                  <span className="sw-body-sm sw-cursor-default">
+                    <IconQuestionMark color="echoes-color-icon-subdued" />
+                  </span>
+                </Tooltip>
+              </>
+            }
+            data-testid={`overview__measures-${MetricKey.pull_request_fixed_issues}`}
+            metric={MetricKey.pull_request_fixed_issues}
+            value={formatMeasure(fixedCount, MetricType.ShortInteger)}
+            disabled={component.needIssueSync}
+            url={fixedUrl}
+            icon={fixedCount !== undefined && fixedCount !== '0' && <TrendDownCircleIcon />}
+            footer={
+              <TextSubdued className="sw-body-xs">
+                {intl.formatMessage({ id: 'overview.pull_request.fixed_issues.help' })}
+              </TextSubdued>
+            }
+          />
+        </StyleMeasuresCard>
+        <StyleMeasuresCardRightBorder>
           <MeasuresCardPercent
             componentKey={component.key}
             branchLike={pullRequest}
@@ -77,23 +227,8 @@ export default function MeasuresCardPanel(props: React.PropsWithChildren<Props>)
             showRequired
             useDiffMetric
           />
-
-          <MeasuresCardNumber
-            label={
-              newSecurityHotspots === '1'
-                ? 'issue.type.SECURITY_HOTSPOT'
-                : 'issue.type.SECURITY_HOTSPOT.plural'
-            }
-            url={getComponentSecurityHotspotsUrl(component.key, pullRequest)}
-            value={newSecurityHotspots}
-            metric={MetricKey.new_security_hotspots}
-            conditions={conditions}
-            conditionMetric={MetricKey.new_security_hotspots_reviewed}
-            showRequired
-          />
-        </div>
-
-        <div className="sw-flex-1 sw-flex sw-flex-col sw-gap-4">
+        </StyleMeasuresCardRightBorder>
+        <StyleMeasuresCardRightBorder>
           <MeasuresCardPercent
             componentKey={component.key}
             branchLike={pullRequest}
@@ -113,8 +248,23 @@ export default function MeasuresCardPanel(props: React.PropsWithChildren<Props>)
             useDiffMetric
             showRequired
           />
+        </StyleMeasuresCardRightBorder>
+        <div>
+          <MeasuresCardNumber
+            label={
+              newSecurityHotspots === '1'
+                ? 'issue.type.SECURITY_HOTSPOT'
+                : 'issue.type.SECURITY_HOTSPOT.plural'
+            }
+            url={getComponentSecurityHotspotsUrl(component.key, pullRequest)}
+            value={newSecurityHotspots}
+            metric={MetricKey.new_security_hotspots}
+            conditions={conditions}
+            conditionMetric={MetricKey.new_security_hotspots_reviewed}
+            showRequired
+          />
         </div>
-      </div>
-    </>
+      </GridContainer>
+    </Card>
   );
 }

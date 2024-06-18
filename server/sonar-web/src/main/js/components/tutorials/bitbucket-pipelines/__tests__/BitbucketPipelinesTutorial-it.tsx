@@ -86,15 +86,56 @@ it('should follow and complete all steps', async () => {
   await user.click(ui.dotnetBuildButton.get());
   expect(getCopyToClipboardValue(0, 'Copy')).toMatchSnapshot('.NET: bitbucket-pipelines.yml');
 
-  // CFamily
-  await user.click(ui.cFamilyBuildButton.get());
-  expect(getCopyToClipboardValue(0, 'Copy')).toMatchSnapshot('CFamily: sonar-project.properties');
-  expect(getCopyToClipboardValue(1, 'Copy')).toMatchSnapshot('CFamily: bitbucket-pipelines.yml');
+  // Cpp
+  await user.click(ui.cppBuildButton.get());
+  expect(getCopyToClipboardValue(0, 'Copy')).toMatchSnapshot(
+    'C++ (automatic) and other: sonar-project.properties',
+  );
+  expect(getCopyToClipboardValue(1, 'Copy')).toMatchSnapshot(
+    'C++ (automatic) and other: bitbucket-pipelines.yml',
+  );
+
+  // Cpp (manual)
+  await user.click(ui.autoConfigManual.get());
+  expect(getCopyToClipboardValue(0, 'Copy')).toMatchSnapshot(
+    'C++ (manual) and Objective-C: sonar-project.properties',
+  );
+  expect(getCopyToClipboardValue(1, 'Copy')).toMatchSnapshot(
+    'C++ (manual) and Objective-C: bitbucket-pipelines.yml',
+  );
+  await user.click(ui.arm64Button.get());
+  expect(getCopyToClipboardValue(0, 'Copy')).toMatchSnapshot(
+    'C++ (manual arm64) and Objective-C: sonar-project.properties',
+  );
+  expect(getCopyToClipboardValue(1, 'Copy')).toMatchSnapshot(
+    'C++ (manual arm64) and Objective-C: bitbucket-pipelines.yml',
+  );
+
+  // Objective-C
+  await user.click(ui.objCBuildButton.get());
+  await user.click(ui.x86_64Button.get());
+  expect(getCopyToClipboardValue(0, 'Copy')).toMatchSnapshot(
+    'C++ (manual) and Objective-C: bitbucket-pipelines.yml',
+  );
+  expect(getCopyToClipboardValue(1, 'Copy')).toMatchSnapshot(
+    'C++ (manual) and Objective-C: sonar-project.properties',
+  );
+  await user.click(ui.arm64Button.get());
+  expect(getCopyToClipboardValue(0, 'Copy')).toMatchSnapshot(
+    'C++ (manual arm64) and Objective-C: bitbucket-pipelines.yml',
+  );
+  expect(getCopyToClipboardValue(1, 'Copy')).toMatchSnapshot(
+    'C++ (manual arm64) and Objective-C: sonar-project.properties',
+  );
 
   // Other
   await user.click(ui.otherBuildButton.get());
-  expect(getCopyToClipboardValue(0, 'Copy')).toMatchSnapshot('Other: sonar-project.properties');
-  expect(getCopyToClipboardValue(1, 'Copy')).toMatchSnapshot('Other: .github/workflows/build.yml');
+  expect(getCopyToClipboardValue(0, 'Copy')).toMatchSnapshot(
+    'C++ (automatic) and other: sonar-project.properties',
+  );
+  expect(getCopyToClipboardValue(1, 'Copy')).toMatchSnapshot(
+    'C++ (automatic) and other: .github/workflows/build.yml',
+  );
 
   expect(ui.allSetSentence.get()).toBeInTheDocument();
 });

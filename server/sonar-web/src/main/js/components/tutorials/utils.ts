@@ -21,7 +21,7 @@ import { GRADLE_SCANNER_VERSION } from '../../helpers/constants';
 import { convertGithubApiUrlToLink, stripTrailingSlash } from '../../helpers/urls';
 import { AlmSettingsInstance, ProjectAlmBindingResponse } from '../../types/alm-settings';
 import { UserToken } from '../../types/token';
-import { GradleBuildDSL } from './types';
+import { Arch, AutoConfig, BuildTools, GradleBuildDSL, OSs, TutorialConfig } from './types';
 
 export function quote(os: string): (s: string) => string {
   return os === 'win' ? (s: string) => `"${s}"` : (s: string) => s;
@@ -91,3 +91,74 @@ export function buildBitbucketCloudLink(
 
   return `${stripTrailingSlash(almBinding.url)}/${projectBinding.repository}`;
 }
+
+export function supportsAutoConfig(buildTool: BuildTools) {
+  return buildTool === BuildTools.Cpp;
+}
+
+export function getBuildToolOptions(supportCFamily: boolean) {
+  const list = [BuildTools.Maven, BuildTools.Gradle, BuildTools.DotNet];
+  if (supportCFamily) {
+    list.push(BuildTools.Cpp);
+    list.push(BuildTools.ObjectiveC);
+  }
+  list.push(BuildTools.Other);
+  return list;
+}
+
+export function isCFamily(buildTool?: BuildTools) {
+  return buildTool === BuildTools.Cpp || buildTool === BuildTools.ObjectiveC;
+}
+
+export function shouldShowGithubCFamilyExampleRepositories(config: TutorialConfig) {
+  if (config.buildTool === BuildTools.Cpp && config.autoConfig === AutoConfig.Manual) {
+    return true;
+  }
+  if (config.buildTool === BuildTools.ObjectiveC) {
+    return true;
+  }
+  return false;
+}
+
+export function shouldShowArchSelector(os: OSs | undefined, config: TutorialConfig) {
+  if (os !== OSs.Linux) {
+    return false;
+  }
+  if (!isCFamily(config.buildTool)) {
+    return false;
+  }
+  if (config.buildTool === BuildTools.Cpp && config.autoConfig === AutoConfig.Automatic) {
+    return false;
+  }
+  return true;
+}
+
+export function getBuildWrapperFolder(os: OSs, arch?: Arch) {
+  if (os === OSs.Linux) {
+    return arch === Arch.X86_64 ? 'build-wrapper-linux-x86' : 'build-wrapper-linux-aarch64';
+  }
+  if (os === OSs.MacOS) {
+    return 'build-wrapper-macosx-x86';
+  }
+  if (os === OSs.Windows) {
+    return 'build-wrapper-win-x86';
+  }
+  throw new Error(`Unsupported OS: ${os}`);
+}
+
+export function getBuildWrapperExecutable(os: OSs, arch?: Arch) {
+  if (os === OSs.Linux) {
+    return arch === Arch.X86_64 ? 'build-wrapper-linux-x86-64' : 'build-wrapper-linux-aarch64';
+  }
+  if (os === OSs.MacOS) {
+    return 'build-wrapper-macosx-x86';
+  }
+  if (os === OSs.Windows) {
+    return 'build-wrapper-win-x86-64.exe';
+  }
+  throw new Error(`Unsupported OS: ${os}`);
+}
+
+export const getBuildWrapperFolderLinux = (arch?: Arch) => getBuildWrapperFolder(OSs.Linux, arch);
+export const getBuildWrapperExecutableLinux = (arch?: Arch) =>
+  getBuildWrapperExecutable(OSs.Linux, arch);

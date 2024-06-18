@@ -17,23 +17,36 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { HelperHintIcon, LightGreyCardTitle, PageTitle } from 'design-system';
+
+import { Note, QualityGateIndicator } from 'design-system';
 import React from 'react';
 import HelpTooltip from '~sonar-aligned/components/controls/HelpTooltip';
 import { translate } from '../../../helpers/l10n';
+import { Status } from '../../../sonar-aligned/types/common';
 
-export function QualityGateStatusTitle() {
+interface Props {
+  status?: Status;
+  titleSize?: 'large' | 'extra-large';
+}
+
+export default function QualityGateStatus(props: Readonly<Props>) {
+  const { status = 'NONE', titleSize = 'large' } = props;
+
   return (
-    <LightGreyCardTitle>
-      <div className="sw-flex sw-items-center">
-        <PageTitle as="h2" text={translate('overview.quality_gate.status')} />
-        <HelpTooltip
-          className="sw-ml-2"
-          overlay={<div className="sw-my-4">{translate('overview.quality_gate.help')}</div>}
-        >
-          <HelperHintIcon aria-label="help-tooltip" />
-        </HelpTooltip>
+    <div className="sw-flex sw-gap-3" data-spotlight-id="cayc-promotion-3">
+      <QualityGateIndicator size="xl" status={status} />
+      <div className="sw-flex sw-flex-col sw-ml-2 sw-justify-around">
+        <div className="sw-flex sw-items-center">
+          <Note>{translate('overview.quality_gate')}</Note>
+          <HelpTooltip
+            className="sw-ml-2"
+            overlay={<div>{translate('overview.quality_gate.help')}</div>}
+          />
+        </div>
+        <span className={titleSize === 'large' ? 'sw-heading-lg' : 'sw-heading-xl'}>
+          {translate('metric.level', status === 'NONE' ? 'NOT_COMPUTED' : status)}
+        </span>
       </div>
-    </LightGreyCardTitle>
+    </div>
   );
 }

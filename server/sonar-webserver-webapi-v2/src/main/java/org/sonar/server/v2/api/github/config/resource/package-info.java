@@ -17,15 +17,7 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { OverviewQGPassedIcon } from 'design-system';
-import React from 'react';
-import { translate } from '../../../helpers/l10n';
+@ParametersAreNonnullByDefault
+package org.sonar.server.v2.api.github.config.resource;
 
-export default function QualityGateStatusPassedView() {
-  return (
-    <div className="sw-flex sw-items-center sw-justify-center sw-flex-col">
-      <OverviewQGPassedIcon className="sw-my-12" />
-      <p className="sw-mb-8">{translate('overview.passed.clean_code')}</p>
-    </div>
-  );
-}
+import javax.annotation.ParametersAreNonnullByDefault;
