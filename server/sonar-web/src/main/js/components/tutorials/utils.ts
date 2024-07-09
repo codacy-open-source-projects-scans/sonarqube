@@ -23,6 +23,8 @@ import { AlmSettingsInstance, ProjectAlmBindingResponse } from '../../types/alm-
 import { UserToken } from '../../types/token';
 import { Arch, AutoConfig, BuildTools, GradleBuildDSL, OSs, TutorialConfig } from './types';
 
+export const SONAR_SCANNER_CLI_LATEST_VERSION = '6.0.0.4432';
+
 export function quote(os: string): (s: string) => string {
   return os === 'win' ? (s: string) => `"${s}"` : (s: string) => s;
 }
@@ -120,12 +122,19 @@ export function shouldShowGithubCFamilyExampleRepositories(config: TutorialConfi
   return false;
 }
 
-export function shouldShowArchSelector(os: OSs | undefined, config: TutorialConfig) {
+export function shouldShowArchSelector(
+  os: OSs | undefined,
+  config: TutorialConfig,
+  scannerDownloadExplicit = false,
+) {
   if (os !== OSs.Linux) {
     return false;
   }
   if (!isCFamily(config.buildTool)) {
     return false;
+  }
+  if (scannerDownloadExplicit) {
+    return true;
   }
   if (config.buildTool === BuildTools.Cpp && config.autoConfig === AutoConfig.Automatic) {
     return false;
@@ -159,6 +168,32 @@ export function getBuildWrapperExecutable(os: OSs, arch?: Arch) {
   throw new Error(`Unsupported OS: ${os}`);
 }
 
-export const getBuildWrapperFolderLinux = (arch?: Arch) => getBuildWrapperFolder(OSs.Linux, arch);
-export const getBuildWrapperExecutableLinux = (arch?: Arch) =>
-  getBuildWrapperExecutable(OSs.Linux, arch);
+export function getBuildWrapperFolderLinux(arch?: Arch) {
+  return getBuildWrapperFolder(OSs.Linux, arch);
+}
+export function getBuildWrapperExecutableLinux(arch?: Arch) {
+  return getBuildWrapperExecutable(OSs.Linux, arch);
+}
+
+export function getScannerUrlSuffix(os: OSs, arch?: Arch) {
+  if (os === OSs.Windows) {
+    return '-windows';
+  }
+  if (os === OSs.MacOS) {
+    return '-macosx';
+  }
+  if (os === OSs.Linux && arch === Arch.X86_64) {
+    return '-linux';
+  }
+  return '';
+}
+
+export function showJreWarning(config: TutorialConfig, arch: Arch) {
+  if (!isCFamily(config.buildTool)) {
+    return false;
+  }
+  if (config.autoConfig === AutoConfig.Automatic) {
+    return false;
+  }
+  return arch === Arch.Arm64;
+}

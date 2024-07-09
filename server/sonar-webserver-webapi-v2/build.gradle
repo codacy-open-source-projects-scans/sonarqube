@@ -8,19 +8,19 @@ dependencies {
     // please keep the list grouped by configuration and ordered by name
     api 'org.springdoc:springdoc-openapi-webmvc-core'
     api 'org.springframework:spring-webmvc'
-    api 'org.hibernate:hibernate-validator'
-    api 'javax.el:javax.el-api'
+    api 'org.hibernate.validator:hibernate-validator'
+    api 'jakarta.el:jakarta.el-api'
     api 'org.glassfish:jakarta.el'
 
     api project(':server:sonar-db-dao')
     api project(':server:sonar-webserver-common')
 
-    testImplementation 'javax.servlet:javax.servlet-api'
+    testImplementation 'jakarta.servlet:jakarta.servlet-api'
     testImplementation 'org.junit.jupiter:junit-jupiter-api'
     testImplementation 'org.junit.jupiter:junit-jupiter-params'
     testImplementation 'org.mockito:mockito-core'
     testImplementation 'org.mockito:mockito-junit-jupiter'
-    testImplementation 'org.skyscreamer:jsonassert:1.5.1'
+    testImplementation 'org.skyscreamer:jsonassert'
     testImplementation 'org.sonarsource.api.plugin:sonar-plugin-api-test-fixtures'
     testImplementation 'com.tngtech.java:junit-dataprovider'
     testImplementation project(':sonar-testing-harness')

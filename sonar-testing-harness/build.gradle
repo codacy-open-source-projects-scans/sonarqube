@@ -9,14 +9,14 @@ dependencies {
 
   api 'com.google.code.gson:gson'
   api 'com.googlecode.json-simple:json-simple'
-  api 'com.sun.mail:javax.mail'
+  api 'com.sun.mail:jakarta.mail'
   api 'commons-io:commons-io'
   api 'junit:junit'
   api 'org.assertj:assertj-core'
   api 'org.jsoup:jsoup'
   api 'org.mockito:mockito-core'
 
-  compileOnlyApi 'com.google.code.findbugs:jsr305'
+  compileOnlyApi 'com.github.spotbugs:spotbugs-annotations'
 }
 
 artifactoryPublish.skip = false

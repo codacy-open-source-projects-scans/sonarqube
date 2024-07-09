@@ -24,12 +24,13 @@ import { translate } from '../../../helpers/l10n';
 import { InlineSnippet } from './InlineSnippet';
 
 export interface CreateYmlFileProps {
+  warning?: React.ReactNode;
   yamlFileName: string;
   yamlTemplate: string;
 }
 
-export default function CreateYmlFile(props: CreateYmlFileProps) {
-  const { yamlTemplate, yamlFileName } = props;
+export default function CreateYmlFile(props: Readonly<CreateYmlFileProps>) {
+  const { yamlTemplate, yamlFileName, warning } = props;
   return (
     <NumberedListItem>
       <FormattedMessage
@@ -44,6 +45,7 @@ export default function CreateYmlFile(props: CreateYmlFileProps) {
           ),
         }}
       />
+      {warning}
       <CodeSnippet className="sw-p-6 sw-overflow-auto" snippet={yamlTemplate} language="yml" />
     </NumberedListItem>
   );
