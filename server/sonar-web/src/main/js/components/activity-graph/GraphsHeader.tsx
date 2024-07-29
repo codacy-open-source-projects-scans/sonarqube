@@ -17,15 +17,15 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+
 import {
-  ButtonSecondary,
-  ChevronDownIcon,
-  Dropdown,
-  ItemButton,
-  PopupPlacement,
-  PopupZLevel,
-  TextMuted,
-} from 'design-system';
+  Button,
+  ButtonGroup,
+  DropdownMenu,
+  DropdownMenuAlign,
+  IconChevronDown,
+} from '@sonarsource/echoes-react';
+import { TextMuted } from 'design-system';
 import * as React from 'react';
 import { translate } from '../../helpers/l10n';
 import { GraphType } from '../../types/project-activity';
@@ -73,34 +73,27 @@ export default function GraphsHeader(props: Props) {
       const label = translate('project_activity.graphs', type);
 
       return (
-        <ItemButton key={label} onClick={() => handleGraphChange(type)}>
+        <DropdownMenu.ItemButton key={label} onClick={() => handleGraphChange(type)}>
           {label}
-        </ItemButton>
+        </DropdownMenu.ItemButton>
       );
     });
   }, [noCustomGraph, handleGraphChange]);
 
   return (
     <div className={className}>
-      <div className="sw-flex">
-        <Dropdown
-          id="activity-graph-type"
-          size="auto"
-          placement={PopupPlacement.BottomLeft}
-          zLevel={PopupZLevel.Content}
-          overlay={options}
-        >
-          <ButtonSecondary
+      <ButtonGroup>
+        <DropdownMenu.Root align={DropdownMenuAlign.Start} id="activity-graph-type" items={options}>
+          <Button
             aria-label={translate('project_activity.graphs.choose_type')}
-            className={
-              'sw-body-sm sw-flex sw-flex-row sw-justify-between sw-pl-3 sw-pr-2 sw-w-32 ' +
-              'sw-z-normal' // needed because the legends overlap part of the button
-            }
+            suffix={<IconChevronDown />}
           >
-            <TextMuted text={translate('project_activity.graphs', graph)} />
-            <ChevronDownIcon className="sw-ml-1 sw-mr-0 sw-pr-0" />
-          </ButtonSecondary>
-        </Dropdown>
+            <TextMuted
+              className="sw-body-sm sw-flex"
+              text={translate('project_activity.graphs', graph)}
+            />
+          </Button>
+        </DropdownMenu.Root>
 
         {isCustomGraph(graph) &&
           props.onAddCustomMetric !== undefined &&
@@ -113,7 +106,7 @@ export default function GraphsHeader(props: Props) {
               selectedMetrics={selectedMetrics}
             />
           )}
-      </div>
+      </ButtonGroup>
     </div>
   );
 }

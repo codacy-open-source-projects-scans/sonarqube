@@ -18,40 +18,33 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 
-import { IconQuestionMark } from '@sonarsource/echoes-react';
-import { Dropdown, InteractiveIcon, PopupPlacement, PopupZLevel } from 'design-system';
+import {
+  ButtonIcon,
+  ButtonVariety,
+  DropdownMenu,
+  DropdownMenuAlign,
+  IconQuestionMark,
+} from '@sonarsource/echoes-react';
 import * as React from 'react';
 import { translate } from '../../helpers/l10n';
-import Tooltip from '../controls/Tooltip';
 import { EmbedDocsPopup } from './EmbedDocsPopup';
 
 export default function EmbedDocsPopupHelper() {
   return (
     <div className="dropdown">
-      <Dropdown
+      <DropdownMenu.Root
+        align={DropdownMenuAlign.End}
         id="help-menu-dropdown"
-        placement={PopupPlacement.BottomRight}
-        overlay={<EmbedDocsPopup />}
-        allowResizing
-        zLevel={PopupZLevel.Global}
+        items={<EmbedDocsPopup />}
       >
-        {({ onToggleClick, open }) => (
-          <Tooltip mouseLeaveDelay={0.2} content={!open ? translate('help') : undefined}>
-            <InteractiveIcon
-              Icon={IconQuestionMark}
-              aria-expanded={open}
-              data-guiding-id="issue-5"
-              aria-controls="help-menu-dropdown"
-              aria-haspopup
-              aria-label={translate('help')}
-              currentColor
-              onClick={onToggleClick}
-              size="medium"
-              stopPropagation={false}
-            />
-          </Tooltip>
-        )}
-      </Dropdown>
+        <ButtonIcon
+          Icon={IconQuestionMark}
+          data-guiding-id="issue-5"
+          ariaLabel={translate('help')}
+          isIconFilled
+          variety={ButtonVariety.DefaultGhost}
+        />
+      </DropdownMenu.Root>
     </div>
   );
 }

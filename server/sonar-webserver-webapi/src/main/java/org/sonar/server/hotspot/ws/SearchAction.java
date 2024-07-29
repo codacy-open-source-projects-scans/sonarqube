@@ -110,6 +110,8 @@ public class SearchAction implements HotspotsWsAction {
   private static final String PARAM_OWASP_ASVS_40 = "owaspAsvs-4.0";
   private static final String PARAM_OWASP_TOP_10_2017 = "owaspTop10";
   private static final String PARAM_OWASP_TOP_10_2021 = "owaspTop10-2021";
+  private static final String PARAM_STIG_ASD_V5R3 = "stig-ASD_V5R3";
+  private static final String PARAM_CASA = "casa";
   /**
    * @deprecated SansTop25 report is outdated, it has been completely deprecated in version 10.0 and will be removed from version 11.0
    */
@@ -151,6 +153,8 @@ public class SearchAction implements HotspotsWsAction {
     Set<String> owaspAsvs40 = setFromList(request.paramAsStrings(PARAM_OWASP_ASVS_40));
     Set<String> owasp2017Top10 = setFromList(request.paramAsStrings(PARAM_OWASP_TOP_10_2017));
     Set<String> owasp2021Top10 = setFromList(request.paramAsStrings(PARAM_OWASP_TOP_10_2021));
+    Set<String> stigAsdV5R3 = setFromList(request.paramAsStrings(PARAM_STIG_ASD_V5R3));
+    Set<String> casa = setFromList(request.paramAsStrings(PARAM_CASA));
     Set<String> sansTop25 = setFromList(request.paramAsStrings(PARAM_SANS_TOP_25));
     Set<String> sonarsourceSecurity = setFromList(request.paramAsStrings(PARAM_SONARSOURCE_SECURITY));
     Set<String> cwes = setFromList(request.paramAsStrings(PARAM_CWE));
@@ -160,7 +164,7 @@ public class SearchAction implements HotspotsWsAction {
       request.mandatoryParamAsInt(PAGE), request.mandatoryParamAsInt(PAGE_SIZE), request.param(PARAM_PROJECT), request.param(PARAM_BRANCH),
       request.param(PARAM_PULL_REQUEST), hotspotKeys, request.param(PARAM_STATUS), request.param(PARAM_RESOLUTION),
       request.paramAsBoolean(PARAM_IN_NEW_CODE_PERIOD), request.paramAsBoolean(PARAM_ONLY_MINE), request.paramAsInt(PARAM_OWASP_ASVS_LEVEL),
-      pciDss32, pciDss40, owaspAsvs40, owasp2017Top10, owasp2021Top10, sansTop25, sonarsourceSecurity, cwes, files);
+      pciDss32, pciDss40, owaspAsvs40, owasp2017Top10, owasp2021Top10, stigAsdV5R3, casa, sansTop25, sonarsourceSecurity, cwes, files);
   }
 
   @Override
@@ -203,6 +207,12 @@ public class SearchAction implements HotspotsWsAction {
     if (!wsRequest.getOwaspTop10For2021().isEmpty()) {
       builder.owaspTop10For2021(wsRequest.getOwaspTop10For2021());
     }
+    if (!wsRequest.getStigAsdV5R3().isEmpty()) {
+      builder.stigAsdR5V3(wsRequest.getStigAsdV5R3());
+    }
+    if (!wsRequest.getCasa().isEmpty()) {
+      builder.casa(wsRequest.getCasa());
+    }
     if (!wsRequest.getSansTop25().isEmpty()) {
       builder.sansTop25(wsRequest.getSansTop25());
     }
@@ -225,6 +235,7 @@ public class SearchAction implements HotspotsWsAction {
         + "When issue indexing is in progress returns 503 service unavailable HTTP code.")
       .setSince("8.1")
       .setChangelog(
+        new Change("10.7", format("Added parameter '%s' and '%s'", PARAM_STIG_ASD_V5R3, PARAM_CASA)),
         new Change("10.2", format("Parameter '%s' renamed to '%s'", PARAM_PROJECT_KEY, PARAM_PROJECT)),
         new Change("10.0", "Parameter 'sansTop25' is deprecated"),
         new Change("9.6", "Added parameters 'pciDss-3.2' and 'pciDss-4.0"),
@@ -266,6 +277,16 @@ public class SearchAction implements HotspotsWsAction {
       .setBooleanPossibleValues()
       .setDefaultValue("false")
       .setSince("9.5");
+    createSecurityStandardParams(action);
+    action.createParam(PARAM_FILES)
+      .setDescription("Comma-separated list of files. Returns only hotspots found in those files")
+      .setExampleValue("src/main/java/org/sonar/server/Test.java")
+      .setSince("9.0");
+
+    action.setResponseExample(getClass().getResource("search-example.json"));
+  }
+
+  private static void createSecurityStandardParams(WebService.NewAction action) {
     action.createParam(PARAM_OWASP_ASVS_LEVEL)
       .setDescription("Filters hotspots with lower or equal OWASP ASVS level to the parameter value. Should be used in combination with the 'owaspAsvs-4.0' parameter.")
       .setSince("9.7")
@@ -296,6 +317,12 @@ public class SearchAction implements HotspotsWsAction {
       .setDescription("Comma-separated list of OWASP 2021 Top 10 lowercase categories.")
       .setSince("9.4")
       .setPossibleValues("a1", "a2", "a3", "a4", "a5", "a6", "a7", "a8", "a9", "a10");
+    action.createParam(PARAM_STIG_ASD_V5R3)
+      .setDescription("Comma-separated list of STIG V5R3 lowercase categories.")
+      .setSince("10.7");
+    action.createParam(PARAM_CASA)
+      .setDescription("Comma-separated list of CASA categories.")
+      .setSince("10.7");
     action.createParam(PARAM_SANS_TOP_25)
       .setDescription("Comma-separated list of SANS Top 25 categories.")
       .setDeprecatedSince("10.0")
@@ -310,12 +337,6 @@ public class SearchAction implements HotspotsWsAction {
       .setDescription("Comma-separated list of CWE numbers")
       .setExampleValue("89,434,352")
       .setSince("8.8");
-    action.createParam(PARAM_FILES)
-      .setDescription("Comma-separated list of files. Returns only hotspots found in those files")
-      .setExampleValue("src/main/java/org/sonar/server/Test.java")
-      .setSince("9.0");
-
-    action.setResponseExample(getClass().getResource("search-example.json"));
   }
 
   private Optional<ProjectAndBranch> getAndValidateProjectOrApplication(DbSession dbSession, WsRequest wsRequest) {
@@ -610,6 +631,8 @@ public class SearchAction implements HotspotsWsAction {
     private final Set<String> owaspAsvs40;
     private final Set<String> owaspTop10For2017;
     private final Set<String> owaspTop10For2021;
+    private final Set<String> stigAsdV5R3;
+    private final Set<String> casa;
     private final Set<String> sansTop25;
     private final Set<String> sonarsourceSecurity;
     private final Set<String> cwe;
@@ -619,7 +642,7 @@ public class SearchAction implements HotspotsWsAction {
       @Nullable String projectKey, @Nullable String branch, @Nullable String pullRequest, Set<String> hotspotKeys,
       @Nullable String status, @Nullable String resolution, @Nullable Boolean inNewCodePeriod, @Nullable Boolean onlyMine,
       @Nullable Integer owaspAsvsLevel, Set<String> pciDss32, Set<String> pciDss40, Set<String> owaspAsvs40,
-      Set<String> owaspTop10For2017, Set<String> owaspTop10For2021, Set<String> sansTop25, Set<String> sonarsourceSecurity,
+      Set<String> owaspTop10For2017, Set<String> owaspTop10For2021, Set<String> stigAsdV5R3, Set<String> casa, Set<String> sansTop25, Set<String> sonarsourceSecurity,
       Set<String> cwe, @Nullable Set<String> files) {
       this.page = page;
       this.index = index;
@@ -637,6 +660,8 @@ public class SearchAction implements HotspotsWsAction {
       this.owaspAsvs40 = owaspAsvs40;
       this.owaspTop10For2017 = owaspTop10For2017;
       this.owaspTop10For2021 = owaspTop10For2021;
+      this.stigAsdV5R3 = stigAsdV5R3;
+      this.casa = casa;
       this.sansTop25 = sansTop25;
       this.sonarsourceSecurity = sonarsourceSecurity;
       this.cwe = cwe;
@@ -705,6 +730,14 @@ public class SearchAction implements HotspotsWsAction {
 
     public Set<String> getOwaspTop10For2021() {
       return owaspTop10For2021;
+    }
+
+    public Set<String> getStigAsdV5R3() {
+      return stigAsdV5R3;
+    }
+
+    public Set<String> getCasa() {
+      return casa;
     }
 
     public Set<String> getSansTop25() {

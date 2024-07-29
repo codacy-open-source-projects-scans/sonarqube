@@ -20,14 +20,13 @@
 package org.sonar.scanner.externalissue.sarif;
 
 import java.util.List;
-import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.sonar.api.batch.sensor.issue.NewExternalIssue;
 import org.sonar.api.batch.sensor.rule.NewAdHocRule;
 import org.sonar.api.scanner.ScannerSide;
-import org.sonar.core.sarif.Run;
-import org.sonar.core.sarif.Sarif210;
+import org.sonar.sarif.pojo.Run;
+import org.sonar.sarif.pojo.SarifSchema210;
 import org.sonar.scanner.externalissue.sarif.RunMapper.RunMapperResult;
 
 import static java.util.Objects.requireNonNull;
@@ -43,12 +42,12 @@ public class DefaultSarif210Importer implements Sarif210Importer {
   }
 
   @Override
-  public SarifImportResults importSarif(Sarif210 sarif210) {
+  public SarifImportResults importSarif(SarifSchema210 sarif210) {
     int successFullyImportedIssues = 0;
     int successFullyImportedRuns = 0;
     int failedRuns = 0;
 
-    Set<Run> runs = requireNonNull(sarif210.getRuns(), "The runs section of the Sarif report is null");
+    List<Run> runs = requireNonNull(sarif210.getRuns(), "The runs section of the Sarif report is null");
     for (Run run : runs) {
       RunMapperResult runMapperResult = tryMapRun(run);
       if (runMapperResult.isSuccess()) {

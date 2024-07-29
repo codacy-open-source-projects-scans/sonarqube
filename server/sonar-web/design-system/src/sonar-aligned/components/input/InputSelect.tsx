@@ -30,6 +30,11 @@ import {
   selectStyle,
 } from './SelectCommon';
 
+/**
+ * @deprecated Use Select or SelectAsync from Echoes instead.
+ *
+ * See the [Migration Guide](https://xtranet-sonarsource.atlassian.net/wiki/x/K4AYxw)
+ */
 export function InputSelect<
   Option,
   IsMulti extends boolean = false,

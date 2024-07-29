@@ -20,9 +20,13 @@
 package org.sonar.scanner.externalissue.sarif;
 
 import com.google.common.collect.ImmutableMap;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import javax.annotation.CheckForNull;
 import javax.annotation.Nullable;
 import org.sonar.api.batch.rule.Severity;
 import org.sonar.api.batch.sensor.SensorContext;
@@ -32,8 +36,10 @@ import org.sonar.api.issue.impact.SoftwareQuality;
 import org.sonar.api.rules.CleanCodeAttribute;
 import org.sonar.api.rules.RuleType;
 import org.sonar.api.scanner.ScannerSide;
-import org.sonar.core.sarif.Location;
-import org.sonar.core.sarif.Result;
+import org.sonar.sarif.pojo.Location;
+import org.sonar.sarif.pojo.Message;
+import org.sonar.sarif.pojo.Result;
+import org.sonar.sarif.pojo.Stack;
 
 import static java.util.Objects.requireNonNull;
 import static org.sonar.api.issue.impact.Severity.HIGH;
@@ -45,18 +51,18 @@ import static org.sonar.api.rules.CleanCodeAttribute.CONVENTIONAL;
 @ScannerSide
 public class ResultMapper {
 
-  private static final Map<String, Severity> SEVERITY_MAPPING = ImmutableMap.<String, Severity>builder()
-    .put("error", Severity.CRITICAL)
-    .put("warning", Severity.MAJOR)
-    .put("note", Severity.MINOR)
-    .put("none", Severity.INFO)
+  private static final Map<Result.Level, Severity> SEVERITY_MAPPING = ImmutableMap.<Result.Level, Severity>builder()
+    .put(Result.Level.ERROR, Severity.CRITICAL)
+    .put(Result.Level.WARNING, Severity.MAJOR)
+    .put(Result.Level.NOTE, Severity.MINOR)
+    .put(Result.Level.NONE, Severity.INFO)
     .build();
 
-  private static final Map<String, org.sonar.api.issue.impact.Severity> IMPACT_SEVERITY_MAPPING = ImmutableMap.<String, org.sonar.api.issue.impact.Severity>builder()
-    .put("error", HIGH)
-    .put("warning", MEDIUM)
-    .put("note", LOW)
-    .put("none", LOW)
+  private static final Map<Result.Level, org.sonar.api.issue.impact.Severity> IMPACT_SEVERITY_MAPPING = ImmutableMap.<Result.Level, org.sonar.api.issue.impact.Severity>builder()
+    .put(Result.Level.ERROR, HIGH)
+    .put(Result.Level.WARNING, MEDIUM)
+    .put(Result.Level.NOTE, LOW)
+    .put(Result.Level.NONE, LOW)
     .build();
 
   public static final Severity DEFAULT_SEVERITY = Severity.MAJOR;
@@ -73,7 +79,7 @@ public class ResultMapper {
     this.locationMapper = locationMapper;
   }
 
-  NewExternalIssue mapResult(String driverName, @Nullable String ruleSeverity, @Nullable String ruleSeverityForNewTaxonomy, Result result) {
+  NewExternalIssue mapResult(String driverName, @Nullable Result.Level ruleSeverity, @Nullable Result.Level ruleSeverityForNewTaxonomy, Result result) {
     NewExternalIssue newExternalIssue = sensorContext.newExternalIssue();
     newExternalIssue.type(DEFAULT_TYPE);
     newExternalIssue.engineId(driverName);
@@ -86,29 +92,98 @@ public class ResultMapper {
     return newExternalIssue;
   }
 
-  protected static org.sonar.api.issue.impact.Severity toSonarQubeImpactSeverity(@Nullable String ruleSeverity) {
+  protected static org.sonar.api.issue.impact.Severity toSonarQubeImpactSeverity(@Nullable Result.Level ruleSeverity) {
     return IMPACT_SEVERITY_MAPPING.getOrDefault(ruleSeverity, DEFAULT_IMPACT_SEVERITY);
   }
 
-  protected static Severity toSonarQubeSeverity(@Nullable String ruleSeverity) {
+  protected static Severity toSonarQubeSeverity(@Nullable Result.Level ruleSeverity) {
     return SEVERITY_MAPPING.getOrDefault(ruleSeverity, DEFAULT_SEVERITY);
   }
 
   private void mapLocations(Result result, NewExternalIssue newExternalIssue) {
-    NewIssueLocation newIssueLocation = newExternalIssue.newLocation();
-    Set<Location> locations = result.getLocations();
-    if (locations == null || locations.isEmpty()) {
-      newExternalIssue.at(locationMapper.fillIssueInProjectLocation(result, newIssueLocation));
-    } else {
-      Location firstLocation = locations.iterator().next();
-      NewIssueLocation primaryLocation = fillFileOrProjectLocation(result, newIssueLocation, firstLocation);
-      newExternalIssue.at(primaryLocation);
+    createPrimaryLocation(newExternalIssue, result);
+    createSecondaryLocations(result, newExternalIssue);
+    createFlows(result, newExternalIssue);
+  }
+
+  private void createFlows(Result result, NewExternalIssue newExternalIssue) {
+    Set<Stack> stacks = Optional.ofNullable(result.getStacks()).orElse(Set.of());
+    if (!stacks.isEmpty()) {
+      stacks.forEach(stack -> {
+        var frames = Optional.ofNullable(stack.getFrames()).orElse(List.of());
+        if (!frames.isEmpty()) {
+          List<NewIssueLocation> flow = new ArrayList<>();
+          frames.forEach(frame -> {
+            var frameLocation = frame.getLocation();
+            if (frameLocation != null) {
+              var newFrameLocation = createIssueLocation(newExternalIssue, frameLocation);
+              flow.add(newFrameLocation);
+            }
+          });
+          newExternalIssue.addFlow(flow);
+        }
+      });
     }
   }
 
-  private NewIssueLocation fillFileOrProjectLocation(Result result, NewIssueLocation newIssueLocation, Location firstLocation) {
-    return Optional.ofNullable(locationMapper.fillIssueInFileLocation(result, newIssueLocation, firstLocation))
-      .orElseGet(() -> locationMapper.fillIssueInProjectLocation(result, newIssueLocation));
+  private void createSecondaryLocations(Result result, NewExternalIssue newExternalIssue) {
+    Set<Location> relatedLocations = Optional.ofNullable(result.getRelatedLocations()).orElse(Set.of());
+    if (!relatedLocations.isEmpty()) {
+      relatedLocations.forEach(relatedLocation -> {
+        var newRelatedLocation = createIssueLocation(newExternalIssue, relatedLocation);
+        newExternalIssue.addLocation(newRelatedLocation);
+      });
+    }
+  }
+
+  private NewIssueLocation createIssueLocation(NewExternalIssue newExternalIssue, Location sarifLocation) {
+    NewIssueLocation newRelatedLocation = newExternalIssue.newLocation();
+    var locationMessageText = getTextMessageOrNull(sarifLocation.getMessage());
+    if (locationMessageText != null) {
+      newRelatedLocation.message(locationMessageText);
+    }
+    fillFileOrProjectLocation(newRelatedLocation, sarifLocation);
+    return newRelatedLocation;
+  }
+
+  private void createPrimaryLocation(NewExternalIssue newExternalIssue, Result result) {
+    NewIssueLocation sonarLocation = newExternalIssue.newLocation();
+    List<Location> sarifLocations = Optional.ofNullable(result.getLocations()).orElse(List.of());
+    var primaryMessage = computePrimaryMessage(result, sarifLocations);
+    sonarLocation.message(primaryMessage);
+    if (sarifLocations.isEmpty()) {
+      locationMapper.fillIssueInProjectLocation(sonarLocation);
+    } else {
+      Location firstSarifLocation = sarifLocations.get(0);
+      fillFileOrProjectLocation(sonarLocation, firstSarifLocation);
+    }
+    newExternalIssue.at(sonarLocation);
+  }
+
+  private static String computePrimaryMessage(Result result, List<Location> locations) {
+    String resultMessage = Objects.requireNonNull(result.getMessage().getText(), "Message text is required on result");
+    if (!locations.isEmpty()) {
+      Location firstLocation = locations.get(0);
+      var locationMessageText = getTextMessageOrNull(firstLocation.getMessage());
+      if (locationMessageText != null) {
+        return resultMessage + " - " + locationMessageText;
+      }
+    }
+    return resultMessage;
+  }
+
+  @CheckForNull
+  private static String getTextMessageOrNull(@Nullable Message message) {
+    if (message == null) {
+      return null;
+    }
+    return message.getText();
+  }
+
+  private void fillFileOrProjectLocation(NewIssueLocation newIssueLocation, Location firstLocation) {
+    if (!locationMapper.fillIssueInFileLocation(newIssueLocation, firstLocation)) {
+      locationMapper.fillIssueInProjectLocation(newIssueLocation);
+    }
   }
 
 }

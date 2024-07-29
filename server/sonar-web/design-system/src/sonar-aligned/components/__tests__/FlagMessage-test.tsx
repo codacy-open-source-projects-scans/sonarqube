@@ -38,8 +38,8 @@ jest.mock(
 it.each([
   ['error', '1px solid rgb(249,112,102)'],
   ['warning', '1px solid rgb(248,205,92)'],
-  ['success', '1px solid rgb(50,213,131)'],
-  ['info', '1px solid rgb(110,185,228)'],
+  ['success', '1px solid rgb(166,208,91)'],
+  ['info', '1px solid rgb(143,202,234)'],
 ])('should render properly for "%s" variant', (variant: Variant, color) => {
   renderFlagMessage({ variant });
 

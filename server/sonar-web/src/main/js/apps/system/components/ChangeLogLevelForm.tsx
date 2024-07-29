@@ -17,8 +17,8 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { RadioButtonGroup } from '@sonarsource/echoes-react';
-import { ButtonPrimary, FlagMessage, Modal } from 'design-system';
+import { Button, ButtonVariety, RadioButtonGroup } from '@sonarsource/echoes-react';
+import { FlagMessage, Modal } from 'design-system';
 import * as React from 'react';
 import { setLogLevel } from '../../../api/system';
 import { translate } from '../../../helpers/l10n';
@@ -68,6 +68,7 @@ export default class ChangeLogLevelForm extends React.PureComponent<Props, State
           <form id={FORM_ID} onSubmit={this.handleFormSubmit}>
             <div className="sw-mt-1">
               <RadioButtonGroup
+                ariaLabel={header}
                 id="system-loglevel-radio"
                 options={LOGS_LEVELS.map((level) => ({ label: level, value: level }))}
                 value={newLevel}
@@ -86,9 +87,15 @@ export default class ChangeLogLevelForm extends React.PureComponent<Props, State
           </form>
         }
         primaryButton={
-          <ButtonPrimary disabled={updating} id="set-log-level-submit" type="submit" form={FORM_ID}>
+          <Button
+            isDisabled={updating}
+            id="set-log-level-submit"
+            type="submit"
+            form={FORM_ID}
+            variety={ButtonVariety.Primary}
+          >
             {translate('save')}
-          </ButtonPrimary>
+          </Button>
         }
         secondaryButtonLabel={translate('cancel')}
         loading={updating}

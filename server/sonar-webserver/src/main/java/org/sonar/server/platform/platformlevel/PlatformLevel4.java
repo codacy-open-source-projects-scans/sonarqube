@@ -84,7 +84,9 @@ import org.sonar.server.common.almsettings.DelegatingDevOpsProjectCreatorFactory
 import org.sonar.server.common.almsettings.azuredevops.AzureDevOpsProjectCreatorFactory;
 import org.sonar.server.common.almsettings.bitbucketcloud.BitbucketCloudProjectCreatorFactory;
 import org.sonar.server.common.almsettings.bitbucketserver.BitbucketServerProjectCreatorFactory;
+import org.sonar.server.common.almsettings.github.GithubDevOpsProjectCreationContextService;
 import org.sonar.server.common.almsettings.github.GithubProjectCreatorFactory;
+import org.sonar.server.common.almsettings.gitlab.GitlabDevOpsProjectCreationContextService;
 import org.sonar.server.common.almsettings.gitlab.GitlabProjectCreatorFactory;
 import org.sonar.server.common.component.ComponentUpdater;
 import org.sonar.server.common.github.config.GithubConfigurationService;
@@ -182,6 +184,10 @@ import org.sonar.server.platform.PersistentSettings;
 import org.sonar.server.platform.SystemInfoWriterModule;
 import org.sonar.server.platform.WebCoreExtensionsInstaller;
 import org.sonar.server.platform.db.CheckAnyonePermissionsAtStartup;
+import org.sonar.server.platform.telemetry.ProjectCppAutoconfigTelemetryProvider;
+import org.sonar.server.platform.telemetry.TelemetryNclocProvider;
+import org.sonar.server.platform.telemetry.TelemetryUserEnabledProvider;
+import org.sonar.server.platform.telemetry.TelemetryVersionProvider;
 import org.sonar.server.platform.web.ActionDeprecationLoggerInterceptor;
 import org.sonar.server.platform.web.SonarLintConnectionFilter;
 import org.sonar.server.platform.web.WebServiceFilter;
@@ -257,12 +263,6 @@ import org.sonar.server.setting.SettingsChangeNotifier;
 import org.sonar.server.setting.ws.SettingsWsModule;
 import org.sonar.server.source.ws.SourceWsModule;
 import org.sonar.server.startup.LogServerId;
-import org.sonar.server.telemetry.CloudUsageDataProvider;
-import org.sonar.server.telemetry.QualityProfileDataProvider;
-import org.sonar.server.telemetry.TelemetryClient;
-import org.sonar.server.telemetry.TelemetryDaemon;
-import org.sonar.server.telemetry.TelemetryDataJsonWriter;
-import org.sonar.server.telemetry.TelemetryDataLoaderImpl;
 import org.sonar.server.ui.PageRepository;
 import org.sonar.server.ui.WebAnalyticsLoaderImpl;
 import org.sonar.server.ui.ws.NavigationWsModule;
@@ -285,6 +285,13 @@ import org.sonar.server.webhook.WebhookQGChangeEventListener;
 import org.sonar.server.webhook.ws.WebhooksWsModule;
 import org.sonar.server.ws.WebServiceEngine;
 import org.sonar.server.ws.ws.WebServicesWsModule;
+import org.sonar.telemetry.TelemetryClient;
+import org.sonar.telemetry.TelemetryDaemon;
+import org.sonar.telemetry.legacy.CloudUsageDataProvider;
+import org.sonar.telemetry.legacy.QualityProfileDataProvider;
+import org.sonar.telemetry.legacy.TelemetryDataJsonWriter;
+import org.sonar.telemetry.legacy.TelemetryDataLoaderImpl;
+import org.sonar.telemetry.metrics.TelemetryMetricsLoader;
 
 import static org.sonar.core.extension.CoreExtensionsInstaller.noAdditionalSideFilter;
 import static org.sonar.core.extension.PlatformLevelPredicates.hasPlatformLevel4OrNone;
@@ -575,8 +582,10 @@ public class PlatformLevel4 extends PlatformLevel {
       GithubApplicationClientImpl.class,
       GithubProvisioningConfigValidator.class,
       GithubProvisioningWs.class,
+      GithubDevOpsProjectCreationContextService.class,
       GithubProjectCreatorFactory.class,
       GithubPermissionConverter.class,
+      GitlabDevOpsProjectCreationContextService.class,
       BitbucketCloudRestClientConfiguration.class,
       BitbucketServerRestClient.class,
       AzureDevOpsHttpClient.class,
@@ -652,7 +661,14 @@ public class PlatformLevel4 extends PlatformLevel {
       RecoveryIndexer.class,
       IndexersImpl.class,
 
+      //new telemetry metrics
+      ProjectCppAutoconfigTelemetryProvider.class,
+      TelemetryVersionProvider.class,
+      TelemetryNclocProvider.class,
+      TelemetryUserEnabledProvider.class,
+
       // telemetry
+      TelemetryMetricsLoader.class,
       TelemetryDataLoaderImpl.class,
       TelemetryDataJsonWriter.class,
       TelemetryDaemon.class,

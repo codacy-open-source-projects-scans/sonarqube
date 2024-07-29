@@ -40,6 +40,11 @@ interface SearchSelectDropdownControlProps {
   size?: InputSizeKeys;
 }
 
+/**
+ * @deprecated Use Select or SelectAsync from Echoes instead.
+ *
+ * See the [Migration Guide](https://xtranet-sonarsource.atlassian.net/wiki/x/K4AYxw)
+ */
 export function SearchSelectDropdownControl(props: SearchSelectDropdownControlProps) {
   const {
     className,
@@ -103,7 +108,7 @@ export function SearchSelectDropdownControl(props: SearchSelectDropdownControlPr
   );
 }
 
-export const StyledControl = styled.div`
+const StyledControl = styled.div`
   color: ${themeContrast('inputBackground')};
   background: ${themeColor('inputBackground')};
   border: ${themeBorder('default', 'inputBorder')};

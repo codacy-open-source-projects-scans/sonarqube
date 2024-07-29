@@ -17,8 +17,8 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { RadioButtonGroup } from '@sonarsource/echoes-react';
-import { ButtonPrimary, FormField, Modal } from 'design-system';
+import { Button, ButtonVariety, RadioButtonGroup } from '@sonarsource/echoes-react';
+import { FormField, Modal } from 'design-system';
 import * as React from 'react';
 import { translate } from '../../../helpers/l10n';
 import { isDiffMetric } from '../../../helpers/measures';
@@ -94,7 +94,10 @@ export default function AddConditionModal({ metrics, onClose, qualityGate }: Rea
   const renderBody = () => {
     return (
       <form onSubmit={handleFormSubmit} id={ADD_CONDITION_MODAL_ID}>
-        <FormField label={translate('quality_gates.conditions.where')}>
+        <FormField
+          label={translate('quality_gates.conditions.where')}
+          htmlFor="quality_gates-add-condition-scope-radio"
+        >
           <RadioButtonGroup
             id="quality_gates-add-condition-scope-radio"
             options={[
@@ -158,15 +161,16 @@ export default function AddConditionModal({ metrics, onClose, qualityGate }: Rea
       onClose={onClose}
       body={renderBody()}
       primaryButton={
-        <ButtonPrimary
-          autoFocus
-          disabled={selectedMetric === undefined}
+        <Button
+          hasAutoFocus
+          isDisabled={selectedMetric === undefined}
           id="add-condition-button"
           form={ADD_CONDITION_MODAL_ID}
           type="submit"
+          variety={ButtonVariety.Primary}
         >
           {translate('quality_gates.add_condition')}
-        </ButtonPrimary>
+        </Button>
       }
       secondaryButtonLabel={translate('close')}
     />

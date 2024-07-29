@@ -66,7 +66,7 @@ const ui = {
   aliceUpdateGroupButton: byRole('button', { name: 'users.update_users_groups.alice.merveille' }),
   aliceUpdateButton: byRole('button', { name: 'users.manage_user.alice.merveille' }),
   denisUpdateButton: byRole('button', { name: 'users.manage_user.denis.villeneuve' }),
-  alicedDeactivateButton: byRole('menuitem', { name: 'users.deactivate' }),
+  alicedDeactivateButton: byText('users.deactivate'),
   bobUpdateGroupButton: byRole('button', { name: 'users.update_users_groups.bob.marley' }),
   bobUpdateButton: byRole('button', { name: 'users.manage_user.bob.marley' }),
   scmAddButton: byRole('button', { name: 'add_verb' }),
@@ -374,7 +374,7 @@ describe('in non managed mode', () => {
     renderUsersApp();
 
     await user.click(await ui.aliceUpdateButton.find());
-    await user.click(await ui.aliceRow.byRole('menuitem', { name: 'update_details' }).find());
+    await user.click(await byText('update_details').find());
     expect(await ui.dialogUpdateUser.find()).toBeInTheDocument();
 
     expect(ui.userNameInput.get()).toHaveValue('Alice Merveille');
@@ -393,7 +393,7 @@ describe('in non managed mode', () => {
     renderUsersApp();
 
     await user.click(await ui.aliceUpdateButton.find());
-    await user.click(await ui.aliceRow.byRole('menuitem', { name: 'users.deactivate' }).find());
+    await user.click(await byText('users.deactivate').find());
     expect(await ui.dialogDeactivateUser.find()).toBeInTheDocument();
     expect(ui.deleteUserAlert.query()).not.toBeInTheDocument();
     await user.click(ui.deleteUserCheckbox.get());
@@ -410,9 +410,7 @@ describe('in non managed mode', () => {
     renderUsersApp([], currentUser);
 
     await user.click(await ui.aliceUpdateButton.find());
-    await user.click(
-      await ui.aliceRow.byRole('menuitem', { name: 'my_profile.password.title' }).find(),
-    );
+    await user.click(await byText('my_profile.password.title').find());
     expect(await ui.dialogPasswords.find()).toBeInTheDocument();
 
     expect(await ui.oldPassword.find()).toBeInTheDocument();
@@ -463,7 +461,7 @@ describe('in non managed mode', () => {
     renderUsersApp([], currentUser);
 
     await user.click(await ui.denisUpdateButton.find());
-    await user.click(await ui.denisRow.byRole('menuitem', { name: 'update_details' }).find());
+    await user.click(await byText('update_details').find());
     expect(await ui.dialogUpdateUser.find()).toBeInTheDocument();
 
     expect(ui.userNameInput.get()).toHaveValue('Denis Villeneuve');
@@ -483,7 +481,7 @@ describe('in non managed mode', () => {
 
     expect(await ui.aliceRow.byText('alice.merveille@wonderland.com').find()).toBeInTheDocument();
     await user.click(await ui.aliceUpdateButton.find());
-    await user.click(await ui.aliceRow.byRole('menuitem', { name: 'update_details' }).find());
+    await user.click(await byText('update_details').find());
     expect(await ui.dialogUpdateUser.find()).toBeInTheDocument();
 
     expect(ui.emailInput.get()).toHaveValue('alice.merveille@wonderland.com');
@@ -534,7 +532,7 @@ describe('in manage mode', () => {
       ui.bobRow.byRole('button', { name: 'my_profile.password.title' }).query(),
     ).not.toBeInTheDocument();
 
-    await user.click(ui.bobRow.byRole('menuitem', { name: 'update_scm' }).get());
+    await user.click(byText('update_scm').get());
 
     expect(ui.userNameInput.get()).toBeDisabled();
     expect(ui.emailInput.get()).toBeDisabled();
@@ -719,7 +717,8 @@ it('should render external identity Providers', async () => {
 
 it('accessibility', async () => {
   systemHandler.setProvider(null);
-  const user = userEvent.setup();
+  // Skip hover to avoid issues with Tooltip rerenders
+  const user = userEvent.setup({ skipHover: true });
   renderUsersApp();
 
   // user list page should be accessible
@@ -729,22 +728,20 @@ it('accessibility', async () => {
   // user creation dialog should be accessible
   await user.click(await ui.createUserButton.find());
   expect(await ui.dialogCreateUser.find()).toBeInTheDocument();
-  await waitFor(async () => {
-    await expect(ui.dialogCreateUser.get()).toHaveNoA11yViolations();
-  });
+  await expect(ui.dialogCreateUser.get()).toHaveNoA11yViolations();
+
   await user.click(ui.cancelButton.get());
 
   // users group membership dialog should be accessible
   await user.click(await ui.aliceUpdateGroupButton.find());
   expect(await ui.dialogGroups.find()).toBeInTheDocument();
-  await waitFor(async () => {
-    await expect(await ui.dialogGroups.find()).toHaveNoA11yViolations();
-  });
+  await expect(await ui.dialogGroups.find()).toHaveNoA11yViolations();
+
   await user.click(ui.doneButton.get());
 
   // user update dialog should be accessible
   await user.click(await ui.aliceUpdateButton.find());
-  await user.click(await ui.aliceRow.byRole('menuitem', { name: 'update_details' }).find());
+  await user.click(await byText('update_details').find());
   expect(await ui.dialogUpdateUser.find()).toBeInTheDocument();
   await expect(await ui.dialogUpdateUser.find()).toHaveNoA11yViolations();
   await user.click(ui.cancelButton.get());
@@ -759,16 +756,12 @@ it('accessibility', async () => {
   );
 
   expect(await ui.dialogTokens.find()).toBeInTheDocument();
-  await waitFor(async () => {
-    await expect(await ui.dialogTokens.find()).toHaveNoA11yViolations();
-  });
+  await expect(await ui.dialogTokens.find()).toHaveNoA11yViolations();
   await user.click(ui.closeButton.get());
 
   // user password dialog should be accessible
   await user.click(await ui.aliceUpdateButton.find());
-  await user.click(
-    await ui.aliceRow.byRole('menuitem', { name: 'my_profile.password.title' }).find(),
-  );
+  await user.click(await byText('my_profile.password.title').find());
   expect(await ui.dialogPasswords.find()).toBeInTheDocument();
   await expect(await ui.dialogPasswords.find()).toHaveNoA11yViolations();
 });

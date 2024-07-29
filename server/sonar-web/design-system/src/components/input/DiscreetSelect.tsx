@@ -32,6 +32,11 @@ type DiscreetProps<
   setValue: (value: OnChangeValue<Option, IsMulti>) => void;
 };
 
+/**
+ * @deprecated Use Select or SelectAsync from Echoes instead, and use the SelectHighlight.Ghost highlight property.
+ *
+ * See the [Migration Guide](https://xtranet-sonarsource.atlassian.net/wiki/x/K4AYxw)
+ */
 export function DiscreetSelect<
   Option,
   IsMulti extends boolean = false,
