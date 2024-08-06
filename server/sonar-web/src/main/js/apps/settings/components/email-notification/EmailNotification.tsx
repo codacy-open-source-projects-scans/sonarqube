@@ -17,37 +17,30 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { SubnavigationItem } from 'design-system';
+import { SubTitle } from 'design-system';
 import React from 'react';
-import { MeasureEnhanced } from '../../../types/types';
-import SubnavigationMeasureValue from './SubnavigationMeasureValue';
+import { FormattedMessage } from 'react-intl';
+import { AdditionalCategoryComponentProps } from '../AdditionalCategories';
+import CategoryDefinitionsList from '../CategoryDefinitionsList';
+import EmailForm from './EmailForm';
 
-interface Props {
-  measure: MeasureEnhanced;
-  name: string;
-  onChange: (metric: string) => void;
-  selected: string;
-}
+export default function EmailNotification(props: Readonly<AdditionalCategoryComponentProps>) {
+  const { component, definitions } = props;
 
-export default function DomainSubnavigationItem({
-  measure,
-  name,
-  onChange,
-  selected,
-}: Readonly<Props>) {
-  const { key } = measure.metric;
   return (
-    <SubnavigationItem
-      active={key === selected}
-      ariaCurrent={key === selected}
-      key={key}
-      onClick={onChange}
-      value={key}
-      className="sw-pl-2 sw-w-full sw-flex sw-justify-between"
-      id={`measure-${key}-name`}
-    >
-      {name}
-      <SubnavigationMeasureValue measure={measure} />
-    </SubnavigationItem>
+    <div>
+      <SubTitle as="h3">
+        <FormattedMessage id="settings.email_notification.header" />
+      </SubTitle>
+      <CategoryDefinitionsList
+        category="general"
+        component={component}
+        definitions={definitions}
+        displaySubCategoryTitle={false}
+        noPadding
+        subCategory="email"
+      />
+      <EmailForm />
+    </div>
   );
 }

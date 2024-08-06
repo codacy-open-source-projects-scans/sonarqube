@@ -17,37 +17,17 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { SubnavigationItem } from 'design-system';
-import React from 'react';
-import { MeasureEnhanced } from '../../../types/types';
-import SubnavigationMeasureValue from './SubnavigationMeasureValue';
 
-interface Props {
-  measure: MeasureEnhanced;
-  name: string;
-  onChange: (metric: string) => void;
-  selected: string;
-}
+import styled from '@emotion/styled';
+import { LAYOUT_GLOBAL_NAV_HEIGHT, Table, themeColor } from 'design-system';
 
-export default function DomainSubnavigationItem({
-  measure,
-  name,
-  onChange,
-  selected,
-}: Readonly<Props>) {
-  const { key } = measure.metric;
-  return (
-    <SubnavigationItem
-      active={key === selected}
-      ariaCurrent={key === selected}
-      key={key}
-      onClick={onChange}
-      value={key}
-      className="sw-pl-2 sw-w-full sw-flex sw-justify-between"
-      id={`measure-${key}-name`}
-    >
-      {name}
-      <SubnavigationMeasureValue measure={measure} />
-    </SubnavigationItem>
-  );
-}
+export const LAYOUT_ADMIN_NAV_HEIGHT = 92;
+
+export const StickyTable = styled(Table)`
+  & th {
+    position: sticky;
+    top: ${LAYOUT_ADMIN_NAV_HEIGHT + LAYOUT_GLOBAL_NAV_HEIGHT}px;
+    background: ${themeColor('backgroundSecondary')};
+    z-index: 1;
+  }
+`;

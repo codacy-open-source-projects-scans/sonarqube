@@ -17,37 +17,20 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { SubnavigationItem } from 'design-system';
-import React from 'react';
-import { MeasureEnhanced } from '../../../types/types';
-import SubnavigationMeasureValue from './SubnavigationMeasureValue';
+import { useMutation } from '@tanstack/react-query';
+import { sendTestEmail } from '../api/settings';
 
-interface Props {
-  measure: MeasureEnhanced;
-  name: string;
-  onChange: (metric: string) => void;
-  selected: string;
-}
-
-export default function DomainSubnavigationItem({
-  measure,
-  name,
-  onChange,
-  selected,
-}: Readonly<Props>) {
-  const { key } = measure.metric;
-  return (
-    <SubnavigationItem
-      active={key === selected}
-      ariaCurrent={key === selected}
-      key={key}
-      onClick={onChange}
-      value={key}
-      className="sw-pl-2 sw-w-full sw-flex sw-justify-between"
-      id={`measure-${key}-name`}
-    >
-      {name}
-      <SubnavigationMeasureValue measure={measure} />
-    </SubnavigationItem>
-  );
+export function useSendTestEmailMutation() {
+  return useMutation<
+    void,
+    Response,
+    {
+      message: string;
+      recipient: string;
+      subject: string;
+    },
+    unknown
+  >({
+    mutationFn: ({ message, recipient, subject }) => sendTestEmail(message, recipient, subject),
+  });
 }

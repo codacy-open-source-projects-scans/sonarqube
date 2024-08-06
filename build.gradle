@@ -249,9 +249,9 @@ subprojects {
       dependency 'com.sonarsource.cobol:sonar-cobol-plugin:5.7.0.8061'
       dependency 'com.sonarsource.cpp:sonar-cfamily-dependencies-plugin:6.57.0.73017'
       dependency 'com.sonarsource.cpp:sonar-cfamily-plugin:6.57.0.73017'
-      dependency 'com.sonarsource.dbd:sonar-dbd-plugin:1.28.0.9315'
-      dependency 'com.sonarsource.dbd:sonar-dbd-java-frontend-plugin:1.28.0.9315'
-      dependency 'com.sonarsource.dbd:sonar-dbd-python-frontend-plugin:1.28.0.9315'
+      dependency 'com.sonarsource.dbd:sonar-dbd-plugin:1.29.0.10185'
+      dependency 'com.sonarsource.dbd:sonar-dbd-java-frontend-plugin:1.29.0.10185'
+      dependency 'com.sonarsource.dbd:sonar-dbd-python-frontend-plugin:1.29.0.10185'
       dependency 'com.sonarsource.pli:sonar-pli-plugin:1.15.0.4810'
       dependency 'com.sonarsource.plsql:sonar-plsql-plugin:3.14.0.6845'
       dependency 'com.sonarsource.plugins.vb:sonar-vb-plugin:2.13.0.5130'
@@ -284,8 +284,8 @@ subprojects {
       dependency "org.sonarsource.api.plugin:sonar-plugin-api-test-fixtures:$pluginApiVersion"
       dependency 'org.sonarsource.xml:sonar-xml-plugin:2.10.0.4108'
       dependency 'org.sonarsource.iac:sonar-iac-plugin:1.32.0.11383'
-      dependency 'org.sonarsource.text:sonar-text-plugin:2.12.1.2905'
-      dependency 'com.sonarsource.text:sonar-text-enterprise-plugin:2.12.1.2905'
+      dependency 'org.sonarsource.text:sonar-text-plugin:2.13.0.3515'
+      dependency 'com.sonarsource.text:sonar-text-enterprise-plugin:2.13.0.3515'
       dependency 'com.sonarsource.jcl:sonar-jcl-plugin:1.2.0.1148'
 
       // please keep this list alphabetically ordered
