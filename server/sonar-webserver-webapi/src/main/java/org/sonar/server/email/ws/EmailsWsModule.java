@@ -20,11 +20,13 @@
 package org.sonar.server.email.ws;
 
 import org.sonar.core.platform.Module;
+import org.sonar.server.common.email.config.EmailConfigurationService;
 
 public class EmailsWsModule extends Module {
   @Override
   protected void configureModule() {
     add(
+      EmailConfigurationService.class,
       EmailsWs.class,
       SendAction.class);
   }

@@ -20,4 +20,5 @@
 
 export * from './components';
 export * from './helpers';
+export * from './hljs';
 export * from './types';

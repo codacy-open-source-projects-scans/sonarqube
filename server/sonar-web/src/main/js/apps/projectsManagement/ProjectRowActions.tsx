@@ -18,13 +18,13 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 import { ActionsDropdown, ItemButton, ItemLink, PopupZLevel, Spinner } from 'design-system';
+import { noop } from 'lodash';
 import React, { useState } from 'react';
 import { throwGlobalError } from '~sonar-aligned/helpers/error';
 import { getComponentNavigation } from '../../api/navigation';
 import { Project } from '../../api/project-management';
 import { translate, translateWithParameters } from '../../helpers/l10n';
 import { getComponentPermissionsUrl } from '../../helpers/urls';
-import { useGithubProvisioningEnabledQuery } from '../../queries/identity-provider/github';
 import { LoggedInUser } from '../../types/users';
 import ApplyTemplate from '../permissions/project/components/ApplyTemplate';
 import RestoreAccessModal from './RestoreAccessModal';
@@ -39,7 +39,6 @@ export default function ProjectRowActions({ currentUser, project }: Props) {
   const [hasAccess, setHasAccess] = useState<boolean | undefined>(undefined);
   const [loading, setLoading] = useState(false);
   const [restoreAccessModal, setRestoreAccessModal] = useState(false);
-  const { data: githubProvisioningEnabled } = useGithubProvisioningEnabledQuery();
 
   const fetchPermissions = async () => {
     setLoading(true);
@@ -84,16 +83,20 @@ export default function ProjectRowActions({ currentUser, project }: Props) {
                 {translate(project.managed ? 'show_permissions' : 'edit_permissions')}
               </ItemLink>
             )}
-
-            {hasAccess === false &&
-              (!project.managed || currentUser.local || !githubProvisioningEnabled) && (
-                <ItemButton
-                  className="it__restore-access"
-                  onClick={() => setRestoreAccessModal(true)}
-                >
-                  {translate('global_permissions.restore_access')}
+            {hasAccess === false && (!project.managed || currentUser.local) ? (
+              <ItemButton
+                className="it__restore-access"
+                onClick={() => setRestoreAccessModal(true)}
+              >
+                {translate('global_permissions.restore_access')}
+              </ItemButton>
+            ) : (
+              hasAccess === false && (
+                <ItemButton disabled onClick={noop}>
+                  {translate('global_permissions.no_actions_available')}
                 </ItemButton>
-              )}
+              )
+            )}
           </>
         </Spinner>
 

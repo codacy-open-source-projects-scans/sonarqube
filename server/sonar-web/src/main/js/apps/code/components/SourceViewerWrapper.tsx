@@ -17,10 +17,14 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { Spinner } from '@sonarsource/echoes-react';
+import { ToggleButton } from 'design-system';
 import * as React from 'react';
 import { Location } from '~sonar-aligned/types/router';
-import SourceViewer from '../../../components/SourceViewer/SourceViewer';
 import withKeyboardNavigation from '../../../components/hoc/withKeyboardNavigation';
+import SourceViewer from '../../../components/SourceViewer/SourceViewer';
+import SourceViewerPreview from '../../../components/SourceViewer/SourceViewerPreview';
+import { translate } from '../../../helpers/l10n';
 import { BranchLike } from '../../../types/branch-like';
 import { Measure } from '../../../types/types';
 
@@ -31,12 +35,24 @@ export interface SourceViewerWrapperProps {
   location: Location;
 }
 
+const PREVIEW_MODE_SUPPORTED_EXTENSIONS = ['ipynb'];
+
 function SourceViewerWrapper(props: SourceViewerWrapperProps) {
   const { branchLike, component, componentMeasures, location } = props;
+
+  const isPreviewSupported = React.useMemo(
+    () => PREVIEW_MODE_SUPPORTED_EXTENSIONS.includes(component.split('.').pop() ?? ''),
+    [component],
+  );
+
+  const [tab, setTab] = React.useState('preview');
+  const [isLoading, setIsLoading] = React.useState(false);
+
   const { line } = location.query;
   const finalLine = line ? Number(line) : undefined;
 
   const handleLoaded = React.useCallback(() => {
+    setIsLoading(false);
     if (line) {
       const row = document.querySelector(`.it__source-line-code[data-line-number="${line}"]`);
       if (row) {
@@ -45,7 +61,43 @@ function SourceViewerWrapper(props: SourceViewerWrapperProps) {
     }
   }, [line]);
 
-  return (
+  const handleTabChange = React.useCallback((value: string) => {
+    setTab(value);
+    if (value === 'code') {
+      setIsLoading(true);
+    }
+  }, []);
+
+  return isPreviewSupported ? (
+    <>
+      <div className="sw-mb-4">
+        <ToggleButton
+          options={[
+            { label: translate('preview'), value: 'preview' },
+            { label: translate('code'), value: 'code' },
+          ]}
+          value={tab}
+          onChange={(value) => handleTabChange(value)}
+        />
+      </div>
+      {tab === 'preview' ? (
+        <SourceViewerPreview branchLike={branchLike} component={component} />
+      ) : (
+        <>
+          <SourceViewer
+            aroundLine={finalLine}
+            branchLike={branchLike}
+            component={component}
+            componentMeasures={componentMeasures}
+            highlightedLine={finalLine}
+            onLoaded={handleLoaded}
+            showMeasures
+          />
+          <Spinner isLoading={isLoading} />
+        </>
+      )}
+    </>
+  ) : (
     <SourceViewer
       aroundLine={finalLine}
       branchLike={branchLike}

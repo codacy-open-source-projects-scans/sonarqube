@@ -39,10 +39,11 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.slf4j.event.Level;
-import org.sonar.api.config.EmailSettings;
 import org.sonar.api.notifications.Notification;
+import org.sonar.api.platform.Server;
 import org.sonar.api.testfixtures.log.LogTester;
 import org.sonar.api.utils.log.LoggerLevel;
+import org.sonar.server.email.EmailSmtpConfiguration;
 import org.sonar.server.issue.notification.EmailMessage;
 import org.sonar.server.issue.notification.EmailTemplate;
 import org.sonar.server.notification.email.EmailNotificationChannel.EmailDeliveryRequest;
@@ -69,7 +70,8 @@ public class EmailNotificationChannelTest {
   public LogTester logTester = new LogTester();
 
   private Wiser smtpServer;
-  private EmailSettings configuration;
+  private EmailSmtpConfiguration configuration;
+  private Server server;
   private EmailNotificationChannel underTest;
 
   @Before
@@ -78,8 +80,10 @@ public class EmailNotificationChannelTest {
     smtpServer = new Wiser(0);
     smtpServer.start();
 
-    configuration = mock(EmailSettings.class);
-    underTest = new EmailNotificationChannel(configuration, null, null);
+    configuration = mock(EmailSmtpConfiguration.class);
+    server = mock(Server.class);
+
+    underTest = new EmailNotificationChannel(configuration, server, null, null);
   }
 
   @After
@@ -251,10 +255,10 @@ public class EmailNotificationChannelTest {
 
   @Test
   public void deliverAll_has_no_effect_if_set_is_empty() {
-    EmailSettings emailSettings = mock(EmailSettings.class);
-    EmailNotificationChannel underTest = new EmailNotificationChannel(emailSettings, null, null);
+    EmailSmtpConfiguration emailSettings = mock(EmailSmtpConfiguration.class);
+    EmailNotificationChannel emailNotificationChannel = new EmailNotificationChannel(emailSettings, server, null, null);
 
-    int count = underTest.deliverAll(Collections.emptySet());
+    int count = emailNotificationChannel.deliverAll(Collections.emptySet());
 
     assertThat(count).isZero();
     verifyNoInteractions(emailSettings);
@@ -263,14 +267,14 @@ public class EmailNotificationChannelTest {
 
   @Test
   public void deliverAll_has_no_effect_if_smtp_host_is_null() {
-    EmailSettings emailSettings = mock(EmailSettings.class);
+    EmailSmtpConfiguration emailSettings = mock(EmailSmtpConfiguration.class);
     when(emailSettings.getSmtpHost()).thenReturn(null);
     Set<EmailDeliveryRequest> requests = IntStream.range(0, 1 + new Random().nextInt(10))
       .mapToObj(i -> new EmailDeliveryRequest("foo" + i + "@moo", mock(Notification.class)))
       .collect(toSet());
-    EmailNotificationChannel underTest = new EmailNotificationChannel(emailSettings, null, null);
+    EmailNotificationChannel emailNotificationChannel = new EmailNotificationChannel(emailSettings, server, null, null);
 
-    int count = underTest.deliverAll(requests);
+    int count = emailNotificationChannel.deliverAll(requests);
 
     assertThat(count).isZero();
     verify(emailSettings).getSmtpHost();
@@ -281,14 +285,14 @@ public class EmailNotificationChannelTest {
   @Test
   @UseDataProvider("emptyStrings")
   public void deliverAll_ignores_requests_which_recipient_is_empty(String emptyString) {
-    EmailSettings emailSettings = mock(EmailSettings.class);
+    EmailSmtpConfiguration emailSettings = mock(EmailSmtpConfiguration.class);
     when(emailSettings.getSmtpHost()).thenReturn(null);
     Set<EmailDeliveryRequest> requests = IntStream.range(0, 1 + new Random().nextInt(10))
       .mapToObj(i -> new EmailDeliveryRequest(emptyString, mock(Notification.class)))
       .collect(toSet());
-    EmailNotificationChannel underTest = new EmailNotificationChannel(emailSettings, null, null);
+    EmailNotificationChannel emailNotificationChannel = new EmailNotificationChannel(emailSettings, server, null, null);
 
-    int count = underTest.deliverAll(requests);
+    int count = emailNotificationChannel.deliverAll(requests);
 
     assertThat(count).isZero();
     verify(emailSettings).getSmtpHost();
@@ -312,9 +316,9 @@ public class EmailNotificationChannelTest {
     Set<EmailDeliveryRequest> requests = Stream.of(notification1, notification2, notification3)
       .map(t -> new EmailDeliveryRequest(recipientEmail, t))
       .collect(toSet());
-    EmailNotificationChannel underTest = new EmailNotificationChannel(configuration, new EmailTemplate[] {template1, template3}, null);
+    EmailNotificationChannel emailNotificationChannel = new EmailNotificationChannel(configuration, server, new EmailTemplate[] {template1, template3}, null);
 
-    int count = underTest.deliverAll(requests);
+    int count = emailNotificationChannel.deliverAll(requests);
 
     assertThat(count).isEqualTo(2);
     assertThat(smtpServer.getMessages()).hasSize(2);
@@ -352,9 +356,9 @@ public class EmailNotificationChannelTest {
     when(template11.format(notification1)).thenReturn(emailMessage11);
     when(template12.format(notification1)).thenReturn(emailMessage12);
     EmailDeliveryRequest request = new EmailDeliveryRequest(recipientEmail, notification1);
-    EmailNotificationChannel underTest = new EmailNotificationChannel(configuration, new EmailTemplate[] {template11, template12}, null);
+    EmailNotificationChannel emailNotificationChannel = new EmailNotificationChannel(configuration, server, new EmailTemplate[] {template11, template12}, null);
 
-    int count = underTest.deliverAll(Collections.singleton(request));
+    int count = emailNotificationChannel.deliverAll(Collections.singleton(request));
 
     assertThat(count).isOne();
     assertThat(smtpServer.getMessages()).hasSize(1);
@@ -374,10 +378,11 @@ public class EmailNotificationChannelTest {
   private void configure() {
     when(configuration.getSmtpHost()).thenReturn("localhost");
     when(configuration.getSmtpPort()).thenReturn(smtpServer.getServer().getPort());
+    when(configuration.getSecureConnection()).thenReturn("NONE");
     when(configuration.getFrom()).thenReturn("server@nowhere");
     when(configuration.getFromName()).thenReturn("SonarQube from NoWhere");
     when(configuration.getPrefix()).thenReturn(SUBJECT_PREFIX);
-    when(configuration.getServerBaseURL()).thenReturn("http://nemo.sonarsource.org");
+    when(server.getPublicRootUrl()).thenReturn("http://nemo.sonarsource.org");
   }
 
 }
