@@ -40,7 +40,7 @@ import {
 } from '../../../../queries/identity-provider/github';
 import { GitHubConfigurationPayload } from '../../../../types/dop-translation';
 import { Feature } from '../../../../types/features';
-import { GitHubMapping, ProvisioningType } from '../../../../types/provisioning';
+import { DevopsRolesMapping, ProvisioningType } from '../../../../types/provisioning';
 import { Provider } from '../../../../types/types';
 import AuthenticationFormField from './AuthenticationFormField';
 import AutoProvisioningConsent from './AutoProvisionningConsent';
@@ -63,7 +63,7 @@ export default function GitHubAuthenticationTab() {
   const [tokenKey, setTokenKey] = React.useState<number>(0);
   const [isConfirmProvisioningModalOpen, setIsConfirmProvisioningModalOpen] = React.useState(false);
   const [isMappingModalOpen, setIsMappingModalOpen] = useState(false);
-  const [rolesMapping, setRolesMapping] = useState<GitHubMapping[] | null>(null);
+  const [rolesMapping, setRolesMapping] = useState<DevopsRolesMapping[] | null>(null);
 
   const hasGithubProvisioning = useContext(AvailableFeaturesContext).includes(
     Feature.GithubProvisioning,
@@ -285,13 +285,13 @@ export default function GitHubAuthenticationTab() {
                   <div className="sw-mt-6">
                     <div className="sw-flex">
                       <Highlight className="sw-mb-4 sw-mr-4 sw-flex sw-items-center sw-gap-2">
-                        <FormattedMessage id="settings.authentication.github.configuration.roles_mapping.title" />
+                        <FormattedMessage id="settings.authentication.configuration.roles_mapping.title" />
                       </Highlight>
                       <ButtonSecondary
                         className="sw--mt-2"
                         onClick={() => setIsMappingModalOpen(true)}
                       >
-                        <FormattedMessage id="settings.authentication.github.configuration.roles_mapping.button_label" />
+                        <FormattedMessage id="settings.authentication.configuration.roles_mapping.button_label" />
                       </ButtonSecondary>
                     </div>
                     <Note className="sw-mt-2">
@@ -345,17 +345,20 @@ export default function GitHubAuthenticationTab() {
               provisioningType={provisioningType ?? ProvisioningType.jit}
               synchronizationDetails={<GitHubSynchronisationWarning />}
             />
-            {isConfirmProvisioningModalOpen && provisioningType && (
+
+            {provisioningType && (
               <ConfirmProvisioningModal
                 allowUsersToSignUp={allowUsersToSignUp}
                 hasProvisioningTypeChange={changes?.provisioningType !== undefined}
                 isAllowListEmpty={isEmpty(gitHubConfiguration.allowedOrganizations)}
+                isOpen={isConfirmProvisioningModalOpen}
                 onClose={() => setIsConfirmProvisioningModalOpen(false)}
                 onConfirm={onUpdateProvisioning}
                 provider={Provider.Github}
                 provisioningStatus={provisioningType}
               />
             )}
+
             {isMappingModalOpen && (
               <GitHubMappingModal
                 mapping={rolesMapping}

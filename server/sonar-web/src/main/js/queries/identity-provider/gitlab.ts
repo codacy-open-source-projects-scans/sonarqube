@@ -17,20 +17,26 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { queryOptions, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { addGlobalSuccessMessage } from 'design-system';
+import { isEqual, keyBy, partition, pick, unionBy } from 'lodash';
 import { getActivity } from '../../api/ce';
 import {
+  addGitlabRolesMapping,
   createGitLabConfiguration,
   deleteGitLabConfiguration,
+  deleteGitlabRolesMapping,
   fetchGitLabConfigurations,
+  fetchGitlabRolesMapping,
   syncNowGitLabProvisioning,
   updateGitLabConfiguration,
+  updateGitlabRolesMapping,
 } from '../../api/gitlab-provisioning';
 import { translate } from '../../helpers/l10n';
 import { mapReactQueryResult } from '../../helpers/react-query';
-import { AlmSyncStatus, ProvisioningType } from '../../types/provisioning';
+import { AlmSyncStatus, DevopsRolesMapping, ProvisioningType } from '../../types/provisioning';
 import { TaskStatuses, TaskTypes } from '../../types/tasks';
+import { createQueryHook, StaleTime } from '../common';
 
 export function useGitLabConfigurationsQuery() {
   return useQuery({
@@ -188,4 +194,67 @@ export function useSyncWithGitLabNow() {
     synchronizeNow: mutation.mutate,
     canSyncNow: autoProvisioningEnabled && !syncStatus?.nextSync && !mutation.isPending,
   };
+}
+
+// Order is reversed to put custom roles at the end (their index is -1)
+const defaultRoleOrder = ['owner', 'maintainer', 'developer', 'reporter', 'guest'];
+
+function sortGitlabRoles(data: DevopsRolesMapping[]) {
+  return [...data].sort((a, b) => {
+    if (defaultRoleOrder.includes(a.id) || defaultRoleOrder.includes(b.id)) {
+      return defaultRoleOrder.indexOf(b.id) - defaultRoleOrder.indexOf(a.id);
+    }
+    return a.role.localeCompare(b.role);
+  });
+}
+
+export const useGitlabRolesMappingQuery = createQueryHook(() => {
+  return queryOptions({
+    queryKey: ['identity_provider', 'gitlab_mapping'],
+    queryFn: fetchGitlabRolesMapping,
+    staleTime: StaleTime.LONG,
+    select: sortGitlabRoles,
+  });
+});
+
+export function useGitlabRolesMappingMutation() {
+  const client = useQueryClient();
+  const queryKey = ['identity_provider', 'gitlab_mapping'];
+  return useMutation({
+    mutationFn: async (mapping: DevopsRolesMapping[]) => {
+      const state = keyBy(client.getQueryData<DevopsRolesMapping[]>(queryKey), (m) => m.id);
+
+      const [maybeChangedRoles, newRoles] = partition(mapping, (m) => state[m.id]);
+      const changedRoles = maybeChangedRoles.filter((item) => !isEqual(item, state[item.id]));
+      const deletedRoles = Object.values(state).filter(
+        (m) => !m.baseRole && !mapping.some((cm) => m.id === cm.id),
+      );
+
+      return {
+        addedOrChanged: await Promise.all([
+          ...changedRoles.map((data) =>
+            updateGitlabRolesMapping(data.id, pick(data, 'permissions')),
+          ),
+          ...newRoles.map((m) => addGitlabRolesMapping(m)),
+        ]),
+        deleted: await Promise.all([
+          deletedRoles.map((dm) => deleteGitlabRolesMapping(dm.id)),
+        ]).then(() => deletedRoles.map((dm) => dm.id)),
+      };
+    },
+    onSuccess: ({ addedOrChanged, deleted }) => {
+      const state = client.getQueryData<DevopsRolesMapping[]>(queryKey);
+      if (state) {
+        const newData = unionBy(
+          addedOrChanged,
+          state.filter((s) => deleted.find((id) => id === s.id) === undefined),
+          (el) => el.id,
+        );
+        client.setQueryData(queryKey, newData);
+      }
+      addGlobalSuccessMessage(
+        translate('settings.authentication.gitlab.configuration.roles_mapping.save_success'),
+      );
+    },
+  });
 }

@@ -31,15 +31,14 @@ import {
   Spinner,
   SubHeading,
 } from 'design-system';
-import { differenceWith, map, uniqBy } from 'lodash';
+import { uniqBy } from 'lodash';
 import * as React from 'react';
 import { FormattedMessage } from 'react-intl';
 import DocHelpTooltip from '~sonar-aligned/components/controls/DocHelpTooltip';
-import { MetricKey } from '~sonar-aligned/types/metrics';
 import { useAvailableFeatures } from '../../../app/components/available-features/withAvailableFeatures';
 import { useMetrics } from '../../../app/components/metrics/withMetricsContext';
 import DocumentationLink from '../../../components/common/DocumentationLink';
-import ModalButton, { ModalProps } from '../../../components/controls/ModalButton';
+import { ModalProps } from '../../../components/controls/ModalButton';
 import { DocLink } from '../../../helpers/doc-links';
 import { useDocUrl } from '../../../helpers/docs';
 import { getLocalizedMetricName, translate } from '../../../helpers/l10n';
@@ -47,9 +46,9 @@ import { Feature } from '../../../types/features';
 import { CaycStatus, Condition as ConditionType, QualityGate } from '../../../types/types';
 import { groupAndSortByPriorityConditions, isQualityGateOptimized } from '../utils';
 import AddConditionModal from './AddConditionModal';
-import CaYCConditionsSimplificationGuide from './CaYCConditionsSimplificationGuide';
 import CaycCompliantBanner from './CaycCompliantBanner';
 import CaycCondition from './CaycCondition';
+import CaYCConditionsSimplificationGuide from './CaYCConditionsSimplificationGuide';
 import CaycFixOptimizeBanner from './CaycFixOptimizeBanner';
 import CaycReviewUpdateConditionsModal from './ConditionReviewAndUpdateModal';
 import ConditionsTable from './ConditionsTable';
@@ -59,14 +58,6 @@ interface Props {
   isFetching?: boolean;
   qualityGate: QualityGate;
 }
-
-const FORBIDDEN_METRIC_TYPES = ['DATA', 'DISTRIB', 'STRING', 'BOOL'];
-const FORBIDDEN_METRICS: string[] = [
-  MetricKey.alert_status,
-  MetricKey.releasability_rating,
-  MetricKey.security_hotspots,
-  MetricKey.new_security_hotspots,
-];
 
 export default function Conditions({ qualityGate, isFetching }: Readonly<Props>) {
   const [editing, setEditing] = React.useState<boolean>(
@@ -100,30 +91,6 @@ export default function Conditions({ qualityGate, isFetching }: Readonly<Props>)
   React.useEffect(() => {
     setEditing(qualityGate.caycStatus === CaycStatus.NonCompliant);
   }, [name]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const renderConditionModal = React.useCallback(
-    ({ onClose }: ModalProps) => {
-      const { conditions = [] } = qualityGate;
-      const availableMetrics = differenceWith(
-        map(metrics, (metric) => metric).filter(
-          (metric) =>
-            !metric.hidden &&
-            !FORBIDDEN_METRIC_TYPES.includes(metric.type) &&
-            !FORBIDDEN_METRICS.includes(metric.key) &&
-            !(
-              metric.key === MetricKey.prioritized_rule_issues &&
-              !hasFeature(Feature.PrioritizedRules)
-            ),
-        ),
-        conditions,
-        (metric, condition) => metric.key === condition.metric,
-      );
-      return (
-        <AddConditionModal metrics={availableMetrics} onClose={onClose} qualityGate={qualityGate} />
-      );
-    },
-    [metrics, qualityGate],
-  );
 
   const docUrl = useDocUrl(DocLink.CaYC);
   const isCompliantCustomQualityGate =
@@ -204,13 +171,7 @@ export default function Conditions({ qualityGate, isFetching }: Readonly<Props>)
         </div>
         <div>
           {(qualityGate.caycStatus === CaycStatus.NonCompliant || editing) && canEdit && (
-            <ModalButton modal={renderConditionModal}>
-              {({ onClick }) => (
-                <ButtonSecondary data-test="quality-gates__add-condition" onClick={onClick}>
-                  {translate('quality_gates.add_condition')}
-                </ButtonSecondary>
-              )}
-            </ModalButton>
+            <AddConditionModal qualityGate={qualityGate} />
           )}
         </div>
       </header>

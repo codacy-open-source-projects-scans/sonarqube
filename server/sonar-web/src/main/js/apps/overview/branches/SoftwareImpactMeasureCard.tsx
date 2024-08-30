@@ -31,6 +31,7 @@ import {
   getIssueTypeBySoftwareQuality,
 } from '../../../helpers/issues';
 import { isDefined } from '../../../helpers/types';
+import { useIsLegacyCCTMode } from '../../../queries/settings';
 import { Branch } from '../../../types/branch-like';
 import {
   SoftwareImpactMeasureData,
@@ -56,17 +57,17 @@ export function SoftwareImpactMeasureCard(props: Readonly<SoftwareImpactBreakdow
   const { component, conditions, softwareQuality, ratingMetricKey, measures, branch } = props;
 
   const intl = useIntl();
+  const { data: isLegacy } = useIsLegacyCCTMode();
 
   // Find measure for this software quality
   const metricKey = softwareQualityToMeasure(softwareQuality);
   const measureRaw = measures.find((m) => m.metric.key === metricKey);
-  const measure = JSON.parse(measureRaw?.value ?? 'null') as SoftwareImpactMeasureData;
+  const measure = isLegacy
+    ? undefined
+    : (JSON.parse(measureRaw?.value ?? 'null') as SoftwareImpactMeasureData);
   const alternativeMeasure = measures.find(
     (m) => m.metric.key === SOFTWARE_QUALITIES_METRIC_KEYS_MAP[softwareQuality].deprecatedMetric,
   );
-
-  // Find rating measure
-  const ratingMeasure = measures.find((m) => m.metric.key === ratingMetricKey);
 
   const count = formatMeasure(measure?.total ?? alternativeMeasure?.value, MetricType.ShortInteger);
 
@@ -139,8 +140,10 @@ export function SoftwareImpactMeasureCard(props: Readonly<SoftwareImpactBreakdow
 
           <div className="sw-flex-grow sw-flex sw-justify-end">
             <SoftwareImpactMeasureRating
+              branch={branch}
               softwareQuality={softwareQuality}
-              value={ratingMeasure?.value}
+              componentKey={component.key}
+              ratingMetricKey={ratingMetricKey}
             />
           </div>
         </div>

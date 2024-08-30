@@ -17,12 +17,17 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { screen } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import React from 'react';
 import { ComponentQualifier, Visibility } from '~sonar-aligned/types/component';
 import { MetricKey } from '~sonar-aligned/types/metrics';
-import { mockCurrentUser, mockLoggedInUser } from '../../../../../helpers/testMocks';
+import { MeasuresServiceMock } from '../../../../../api/mocks/MeasuresServiceMock';
+import SettingsServiceMock from '../../../../../api/mocks/SettingsServiceMock';
+import { mockComponent } from '../../../../../helpers/mocks/component';
+import { mockCurrentUser, mockLoggedInUser, mockMeasure } from '../../../../../helpers/testMocks';
 import { renderComponent } from '../../../../../helpers/testReactTestingUtils';
+import { SettingsKey } from '../../../../../types/settings';
 import { CurrentUser } from '../../../../../types/users';
 import { Project } from '../../../types';
 import ProjectCard from '../ProjectCard';
@@ -33,6 +38,7 @@ const MEASURES = {
   [MetricKey.reliability_rating]: '1.0',
   [MetricKey.security_rating]: '1.0',
   [MetricKey.sqale_rating]: '1.0',
+  [MetricKey.security_review_rating]: '1.0',
   [MetricKey.new_bugs]: '12',
 };
 
@@ -49,6 +55,14 @@ const PROJECT: Project = {
 
 const USER_LOGGED_OUT = mockCurrentUser();
 const USER_LOGGED_IN = mockLoggedInUser();
+
+const settingsHandler = new SettingsServiceMock();
+const measuresHandler = new MeasuresServiceMock();
+
+beforeEach(() => {
+  settingsHandler.reset();
+  measuresHandler.reset();
+});
 
 it('should not display the quality gate', () => {
   const project = { ...PROJECT, analysisDate: undefined };
@@ -84,97 +98,247 @@ it('should display applications', () => {
   expect(screen.getAllByText('qualifier.APP')).toHaveLength(2);
 });
 
-it('should not display awaiting analysis badge and do not display old measures', () => {
-  renderProjectCard({
-    ...PROJECT,
-    measures: {
-      ...MEASURES,
-      [MetricKey.security_issues]: JSON.stringify({ LOW: 0, MEDIUM: 0, HIGH: 1, total: 1 }),
-      [MetricKey.reliability_issues]: JSON.stringify({ LOW: 0, MEDIUM: 2, HIGH: 0, total: 2 }),
-      [MetricKey.maintainability_issues]: JSON.stringify({ LOW: 3, MEDIUM: 0, HIGH: 0, total: 3 }),
-      [MetricKey.code_smells]: '4',
-      [MetricKey.bugs]: '5',
-      [MetricKey.vulnerabilities]: '6',
-    },
-  });
-  expect(screen.queryByText('projects.awaiting_scan')).not.toBeInTheDocument();
-  expect(screen.getByText('1')).toBeInTheDocument();
-  expect(screen.getByText('2')).toBeInTheDocument();
-  expect(screen.getByText('3')).toBeInTheDocument();
-  expect(screen.queryByText('4')).not.toBeInTheDocument();
-  expect(screen.queryByText('5')).not.toBeInTheDocument();
-  expect(screen.queryByText('6')).not.toBeInTheDocument();
-});
-
-it('should display awaiting analysis badge and show the old measures', async () => {
-  renderProjectCard({
-    ...PROJECT,
-    measures: {
-      ...MEASURES,
-      [MetricKey.code_smells]: '4',
-      [MetricKey.bugs]: '5',
-      [MetricKey.vulnerabilities]: '6',
-    },
-  });
-  expect(screen.getByText('projects.awaiting_scan')).toBeInTheDocument();
-  await expect(screen.getByText('projects.awaiting_scan')).toHaveATooltipWithContent(
-    'projects.awaiting_scan.description.TRK',
-  );
-  expect(screen.getByText('4')).toBeInTheDocument();
-  expect(screen.getByText('5')).toBeInTheDocument();
-  expect(screen.getByText('6')).toBeInTheDocument();
-});
-
-it('should display awaiting analysis badge and show the old measures for Application', async () => {
-  renderProjectCard({
-    ...PROJECT,
-    qualifier: ComponentQualifier.Application,
-    measures: {
-      ...MEASURES,
-      [MetricKey.code_smells]: '4',
-      [MetricKey.bugs]: '5',
-      [MetricKey.vulnerabilities]: '6',
-    },
-  });
-  expect(screen.getByText('projects.awaiting_scan')).toBeInTheDocument();
-  await expect(screen.getByText('projects.awaiting_scan')).toHaveATooltipWithContent(
-    'projects.awaiting_scan.description.APP',
-  );
-  expect(screen.getByText('4')).toBeInTheDocument();
-  expect(screen.getByText('5')).toBeInTheDocument();
-  expect(screen.getByText('6')).toBeInTheDocument();
-});
-
-it('should not display awaiting analysis badge if project is not analyzed', () => {
-  renderProjectCard({
-    ...PROJECT,
-    analysisDate: undefined,
-  });
-  expect(screen.queryByText('projects.awaiting_scan')).not.toBeInTheDocument();
-});
-
-it('should not display awaiting analysis badge if project does not have lines of code', () => {
-  renderProjectCard({
-    ...PROJECT,
-    measures: {
-      ...(({ [MetricKey.ncloc]: _, ...rest }) => rest)(MEASURES),
-    },
-  });
-  expect(screen.queryByText('projects.awaiting_scan')).not.toBeInTheDocument();
-});
-
-it('should not display awaiting analysis badge if it is a new code filter', () => {
-  renderProjectCard(PROJECT, undefined, 'leak');
-  expect(screen.queryByText('projects.awaiting_scan')).not.toBeInTheDocument();
-});
-
-it('should display 3 aplication', () => {
+it('should display 3 projects', () => {
   renderProjectCard({
     ...PROJECT,
     qualifier: ComponentQualifier.Application,
     measures: { ...MEASURES, projects: '3' },
   });
   expect(screen.getByText(/x_projects_.3/)).toBeInTheDocument();
+});
+
+describe('upgrade scenario (awaiting scan)', () => {
+  const oldRatings = {
+    [MetricKey.reliability_rating]: mockMeasure({
+      metric: MetricKey.reliability_rating,
+      value: '1',
+    }),
+    [MetricKey.sqale_rating]: mockMeasure({
+      metric: MetricKey.sqale_rating,
+      value: '1',
+    }),
+    [MetricKey.security_rating]: mockMeasure({
+      metric: MetricKey.security_rating,
+      value: '1',
+    }),
+    [MetricKey.security_review_rating]: mockMeasure({
+      metric: MetricKey.security_review_rating,
+      value: '1',
+    }),
+  };
+
+  const newRatings = {
+    [MetricKey.software_quality_reliability_rating]: mockMeasure({
+      metric: MetricKey.software_quality_reliability_rating,
+      value: '2',
+    }),
+    [MetricKey.software_quality_maintainability_rating]: mockMeasure({
+      metric: MetricKey.software_quality_maintainability_rating,
+      value: '2',
+    }),
+    [MetricKey.software_quality_security_rating]: mockMeasure({
+      metric: MetricKey.software_quality_security_rating,
+      value: '2',
+    }),
+    [MetricKey.software_quality_security_review_rating]: mockMeasure({
+      metric: MetricKey.software_quality_security_review_rating,
+      value: '2',
+    }),
+  };
+  beforeEach(() => {
+    measuresHandler.setComponents({
+      component: mockComponent({ key: PROJECT.key }),
+      ancestors: [],
+      children: [],
+    });
+    measuresHandler.registerComponentMeasures({
+      [PROJECT.key]: oldRatings,
+    });
+  });
+  it('should not display awaiting analysis badge and do not display old measures', async () => {
+    measuresHandler.registerComponentMeasures({
+      [PROJECT.key]: newRatings,
+    });
+    renderProjectCard({
+      ...PROJECT,
+      measures: {
+        ...MEASURES,
+        [MetricKey.security_issues]: JSON.stringify({ LOW: 0, MEDIUM: 0, HIGH: 1, total: 1 }),
+        [MetricKey.reliability_issues]: JSON.stringify({ LOW: 0, MEDIUM: 2, HIGH: 0, total: 2 }),
+        [MetricKey.maintainability_issues]: JSON.stringify({
+          LOW: 3,
+          MEDIUM: 0,
+          HIGH: 0,
+          total: 3,
+        }),
+        [MetricKey.software_quality_maintainability_rating]: '2',
+        [MetricKey.software_quality_reliability_rating]: '2',
+        [MetricKey.software_quality_security_rating]: '2',
+        [MetricKey.software_quality_security_review_rating]: '2',
+        [MetricKey.code_smells]: '4',
+        [MetricKey.bugs]: '5',
+        [MetricKey.vulnerabilities]: '6',
+      },
+    });
+    expect(screen.getByText('1')).toBeInTheDocument();
+    expect(screen.getByText('2')).toBeInTheDocument();
+    expect(screen.getByText('3')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getAllByText('B')).toHaveLength(4));
+    expect(screen.queryByText('projects.awaiting_scan')).not.toBeInTheDocument();
+    expect(screen.queryByText('4')).not.toBeInTheDocument();
+    expect(screen.queryByText('5')).not.toBeInTheDocument();
+    expect(screen.queryByText('6')).not.toBeInTheDocument();
+    expect(screen.queryByText('A')).not.toBeInTheDocument();
+  });
+
+  it('should display awaiting analysis badge and show the old measures', async () => {
+    const user = userEvent.setup();
+    renderProjectCard({
+      ...PROJECT,
+      measures: {
+        ...MEASURES,
+        [MetricKey.code_smells]: '4',
+        [MetricKey.bugs]: '5',
+        [MetricKey.vulnerabilities]: '6',
+      },
+    });
+    expect(await screen.findByText('projects.awaiting_scan')).toBeInTheDocument();
+    await user.click(screen.getByText('projects.awaiting_scan'));
+    await expect(screen.getByText('projects.awaiting_scan.description.TRK')).toBeInTheDocument();
+    expect(screen.getByText('4')).toBeInTheDocument();
+    expect(screen.getByText('5')).toBeInTheDocument();
+    expect(screen.getByText('6')).toBeInTheDocument();
+    expect(screen.getAllByText('A')).toHaveLength(4);
+  });
+
+  it('should display awaiting analysis badge, show new software qualities, but old ratings', async () => {
+    renderProjectCard({
+      ...PROJECT,
+      measures: {
+        ...MEASURES,
+        [MetricKey.security_issues]: JSON.stringify({ LOW: 0, MEDIUM: 0, HIGH: 1, total: 1 }),
+        [MetricKey.reliability_issues]: JSON.stringify({ LOW: 0, MEDIUM: 2, HIGH: 0, total: 2 }),
+        [MetricKey.maintainability_issues]: JSON.stringify({
+          LOW: 3,
+          MEDIUM: 0,
+          HIGH: 0,
+          total: 3,
+        }),
+        [MetricKey.code_smells]: '4',
+        [MetricKey.bugs]: '5',
+        [MetricKey.vulnerabilities]: '6',
+      },
+    });
+    expect(await screen.findByText('projects.awaiting_scan')).toBeInTheDocument();
+    expect(screen.getByText('1')).toBeInTheDocument();
+    expect(screen.getByText('2')).toBeInTheDocument();
+    expect(screen.getByText('3')).toBeInTheDocument();
+    expect(screen.queryByText('4')).not.toBeInTheDocument();
+    expect(screen.queryByText('5')).not.toBeInTheDocument();
+    expect(screen.queryByText('6')).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.getAllByText('A')).toHaveLength(4));
+  });
+
+  it('should display awaiting analysis badge and show the old measures for Application', async () => {
+    const user = userEvent.setup();
+    renderProjectCard({
+      ...PROJECT,
+      qualifier: ComponentQualifier.Application,
+      measures: {
+        ...MEASURES,
+        [MetricKey.code_smells]: '4',
+        [MetricKey.bugs]: '5',
+        [MetricKey.vulnerabilities]: '6',
+      },
+    });
+    expect(await screen.findByText('projects.awaiting_scan')).toBeInTheDocument();
+    await user.click(screen.getByText('projects.awaiting_scan'));
+    await expect(screen.getByText('projects.awaiting_scan.description.APP')).toBeInTheDocument();
+    expect(screen.getByText('4')).toBeInTheDocument();
+    expect(screen.getByText('5')).toBeInTheDocument();
+    expect(screen.getByText('6')).toBeInTheDocument();
+  });
+
+  it('should not display awaiting analysis badge if project is not analyzed', () => {
+    renderProjectCard({
+      ...PROJECT,
+      analysisDate: undefined,
+    });
+    expect(screen.queryByText('projects.awaiting_scan')).not.toBeInTheDocument();
+  });
+
+  it('should not display awaiting analysis badge if project does not have lines of code', () => {
+    renderProjectCard({
+      ...PROJECT,
+      measures: {
+        ...(({ [MetricKey.ncloc]: _, ...rest }) => rest)(MEASURES),
+      },
+    });
+    expect(screen.queryByText('projects.awaiting_scan')).not.toBeInTheDocument();
+  });
+
+  it('should not display awaiting analysis badge if it is a new code filter', () => {
+    renderProjectCard(PROJECT, undefined, 'leak');
+    expect(screen.queryByText('projects.awaiting_scan')).not.toBeInTheDocument();
+  });
+
+  it('should not display awaiting analysis badge if legacy mode is enabled', async () => {
+    settingsHandler.set(SettingsKey.LegacyMode, 'true');
+    renderProjectCard({
+      ...PROJECT,
+      measures: {
+        ...MEASURES,
+        [MetricKey.code_smells]: '4',
+        [MetricKey.bugs]: '5',
+        [MetricKey.vulnerabilities]: '6',
+      },
+    });
+    expect(screen.getByText('4')).toBeInTheDocument();
+    expect(screen.getByText('5')).toBeInTheDocument();
+    expect(screen.getByText('6')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getAllByText('A')).toHaveLength(4));
+    expect(screen.queryByText('projects.awaiting_scan')).not.toBeInTheDocument();
+  });
+
+  it('should not display new values if legacy mode is enabled', async () => {
+    settingsHandler.set(SettingsKey.LegacyMode, 'true');
+    measuresHandler.registerComponentMeasures({
+      [PROJECT.key]: {
+        ...newRatings,
+        ...oldRatings,
+      },
+    });
+    renderProjectCard({
+      ...PROJECT,
+      measures: {
+        ...MEASURES,
+        [MetricKey.security_issues]: JSON.stringify({ LOW: 0, MEDIUM: 0, HIGH: 1, total: 1 }),
+        [MetricKey.reliability_issues]: JSON.stringify({ LOW: 0, MEDIUM: 2, HIGH: 0, total: 2 }),
+        [MetricKey.maintainability_issues]: JSON.stringify({
+          LOW: 3,
+          MEDIUM: 0,
+          HIGH: 0,
+          total: 3,
+        }),
+        [MetricKey.software_quality_maintainability_rating]: '2',
+        [MetricKey.software_quality_reliability_rating]: '2',
+        [MetricKey.software_quality_security_rating]: '2',
+        [MetricKey.software_quality_security_review_rating]: '2',
+        [MetricKey.code_smells]: '4',
+        [MetricKey.bugs]: '5',
+        [MetricKey.vulnerabilities]: '6',
+      },
+    });
+    expect(await screen.findByText('4')).toBeInTheDocument();
+    expect(screen.getByText('5')).toBeInTheDocument();
+    expect(screen.getByText('6')).toBeInTheDocument();
+    expect(screen.queryByText('1')).not.toBeInTheDocument();
+    expect(screen.queryByText('2')).not.toBeInTheDocument();
+    expect(screen.queryByText('3')).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.getAllByText('A')).toHaveLength(4));
+    expect(screen.queryByText('B')).not.toBeInTheDocument();
+    expect(screen.queryByText('projects.awaiting_scan')).not.toBeInTheDocument();
+  });
 });
 
 function renderProjectCard(project: Project, user: CurrentUser = USER_LOGGED_OUT, type?: string) {

@@ -48,7 +48,7 @@ import org.sonar.db.issue.IssueChangeDao;
 import org.sonar.db.issue.IssueDao;
 import org.sonar.db.issue.IssueFixedDao;
 import org.sonar.db.measure.LiveMeasureDao;
-import org.sonar.db.measure.MeasureDao;
+import org.sonar.db.measure.ProjectMeasureDao;
 import org.sonar.db.metric.MetricDao;
 import org.sonar.db.newcodeperiod.NewCodePeriodDao;
 import org.sonar.db.notification.NotificationQueueDao;
@@ -66,7 +66,7 @@ import org.sonar.db.property.InternalComponentPropertiesDao;
 import org.sonar.db.property.InternalPropertiesDao;
 import org.sonar.db.property.PropertiesDao;
 import org.sonar.db.provisioning.GithubOrganizationGroupDao;
-import org.sonar.db.provisioning.GithubPermissionsMappingDao;
+import org.sonar.db.provisioning.DevOpsPermissionsMappingDao;
 import org.sonar.db.purge.PurgeDao;
 import org.sonar.db.pushevent.PushEventDao;
 import org.sonar.db.qualitygate.ProjectQgateAssociationDao;
@@ -127,13 +127,13 @@ public class DaoModule extends Module {
     ComponentDao.class,
     ComponentKeyUpdaterDao.class,
     DefaultQProfileDao.class,
+    DevOpsPermissionsMappingDao.class,
     DuplicationDao.class,
     EntityDao.class,
     EsQueueDao.class,
     EventDao.class,
     EventComponentChangeDao.class,
     GithubOrganizationGroupDao.class,
-    GithubPermissionsMappingDao.class,
     ExternalGroupDao.class,
     FileSourceDao.class,
     GroupDao.class,
@@ -148,7 +148,7 @@ public class DaoModule extends Module {
     IssueDao.class,
     IssueFixedDao.class,
     LiveMeasureDao.class,
-    MeasureDao.class,
+    ProjectMeasureDao.class,
     MetricDao.class,
     NewCodePeriodDao.class,
     NotificationQueueDao.class,

@@ -20,9 +20,7 @@
 import { invert } from 'lodash';
 import { MetricKey } from '~sonar-aligned/types/metrics';
 import { Facet, getScannableProjects, searchProjects } from '../../api/components';
-import { getMeasuresForProjects } from '../../api/measures';
 import { translate, translateWithParameters } from '../../helpers/l10n';
-import { isDiffMetric } from '../../helpers/measures';
 import { RequestData } from '../../helpers/request';
 import { Dict } from '../../types/types';
 import { Query, convertToFilter } from './query';
@@ -93,14 +91,18 @@ export const METRICS = [
   MetricKey.reliability_issues,
   MetricKey.bugs,
   MetricKey.reliability_rating,
+  MetricKey.software_quality_reliability_rating,
   MetricKey.security_issues,
   MetricKey.vulnerabilities,
   MetricKey.security_rating,
+  MetricKey.software_quality_security_rating,
   MetricKey.maintainability_issues,
   MetricKey.code_smells,
   MetricKey.sqale_rating,
+  MetricKey.software_quality_maintainability_rating,
   MetricKey.security_hotspots_reviewed,
   MetricKey.security_review_rating,
+  MetricKey.software_quality_security_review_rating,
   MetricKey.duplicated_lines_density,
   MetricKey.coverage,
   MetricKey.ncloc,
@@ -119,29 +121,57 @@ export const LEAK_METRICS = [
   MetricKey.projects,
 ];
 
+export const LEGACY_FACETS = [
+  MetricKey.reliability_rating,
+  MetricKey.security_rating,
+  MetricKey.security_review_rating,
+  MetricKey.sqale_rating,
+  MetricKey.coverage,
+  MetricKey.duplicated_lines_density,
+  MetricKey.ncloc,
+  MetricKey.alert_status,
+  'languages',
+  'tags',
+  'qualifier',
+];
+
 export const FACETS = [
-  'reliability_rating',
-  'security_rating',
-  'security_review_rating',
-  'sqale_rating',
-  'coverage',
-  'duplicated_lines_density',
-  'ncloc',
-  'alert_status',
+  MetricKey.software_quality_reliability_rating,
+  MetricKey.software_quality_security_rating,
+  MetricKey.software_quality_security_review_rating,
+  MetricKey.software_quality_maintainability_rating,
+  MetricKey.coverage,
+  MetricKey.duplicated_lines_density,
+  MetricKey.ncloc,
+  MetricKey.alert_status,
+  'languages',
+  'tags',
+  'qualifier',
+];
+
+export const LEGACY_LEAK_FACETS = [
+  MetricKey.new_reliability_rating,
+  MetricKey.new_security_rating,
+  MetricKey.new_security_review_rating,
+  MetricKey.new_maintainability_rating,
+  MetricKey.new_coverage,
+  MetricKey.new_duplicated_lines_density,
+  MetricKey.new_lines,
+  MetricKey.alert_status,
   'languages',
   'tags',
   'qualifier',
 ];
 
 export const LEAK_FACETS = [
-  'new_reliability_rating',
-  'new_security_rating',
-  'new_security_review_rating',
-  'new_maintainability_rating',
-  'new_coverage',
-  'new_duplicated_lines_density',
-  'new_lines',
-  'alert_status',
+  MetricKey.new_software_quality_reliability_rating,
+  MetricKey.new_software_quality_security_rating,
+  MetricKey.new_software_quality_security_review_rating,
+  MetricKey.new_software_quality_maintainability_rating,
+  MetricKey.new_coverage,
+  MetricKey.new_duplicated_lines_density,
+  MetricKey.new_lines,
+  MetricKey.alert_status,
   'languages',
   'tags',
   'qualifier',
@@ -177,48 +207,31 @@ export function fetchProjects({
   isFavorite,
   query,
   pageIndex = 1,
+  isLegacy,
 }: {
   isFavorite: boolean;
+  isLegacy: boolean;
   pageIndex?: number;
   query: Query;
 }) {
   const ps = PAGE_SIZE;
 
-  const data = convertToQueryData(query, isFavorite, {
+  const data = convertToQueryData(query, isFavorite, isLegacy, {
     p: pageIndex > 1 ? pageIndex : undefined,
     ps,
-    facets: defineFacets(query).join(),
+    facets: defineFacets(query, isLegacy).join(),
     f: 'analysisDate,leakPeriodDate',
   });
 
   return searchProjects(data)
-    .then((response) =>
-      Promise.all([
-        fetchProjectMeasures(response.components, query),
-        Promise.resolve(response),
-        fetchScannableProjects(),
-      ]),
-    )
-    .then(([measures, { components, facets, paging }, { scannableProjects }]) => {
+    .then((response) => Promise.all([Promise.resolve(response), fetchScannableProjects()]))
+    .then(([{ components, facets, paging }, { scannableProjects }]) => {
       return {
-        facets: getFacetsMap(facets),
-        projects: components.map((component) => {
-          const componentMeasures: Dict<string> = {};
-          measures
-            .filter((measure) => measure.component === component.key)
-            .forEach((measure) => {
-              const value = isDiffMetric(measure.metric) ? measure.period?.value : measure.value;
-              if (value !== undefined) {
-                componentMeasures[measure.metric] = value;
-              }
-            });
-
-          return {
-            ...component,
-            measures: componentMeasures,
-            isScannable: scannableProjects.find((p) => p.key === component.key) !== undefined,
-          };
-        }),
+        facets: getFacetsMap(facets, isLegacy),
+        projects: components.map((component) => ({
+          ...component,
+          isScannable: scannableProjects.find((p) => p.key === component.key) !== undefined,
+        })),
         total: paging.total,
       };
     });
@@ -232,18 +245,23 @@ export function defineMetrics(query: Query): string[] {
   return METRICS;
 }
 
-function defineFacets(query: Query): string[] {
+function defineFacets(query: Query, isLegacy: boolean): string[] {
   if (query.view === 'leak') {
-    return LEAK_FACETS;
+    return isLegacy ? LEGACY_LEAK_FACETS : LEAK_FACETS;
   }
 
-  return FACETS;
+  return isLegacy ? LEGACY_FACETS : FACETS;
 }
 
-export function convertToQueryData(query: Query, isFavorite: boolean, defaultData = {}) {
+export function convertToQueryData(
+  query: Query,
+  isFavorite: boolean,
+  isLegacy: boolean,
+  defaultData = {},
+) {
   const data: RequestData = { ...defaultData };
-  const filter = convertToFilter(query, isFavorite);
-  const sort = convertToSorting(query);
+  const filter = convertToFilter(query, isFavorite, isLegacy);
+  const sort = convertToSorting(query, isLegacy);
 
   if (filter) {
     data.filter = filter;
@@ -260,17 +278,6 @@ export function convertToQueryData(query: Query, isFavorite: boolean, defaultDat
   return data;
 }
 
-export function fetchProjectMeasures(projects: Array<{ key: string }>, query: Query) {
-  if (!projects.length) {
-    return Promise.resolve([]);
-  }
-
-  const projectKeys = projects.map((project) => project.key);
-  const metrics = defineMetrics(query);
-
-  return getMeasuresForProjects(projectKeys, metrics);
-}
-
 function mapFacetValues(values: Array<{ count: number; val: string }>) {
   const map: Dict<number> = {};
 
@@ -281,7 +288,7 @@ function mapFacetValues(values: Array<{ count: number; val: string }>) {
   return map;
 }
 
-const propertyToMetricMap: Dict<string | undefined> = {
+export const propertyToMetricMapLegacy: Dict<string | undefined> = {
   analysis_date: 'analysisDate',
   reliability: 'reliability_rating',
   new_reliability: 'new_reliability_rating',
@@ -305,13 +312,25 @@ const propertyToMetricMap: Dict<string | undefined> = {
   creation_date: 'creationDate',
 };
 
-const metricToPropertyMap = invert(propertyToMetricMap);
+export const propertyToMetricMap: Dict<string | undefined> = {
+  ...propertyToMetricMapLegacy,
+  reliability: 'software_quality_reliability_rating',
+  new_reliability: 'new_software_quality_reliability_rating',
+  security: 'software_quality_security_rating',
+  new_security: 'new_software_quality_security_rating',
+  security_review: 'software_quality_security_review_rating',
+  new_security_review: 'new_software_quality_security_review_rating',
+  maintainability: 'software_quality_maintainability_rating',
+  new_maintainability: 'new_software_quality_maintainability_rating',
+};
 
-function getFacetsMap(facets: Facet[]) {
+function getFacetsMap(facets: Facet[], isLegacy: boolean) {
   const map: Dict<Dict<number>> = {};
 
   facets.forEach((facet) => {
-    const property = metricToPropertyMap[facet.property];
+    const property = invert(isLegacy ? propertyToMetricMapLegacy : propertyToMetricMap)[
+      facet.property
+    ];
     const { values } = facet;
 
     if (REVERSED_FACETS.includes(property)) {
@@ -324,12 +343,18 @@ function getFacetsMap(facets: Facet[]) {
   return map;
 }
 
-export function convertToSorting({ sort }: Query): { asc?: boolean; s?: string } {
+export function convertToSorting(
+  { sort }: Query,
+  isLegacy: boolean,
+): { asc?: boolean; s?: string } {
   if (sort?.startsWith('-')) {
-    return { s: propertyToMetricMap[sort.substring(1)], asc: false };
+    return {
+      s: (isLegacy ? propertyToMetricMapLegacy : propertyToMetricMap)[sort.substring(1)],
+      asc: false,
+    };
   }
 
-  return { s: propertyToMetricMap[sort ?? ''] };
+  return { s: (isLegacy ? propertyToMetricMapLegacy : propertyToMetricMap)[sort ?? ''] };
 }
 
 const ONE_MINUTE = 60000;

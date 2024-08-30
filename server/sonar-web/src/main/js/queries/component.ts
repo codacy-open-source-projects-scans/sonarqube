@@ -17,12 +17,13 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { UseQueryResult, useQuery } from '@tanstack/react-query';
+import { queryOptions, useQuery, useQueryClient } from '@tanstack/react-query';
+import { groupBy, omit } from 'lodash';
 import { BranchParameters } from '~sonar-aligned/types/branch-like';
 import { getTasksForComponent } from '../api/ce';
-import { getMeasuresWithMetrics } from '../api/measures';
-import { MeasuresAndMetaWithMetrics } from '../types/measures';
-import { Component } from '../types/types';
+import { getBreadcrumbs, getComponent, getComponentData } from '../api/components';
+import { Component, Measure } from '../types/types';
+import { StaleTime, createQueryHook } from './common';
 
 const TASK_RETRY = 10_000;
 
@@ -31,12 +32,6 @@ type QueryKeyData = {
   metricKeys: string[];
 };
 
-function getComponentQueryKey(key: string, type: 'tasks'): string[];
-function getComponentQueryKey(key: string, type: 'measures', data: QueryKeyData): string[];
-function getComponentQueryKey(key: string, type: string, data?: QueryKeyData): string[] {
-  return ['component', key, type, JSON.stringify(data)];
-}
-
 function extractQueryKeyData(queryKey: string[]): { data?: QueryKeyData; key: string } {
   const [, key, , data] = queryKey;
   return { key, data: JSON.parse(data ?? 'null') };
@@ -44,7 +39,7 @@ function extractQueryKeyData(queryKey: string[]): { data?: QueryKeyData; key: st
 
 export function useTaskForComponentQuery(component: Component) {
   return useQuery({
-    queryKey: getComponentQueryKey(component.key, 'tasks'),
+    queryKey: ['component', component.key, 'tasks'],
     queryFn: ({ queryKey }) => {
       const { key } = extractQueryKeyData(queryKey);
       return getTasksForComponent(key);
@@ -53,21 +48,49 @@ export function useTaskForComponentQuery(component: Component) {
   });
 }
 
-export function useComponentMeasuresWithMetricsQuery(
-  key: string,
-  metricKeys: string[],
-  branchParameters: BranchParameters,
-  enabled = true,
-): UseQueryResult<MeasuresAndMetaWithMetrics> {
-  return useQuery({
-    enabled,
-    queryKey: getComponentQueryKey(key, 'measures', {
-      metricKeys,
-      branchParameters,
-    }),
-    queryFn: ({ queryKey }) => {
-      const { key, data } = extractQueryKeyData(queryKey);
-      return data && getMeasuresWithMetrics(key, data.metricKeys, data.branchParameters);
-    },
-  });
-}
+export const useComponentQuery = createQueryHook(
+  ({ component, metricKeys, ...params }: Parameters<typeof getComponent>[0]) => {
+    const queryClient = useQueryClient();
+
+    return queryOptions({
+      queryKey: ['component', component, 'measures', { metricKeys, params }],
+      queryFn: async () => {
+        const result = await getComponent({
+          component,
+          metricKeys,
+          ...params,
+        });
+        const measuresMapByMetricKey = groupBy(result.component.measures, 'metric');
+        metricKeys.split(',').forEach((metricKey) => {
+          const measure = measuresMapByMetricKey[metricKey]?.[0] ?? null;
+          queryClient.setQueryData<Measure>(
+            ['measures', 'details', result.component.key, metricKey],
+            measure,
+          );
+        });
+        return result;
+      },
+      staleTime: StaleTime.LONG,
+    });
+  },
+);
+
+export const useComponentBreadcrumbsQuery = createQueryHook(
+  ({ component, ...params }: Parameters<typeof getBreadcrumbs>[0]) => {
+    return queryOptions({
+      queryKey: ['component', component, 'breadcrumbs', params],
+      queryFn: () => getBreadcrumbs({ component, ...params }),
+      staleTime: StaleTime.LONG,
+    });
+  },
+);
+
+export const useComponentDataQuery = createQueryHook(
+  (data: Parameters<typeof getComponentData>[0]) => {
+    return queryOptions({
+      queryKey: ['component', data.component, 'component_data', omit(data, 'component')],
+      queryFn: () => getComponentData(data),
+      staleTime: StaleTime.LONG,
+    });
+  },
+);

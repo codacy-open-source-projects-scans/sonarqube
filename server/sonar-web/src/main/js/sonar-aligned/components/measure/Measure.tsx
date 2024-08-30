@@ -17,21 +17,25 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { Tooltip } from '@sonarsource/echoes-react';
 import classNames from 'classnames';
-import { MetricsRatingBadge, QualityGateIndicator, RatingLabel } from 'design-system';
-import React from 'react';
+import { QualityGateIndicator, RatingEnum } from 'design-system';
+import React, { useCallback } from 'react';
 import { useIntl } from 'react-intl';
 import { formatMeasure } from '~sonar-aligned/helpers/measures';
 import { Status } from '~sonar-aligned/types/common';
-import { MetricType } from '~sonar-aligned/types/metrics';
+import { MetricKey, MetricType } from '~sonar-aligned/types/metrics';
+import RatingComponent from '../../../app/components/metrics/RatingComponent';
 import RatingTooltipContent from '../../../components/measure/RatingTooltipContent';
+import { BranchLike } from '../../../types/branch-like';
 
 interface Props {
   badgeSize?: 'xs' | 'sm' | 'md';
+  branchLike?: BranchLike;
   className?: string;
+  componentKey: string;
   decimals?: number;
   fontClassName?: `sw-body-${string}` | `sw-heading-lg`;
+  forceRatingMetric?: boolean;
   metricKey: string;
   metricType: string;
   small?: boolean;
@@ -40,16 +44,34 @@ interface Props {
 
 export default function Measure({
   className,
+  componentKey,
   badgeSize,
   decimals,
   fontClassName,
   metricKey,
+  branchLike,
   metricType,
+  forceRatingMetric,
   small,
   value,
 }: Readonly<Props>) {
   const intl = useIntl();
   const classNameWithFont = classNames(className, fontClassName);
+
+  const getTooltip = useCallback(
+    (_: RatingEnum, value: string | undefined, metric?: MetricKey) =>
+      value !== undefined &&
+      metric !== undefined && <RatingTooltipContent metricKey={metric} value={value} />,
+    [],
+  );
+
+  const getLabel = useCallback(
+    (rating: RatingEnum) =>
+      rating
+        ? intl.formatMessage({ id: 'metric.has_rating_X' }, { '0': rating })
+        : intl.formatMessage({ id: 'metric.no_rating' }),
+    [intl],
+  );
 
   if (value === undefined) {
     return (
@@ -89,28 +111,24 @@ export default function Measure({
     return <span className={classNameWithFont}>{formattedValue ?? '—'}</span>;
   }
 
-  const tooltip = <RatingTooltipContent metricKey={metricKey} value={value} />;
   const rating = (
-    <MetricsRatingBadge
+    <RatingComponent
+      forceMetric={forceRatingMetric}
+      branchLike={branchLike}
       size={badgeSize ?? small ? 'sm' : 'md'}
-      label={
-        value
-          ? intl.formatMessage(
-              { id: 'metric.has_rating_X' },
-              { '0': formatMeasure(value, MetricType.Rating) },
-            )
-          : intl.formatMessage({ id: 'metric.no_rating' })
-      }
-      rating={formatMeasure(value, MetricType.Rating) as RatingLabel}
+      getLabel={getLabel}
+      getTooltip={getTooltip}
+      componentKey={componentKey}
+      ratingMetric={metricKey as MetricKey}
     />
   );
 
   return (
-    <Tooltip content={tooltip}>
+    <>
       {/* eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex */}
       <span className={className} tabIndex={0}>
         {rating}
       </span>
-    </Tooltip>
+    </>
   );
 }

@@ -20,13 +20,17 @@
 import { cloneDeep, omit } from 'lodash';
 import { mockGitlabConfiguration } from '../../helpers/mocks/alm-integrations';
 import { mockPaging } from '../../helpers/testMocks';
-import { GitlabConfiguration } from '../../types/provisioning';
+import { DevopsRolesMapping, GitlabConfiguration } from '../../types/provisioning';
 import {
+  addGitlabRolesMapping,
   createGitLabConfiguration,
   deleteGitLabConfiguration,
+  deleteGitlabRolesMapping,
   fetchGitLabConfiguration,
   fetchGitLabConfigurations,
+  fetchGitlabRolesMapping,
   updateGitLabConfiguration,
+  updateGitlabRolesMapping,
 } from '../gitlab-provisioning';
 
 jest.mock('../gitlab-provisioning');
@@ -35,16 +39,58 @@ const defaultGitlabConfiguration: GitlabConfiguration[] = [
   mockGitlabConfiguration({ id: '1', enabled: true }),
 ];
 
+const gitlabMappingMock = (
+  id: string,
+  permissions: (keyof DevopsRolesMapping['permissions'])[],
+  baseRole = false,
+) => ({
+  id,
+  role: id,
+  baseRole,
+  permissions: {
+    user: permissions.includes('user'),
+    codeViewer: permissions.includes('codeViewer'),
+    issueAdmin: permissions.includes('issueAdmin'),
+    securityHotspotAdmin: permissions.includes('securityHotspotAdmin'),
+    admin: permissions.includes('admin'),
+    scan: permissions.includes('scan'),
+  },
+});
+
+const defaultMapping: DevopsRolesMapping[] = [
+  gitlabMappingMock('guest', ['user', 'codeViewer'], true),
+  gitlabMappingMock('reporter', ['user', 'codeViewer'], true),
+  gitlabMappingMock(
+    'developer',
+    ['user', 'codeViewer', 'issueAdmin', 'securityHotspotAdmin', 'scan'],
+    true,
+  ),
+  gitlabMappingMock(
+    'maintainer',
+    ['user', 'codeViewer', 'issueAdmin', 'securityHotspotAdmin', 'scan'],
+    true,
+  ),
+  gitlabMappingMock(
+    'owner',
+    ['user', 'codeViewer', 'issueAdmin', 'securityHotspotAdmin', 'admin', 'scan'],
+    true,
+  ),
+];
+
 export default class GitlabProvisioningServiceMock {
   gitlabConfigurations: GitlabConfiguration[];
+  gitlabMapping: DevopsRolesMapping[];
 
   constructor() {
     this.gitlabConfigurations = cloneDeep(defaultGitlabConfiguration);
+    this.gitlabMapping = cloneDeep(defaultMapping);
     jest.mocked(fetchGitLabConfigurations).mockImplementation(this.handleFetchGitLabConfigurations);
     jest.mocked(fetchGitLabConfiguration).mockImplementation(this.handleFetchGitLabConfiguration);
     jest.mocked(createGitLabConfiguration).mockImplementation(this.handleCreateGitLabConfiguration);
     jest.mocked(updateGitLabConfiguration).mockImplementation(this.handleUpdateGitLabConfiguration);
     jest.mocked(deleteGitLabConfiguration).mockImplementation(this.handleDeleteGitLabConfiguration);
+    jest.mocked(fetchGitlabRolesMapping).mockImplementation(this.handleFetchGilabRolesMapping);
+    jest.mocked(updateGitlabRolesMapping).mockImplementation(this.handleUpdateGitlabRolesMapping);
   }
 
   handleFetchGitLabConfigurations: typeof fetchGitLabConfigurations = () => {
@@ -85,6 +131,36 @@ export default class GitlabProvisioningServiceMock {
 
   setGitlabConfigurations = (gitlabConfigurations: GitlabConfiguration[]) => {
     this.gitlabConfigurations = gitlabConfigurations;
+  };
+
+  handleFetchGilabRolesMapping: typeof fetchGitlabRolesMapping = () => {
+    return Promise.resolve(this.gitlabMapping);
+  };
+
+  handleUpdateGitlabRolesMapping: typeof updateGitlabRolesMapping = (id, data) => {
+    this.gitlabMapping = this.gitlabMapping.map((mapping) =>
+      mapping.id === id ? { ...mapping, ...data } : mapping,
+    );
+
+    return Promise.resolve(
+      this.gitlabMapping.find((mapping) => mapping.id === id) as DevopsRolesMapping,
+    );
+  };
+
+  handleAddGitlabRolesMapping: typeof addGitlabRolesMapping = (data) => {
+    const newRole = { ...data, id: data.role };
+    this.gitlabMapping = [...this.gitlabMapping, newRole];
+
+    return Promise.resolve(newRole);
+  };
+
+  handleDeleteGitlabRolesMapping: typeof deleteGitlabRolesMapping = (id) => {
+    this.gitlabMapping = this.gitlabMapping.filter((el) => el.id !== id);
+    return Promise.resolve();
+  };
+
+  addGitLabCustomRole = (id: string, permissions: (keyof DevopsRolesMapping['permissions'])[]) => {
+    this.gitlabMapping = [...this.gitlabMapping, gitlabMappingMock(id, permissions)];
   };
 
   reset = () => {

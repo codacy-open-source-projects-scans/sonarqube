@@ -58,6 +58,7 @@ import org.sonar.core.component.DefaultResourceTypes;
 import org.sonar.core.documentation.DefaultDocumentationLinkGenerator;
 import org.sonar.core.extension.CoreExtensionsInstaller;
 import org.sonar.core.language.LanguagesProvider;
+import org.sonar.core.metric.SoftwareQualitiesMetrics;
 import org.sonar.core.platform.PlatformEditionProvider;
 import org.sonar.core.platform.SpringComponentContainer;
 import org.sonar.server.almintegration.ws.AlmIntegrationsWSModule;
@@ -187,6 +188,8 @@ import org.sonar.server.platform.SystemInfoWriterModule;
 import org.sonar.server.platform.WebCoreExtensionsInstaller;
 import org.sonar.server.platform.db.CheckAnyonePermissionsAtStartup;
 import org.sonar.server.platform.telemetry.ProjectCppAutoconfigTelemetryProvider;
+import org.sonar.server.platform.telemetry.TelemetryFipsEnabledProvider;
+import org.sonar.server.platform.telemetry.TelemetryLegacyModePropertyProvider;
 import org.sonar.server.platform.telemetry.TelemetryNclocProvider;
 import org.sonar.server.platform.telemetry.TelemetryUserEnabledProvider;
 import org.sonar.server.platform.telemetry.TelemetryVersionProvider;
@@ -393,6 +396,7 @@ public class PlatformLevel4 extends PlatformLevel {
       new MeasuresWsModule(),
       UnanalyzedLanguageMetrics.class,
       IssueCountMetrics.class,
+      SoftwareQualitiesMetrics.class,
 
       new QualityGateModule(),
       new QualityGateWsModule(),
@@ -663,11 +667,13 @@ public class PlatformLevel4 extends PlatformLevel {
       RecoveryIndexer.class,
       IndexersImpl.class,
 
-      //new telemetry metrics
+      // new telemetry metrics
       ProjectCppAutoconfigTelemetryProvider.class,
       TelemetryVersionProvider.class,
+      TelemetryLegacyModePropertyProvider.class,
       TelemetryNclocProvider.class,
       TelemetryUserEnabledProvider.class,
+      TelemetryFipsEnabledProvider.class,
 
       // telemetry
       TelemetryMetricsLoader.class,

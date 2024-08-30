@@ -21,11 +21,15 @@ import { CoverageIndicator, DuplicationsIndicator } from 'design-system';
 import * as React from 'react';
 import Measure from '~sonar-aligned/components/measure/Measure';
 import { MetricKey, MetricType } from '~sonar-aligned/types/metrics';
+import { BranchLike } from '../../types/branch-like';
 import { duplicationRatingConverter } from './utils';
 
 interface Props {
+  branchLike?: BranchLike;
   className?: string;
+  componentKey: string;
   decimals?: number;
+  forceRatingMetric?: boolean;
   metricKey: string;
   metricType: string;
   small?: boolean;

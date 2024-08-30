@@ -34,6 +34,8 @@ import BranchesServiceMock from '../../../api/mocks/BranchesServiceMock';
 import ComponentsServiceMock from '../../../api/mocks/ComponentsServiceMock';
 import { PARENT_COMPONENT_KEY, RULE_1 } from '../../../api/mocks/data/ids';
 import IssuesServiceMock from '../../../api/mocks/IssuesServiceMock';
+import { MeasuresServiceMock } from '../../../api/mocks/MeasuresServiceMock';
+import SettingsServiceMock from '../../../api/mocks/SettingsServiceMock';
 import SourcesServiceMock from '../../../api/mocks/SourcesServiceMock';
 import { CCT_SOFTWARE_QUALITY_METRICS } from '../../../helpers/constants';
 import { isDiffMetric } from '../../../helpers/measures';
@@ -70,6 +72,8 @@ const branchesHandler = new BranchesServiceMock();
 const componentsHandler = new ComponentsServiceMock();
 const sourcesHandler = new SourcesServiceMock();
 const issuesHandler = new IssuesServiceMock();
+const settingsHandler = new SettingsServiceMock();
+const measuresHandler = new MeasuresServiceMock();
 
 const JUPYTER_ISSUE = {
   issue: mockRawIssue(false, {
@@ -126,6 +130,8 @@ beforeEach(() => {
   componentsHandler.reset();
   sourcesHandler.reset();
   issuesHandler.reset();
+  settingsHandler.reset();
+  measuresHandler.reset();
 });
 
 it('should allow navigating through the tree', async () => {

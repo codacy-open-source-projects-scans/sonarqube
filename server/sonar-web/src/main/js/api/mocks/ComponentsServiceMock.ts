@@ -40,10 +40,9 @@ import {
   changeKey,
   doesComponentExists,
   getBreadcrumbs,
-  getChildren,
+  getComponent,
   getComponentData,
   getComponentForSourceViewer,
-  getComponentLeaves,
   getComponentTree,
   getDuplications,
   getSources,
@@ -93,8 +92,8 @@ export default class ComponentsServiceMock {
     this.measures = cloneDeep(this.defaultMeasures);
     this.projects = cloneDeep(this.defaultProjects);
 
+    jest.mocked(getComponent).mockImplementation(this.handleGetComponent);
     jest.mocked(getComponentTree).mockImplementation(this.handleGetComponentTree);
-    jest.mocked(getChildren).mockImplementation(this.handleGetChildren);
     jest.mocked(getTree).mockImplementation(this.handleGetTree);
     jest.mocked(getComponentData).mockImplementation(this.handleGetComponentData);
     jest
@@ -103,7 +102,6 @@ export default class ComponentsServiceMock {
     jest.mocked(getDuplications).mockImplementation(this.handleGetDuplications);
     jest.mocked(getSources).mockImplementation(this.handleGetSources);
     jest.mocked(changeKey).mockImplementation(this.handleChangeKey);
-    jest.mocked(getComponentLeaves).mockImplementation(this.handleGetComponentLeaves);
     jest.mocked(getBreadcrumbs).mockImplementation(this.handleGetBreadcrumbs);
     jest.mocked(setProjectTags).mockImplementation(this.handleSetProjectTags);
     jest.mocked(setApplicationTags).mockImplementation(this.handleSetApplicationTags);
@@ -244,19 +242,6 @@ export default class ComponentsServiceMock {
     this.measures = cloneDeep(this.defaultMeasures);
   };
 
-  handleGetChildren = (
-    component: string,
-    metrics: string[] = [],
-    data: RequestData = {},
-  ): Promise<{
-    baseComponent: ComponentMeasure;
-    components: ComponentMeasure[];
-    metrics: Metric[];
-    paging: Paging;
-  }> => {
-    return this.handleGetComponentTree('children', component, metrics, data);
-  };
-
   handleGetComponentTree = (
     strategy: string,
     key: string,
@@ -350,6 +335,18 @@ export default class ComponentsServiceMock {
     throw new Error(`Couldn't find component with key ${data.component}`);
   };
 
+  handleGetComponent: typeof getComponent = (data: { component: string } & BranchParameters) => {
+    if (this.failLoadingComponentStatus !== undefined) {
+      return Promise.reject({ status: this.failLoadingComponentStatus });
+    }
+    const tree = this.findComponentTree(data.component);
+    if (tree) {
+      const { component } = tree;
+      return this.reply({ component });
+    }
+    throw new Error(`Couldn't find component with key ${data.component}`);
+  };
+
   handleGetComponentForSourceViewer = ({ component }: { component: string } & BranchParameters) => {
     const sourceFile = this.findSourceFile(component);
     return this.reply(sourceFile.component);
@@ -382,19 +379,6 @@ export default class ComponentsServiceMock {
       return this.reply(undefined);
     }
     return Promise.reject({ status: 404, message: 'Component not found' });
-  };
-
-  handleGetComponentLeaves = (
-    component: string,
-    metrics: string[] = [],
-    data: RequestData = {},
-  ): Promise<{
-    baseComponent: ComponentMeasure;
-    components: ComponentMeasure[];
-    metrics: Metric[];
-    paging: Paging;
-  }> => {
-    return this.handleGetComponentTree('leaves', component, metrics, data);
   };
 
   handleGetBreadcrumbs = ({ component: key }: { component: string } & BranchParameters) => {

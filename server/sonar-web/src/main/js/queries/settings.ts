@@ -17,11 +17,13 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { queryOptions, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { addGlobalSuccessMessage } from 'design-system';
 import { getValue, getValues, resetSettingValue, setSettingValue } from '../api/settings';
 import { translate } from '../helpers/l10n';
-import { ExtendedSettingDefinition } from '../types/settings';
+import { ExtendedSettingDefinition, SettingsKey } from '../types/settings';
+import { createQueryHook } from './common';
+import { invalidateAllMeasures } from './measures';
 
 type SettingValue = string | boolean | string[];
 
@@ -34,14 +36,23 @@ export function useGetValuesQuery(keys: string[]) {
   });
 }
 
-export function useGetValueQuery(key: string, component?: string) {
-  return useQuery({
-    queryKey: ['settings', 'details', key] as const,
-    queryFn: ({ queryKey: [_a, _b, key] }) => {
-      return getValue({ key, component }).then((v) => v ?? null);
-    },
-  });
-}
+export const useGetValueQuery = createQueryHook(
+  ({ key, component }: { component?: string; key: string }) => {
+    return queryOptions({
+      queryKey: ['settings', 'details', key] as const,
+      queryFn: ({ queryKey: [_a, _b, key] }) => {
+        return getValue({ key, component }).then((v) => v ?? null);
+      },
+    });
+  },
+);
+
+export const useIsLegacyCCTMode = () => {
+  return useGetValueQuery(
+    { key: SettingsKey.LegacyMode },
+    { staleTime: Infinity, select: (data) => data?.value === 'true' },
+  );
+};
 
 export function useResetSettingsMutation() {
   const queryClient = useQueryClient();
@@ -115,6 +126,7 @@ export function useSaveValueMutation() {
     onSuccess: (_, { definition }) => {
       queryClient.invalidateQueries({ queryKey: ['settings', 'details', definition.key] });
       queryClient.invalidateQueries({ queryKey: ['settings', 'values'] });
+      invalidateAllMeasures(queryClient);
       addGlobalSuccessMessage(translate('settings.authentication.form.settings.save_success'));
     },
   });

@@ -83,8 +83,8 @@ import org.sonar.db.issue.NewCodeReferenceIssueDto;
 import org.sonar.db.issue.PrIssueDto;
 import org.sonar.db.measure.LargestBranchNclocDto;
 import org.sonar.db.measure.LiveMeasureMapper;
-import org.sonar.db.measure.MeasureDto;
-import org.sonar.db.measure.MeasureMapper;
+import org.sonar.db.measure.ProjectMeasureDto;
+import org.sonar.db.measure.ProjectMeasureMapper;
 import org.sonar.db.measure.ProjectLocDistributionDto;
 import org.sonar.db.metric.MetricMapper;
 import org.sonar.db.newcodeperiod.NewCodePeriodMapper;
@@ -121,8 +121,8 @@ import org.sonar.db.property.PropertiesMapper;
 import org.sonar.db.property.ScrapPropertyDto;
 import org.sonar.db.provisioning.GithubOrganizationGroupDto;
 import org.sonar.db.provisioning.GithubOrganizationGroupMapper;
-import org.sonar.db.provisioning.GithubPermissionsMappingDto;
-import org.sonar.db.provisioning.GithubPermissionsMappingMapper;
+import org.sonar.db.provisioning.DevOpsPermissionsMappingDto;
+import org.sonar.db.provisioning.DevOpsPermissionsMappingMapper;
 import org.sonar.db.purge.PurgeMapper;
 import org.sonar.db.purge.PurgeableAnalysisDto;
 import org.sonar.db.pushevent.PushEventDto;
@@ -208,12 +208,12 @@ public class MyBatis {
     confBuilder.loadAlias("AnticipatedTransition", AnticipatedTransitionDto.class);
     confBuilder.loadAlias("CeTaskCharacteristic", CeTaskCharacteristicDto.class);
     confBuilder.loadAlias("Component", ComponentDto.class);
+    confBuilder.loadAlias("DevOpsPermissionsMapping", DevOpsPermissionsMappingDto.class);
     confBuilder.loadAlias("DuplicationUnit", DuplicationUnitDto.class);
     confBuilder.loadAlias("Entity", EntityDto.class);
     confBuilder.loadAlias("Event", EventDto.class);
     confBuilder.loadAlias("ExternalGroup", ExternalGroupDto.class);
     confBuilder.loadAlias("GithubOrganizationGroup", GithubOrganizationGroupDto.class);
-    confBuilder.loadAlias("GithubPermissionsMapping", GithubPermissionsMappingDto.class);
     confBuilder.loadAlias("FilePathWithHash", FilePathWithHashDto.class);
     confBuilder.loadAlias("KeyWithUuid", KeyWithUuidDto.class);
     confBuilder.loadAlias("Group", GroupDto.class);
@@ -226,7 +226,7 @@ public class MyBatis {
     confBuilder.loadAlias("Impact", ImpactDto.class);
     confBuilder.loadAlias("Issue", IssueDto.class);
     confBuilder.loadAlias("NewCodeReferenceIssue", NewCodeReferenceIssueDto.class);
-    confBuilder.loadAlias("Measure", MeasureDto.class);
+    confBuilder.loadAlias("ProjectMeasure", ProjectMeasureDto.class);
     confBuilder.loadAlias("LargestBranchNclocDto", LargestBranchNclocDto.class);
     confBuilder.loadAlias("NotificationQueue", NotificationQueueDto.class);
     confBuilder.loadAlias("PermissionTemplateCharacteristic", PermissionTemplateCharacteristicDto.class);
@@ -292,7 +292,7 @@ public class MyBatis {
       EventMapper.class,
       EventComponentChangeMapper.class,
       GithubOrganizationGroupMapper.class,
-      GithubPermissionsMappingMapper.class,
+      DevOpsPermissionsMappingMapper.class,
       ExternalGroupMapper.class,
       FileSourceMapper.class,
       GroupMapper.class,
@@ -304,7 +304,7 @@ public class MyBatis {
       IssueChangeMapper.class,
       IssueMapper.class,
       IssueFixedMapper.class,
-      MeasureMapper.class,
+      ProjectMeasureMapper.class,
       MetricMapper.class,
       NewCodePeriodMapper.class,
       NotificationQueueMapper.class,

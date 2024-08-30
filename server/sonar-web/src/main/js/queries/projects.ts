@@ -17,9 +17,11 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { queryOptions } from '@tanstack/react-query';
+import { queryOptions, useMutation, useQueryClient } from '@tanstack/react-query';
 import { searchProjects } from '../api/components';
+import { deleteProject } from '../api/project-management';
 import { createQueryHook } from './common';
+import { invalidateMeasuresByComponentKey } from './measures';
 
 export const useProjectQuery = createQueryHook((key: string) => {
   return queryOptions({
@@ -27,3 +29,13 @@ export const useProjectQuery = createQueryHook((key: string) => {
     queryFn: ({ queryKey: [, key] }) => searchProjects({ filter: `query=${key}` }),
   });
 });
+
+export function useDeleteProjectMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (key: string) => deleteProject(key),
+    onSuccess: (_, key) => {
+      invalidateMeasuresByComponentKey(key, queryClient);
+    },
+  });
+}

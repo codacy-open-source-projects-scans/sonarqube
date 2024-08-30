@@ -20,11 +20,15 @@
 package org.sonar.auth.gitlab;
 
 import com.google.gson.annotations.SerializedName;
+import javax.annotation.Nullable;
 
 public record GsonProjectMember (
   @SerializedName("id")
   long id,
   @SerializedName("access_level")
-  int accessLevel
+  int accessLevel,
+  @SerializedName("member_role")
+  @Nullable
+  GsonMemberRole gsonMemberRole
 ){
 }

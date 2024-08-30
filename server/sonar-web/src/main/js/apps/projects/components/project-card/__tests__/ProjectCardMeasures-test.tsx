@@ -54,7 +54,6 @@ describe('Overall measures', () => {
 describe('New code measures', () => {
   it('should be rendered properly', () => {
     renderProjectCardMeasures({}, { isNewCode: true });
-    expect(screen.getByLabelText(MetricKey.new_security_hotspots_reviewed)).toBeInTheDocument();
     expect(screen.getByTitle('metric.new_violations.description')).toBeInTheDocument();
   });
 });
@@ -92,6 +91,7 @@ function renderProjectCardMeasures(
 
   renderComponent(
     <ProjectCardMeasures
+      componentKey="test"
       componentQualifier={ComponentQualifier.Project}
       isNewCode={false}
       measures={measures}

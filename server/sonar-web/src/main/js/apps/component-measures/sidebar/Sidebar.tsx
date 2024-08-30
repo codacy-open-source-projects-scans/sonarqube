@@ -32,12 +32,14 @@ import * as React from 'react';
 import A11ySkipTarget from '~sonar-aligned/components/a11y/A11ySkipTarget';
 import { translate } from '../../../helpers/l10n';
 import useFollowScroll from '../../../hooks/useFollowScroll';
+import { useIsLegacyCCTMode } from '../../../queries/settings';
 import { Domain } from '../../../types/measures';
 import { MeasureEnhanced } from '../../../types/types';
 import { PROJECT_OVERVEW, Query, isProjectOverview, populateDomainsFromMeasures } from '../utils';
 import DomainSubnavigation from './DomainSubnavigation';
 
 interface Props {
+  componentKey: string;
   measures: MeasureEnhanced[];
   selectedMetric: string;
   showFullMeasures: boolean;
@@ -45,9 +47,10 @@ interface Props {
 }
 
 export default function Sidebar(props: Readonly<Props>) {
-  const { showFullMeasures, updateQuery, selectedMetric, measures } = props;
+  const { showFullMeasures, updateQuery, componentKey, selectedMetric, measures } = props;
   const { top: topScroll, scrolledOnce } = useFollowScroll();
-  const domains = populateDomainsFromMeasures(measures);
+  const { data: isLegacy } = useIsLegacyCCTMode();
+  const domains = populateDomainsFromMeasures(measures, isLegacy);
 
   const handleChangeMetric = React.useCallback(
     (metric: string) => {
@@ -99,9 +102,11 @@ export default function Sidebar(props: Readonly<Props>) {
 
         {domains.map((domain: Domain) => (
           <DomainSubnavigation
+            componentKey={componentKey}
             domain={domain}
             key={domain.name}
             onChange={handleChangeMetric}
+            measures={measures}
             open={isDomainSelected(selectedMetric, domain)}
             selected={selectedMetric}
             showFullMeasures={showFullMeasures}

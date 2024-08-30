@@ -108,7 +108,21 @@ export function areLeakCCTMeasuresComputed(measures?: Measure[] | MeasureEnhance
 }
 
 export function areCCTMeasuresComputed(measures?: Measure[] | MeasureEnhanced[]) {
+  if (!measures || measures.length === 0) {
+    return true;
+  }
   return CCT_SOFTWARE_QUALITY_METRICS.every((metric) =>
+    measures?.find((measure) =>
+      isMeasureEnhanced(measure) ? measure.metric.key === metric : measure.metric === metric,
+    ),
+  );
+}
+export function areSoftwareQualityRatingsComputed(measures?: Measure[] | MeasureEnhanced[]) {
+  return [
+    MetricKey.software_quality_reliability_rating,
+    MetricKey.software_quality_security_rating,
+    MetricKey.software_quality_maintainability_rating,
+  ].every((metric) =>
     measures?.find((measure) =>
       isMeasureEnhanced(measure) ? measure.metric.key === metric : measure.metric === metric,
     ),

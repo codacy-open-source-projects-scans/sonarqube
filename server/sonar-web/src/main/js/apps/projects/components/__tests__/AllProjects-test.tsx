@@ -25,6 +25,7 @@ import { byLabelText, byRole, byText } from '~sonar-aligned/helpers/testSelector
 import { ComponentQualifier } from '~sonar-aligned/types/component';
 import { MetricKey } from '~sonar-aligned/types/metrics';
 import { ProjectsServiceMock } from '../../../../api/mocks/ProjectsServiceMock';
+import SettingsServiceMock from '../../../../api/mocks/SettingsServiceMock';
 import { save } from '../../../../helpers/storage';
 import { mockAppState, mockLoggedInUser } from '../../../../helpers/testMocks';
 import { renderAppRoutes } from '../../../../helpers/testReactTestingUtils';
@@ -62,10 +63,12 @@ jest.mock('../../../../helpers/storage', () => {
 const BASE_PATH = 'projects';
 
 const projectHandler = new ProjectsServiceMock();
+const settingsHandler = new SettingsServiceMock();
 
 beforeEach(() => {
   jest.clearAllMocks();
   projectHandler.reset();
+  settingsHandler.reset();
 });
 
 it('renders correctly', async () => {
@@ -78,7 +81,7 @@ it('changes sort and perspective', async () => {
   const user = userEvent.setup();
   renderProjects();
 
-  await user.click(ui.sortSelect.get());
+  await user.click(await ui.sortSelect.find());
   await user.click(screen.getByText('projects.sorting.size'));
 
   const projects = ui.projects.getAll();
@@ -105,7 +108,7 @@ it('handles showing favorite projects on load', async () => {
   const user = userEvent.setup();
   renderProjects(`${BASE_PATH}/favorite`);
 
-  expect(ui.myFavoritesToggleOption.get()).toHaveAttribute('aria-current', 'true');
+  expect(await ui.myFavoritesToggleOption.find()).toHaveAttribute('aria-current', 'true');
   expect(await ui.projects.findAll()).toHaveLength(2);
 
   await user.click(ui.allToggleOption.get());
