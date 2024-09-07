@@ -61,7 +61,7 @@ public class TelemetryUserEnabledProvider implements TelemetryDataProvider<Boole
   }
 
   @Override
-  public Map<String, Boolean> getUuidValues() {
+  public Map<String, Boolean> getValues() {
     Map<String, Boolean> result = new HashMap<>();
     int pageSize = 1000;
     int page = 1;

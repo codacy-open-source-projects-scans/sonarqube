@@ -29,4 +29,5 @@ export enum Feature {
   GithubProvisioning = 'github-provisioning',
   GitlabProvisioning = 'gitlab-provisioning',
   PrioritizedRules = 'prioritized-rules',
+  FixSuggestions = 'fix-suggestions',
 }
