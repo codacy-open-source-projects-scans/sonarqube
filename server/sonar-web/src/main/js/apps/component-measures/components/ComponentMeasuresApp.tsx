@@ -17,6 +17,7 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+
 import { withTheme } from '@emotion/react';
 import styled from '@emotion/styled';
 import { Spinner } from '@sonarsource/echoes-react';
@@ -47,8 +48,9 @@ import {
   areCCTMeasuresComputed,
   areSoftwareQualityRatingsComputed,
 } from '../../../helpers/measures';
-import { useBranchesQuery } from '../../../queries/branch';
+import { useCurrentBranchQuery } from '../../../queries/branch';
 import { useMeasuresComponentQuery } from '../../../queries/measures';
+
 import { MeasurePageView } from '../../../types/measures';
 import { useBubbleChartMetrics } from '../hooks';
 import Sidebar from '../sidebar/Sidebar';
@@ -72,14 +74,14 @@ import MeasuresEmpty from './MeasuresEmpty';
 
 export default function ComponentMeasuresApp() {
   const { component } = React.useContext(ComponentContext);
-  const { data: { branchLike } = {} } = useBranchesQuery(component);
+  const { data: branchLike } = useCurrentBranchQuery(component);
   const { query: rawQuery, pathname } = useLocation();
   const query = parseQuery(rawQuery);
   const router = useRouter();
   const metrics = useMetrics();
   const filteredMetrics = getMeasuresPageMetricKeys(metrics, branchLike);
   const componentKey =
-    query.selected !== undefined && query.selected !== '' ? query.selected : component?.key ?? '';
+    query.selected !== undefined && query.selected !== '' ? query.selected : (component?.key ?? '');
 
   const { data: { component: componentWithMeasures, period } = {}, isLoading } =
     useMeasuresComponentQuery(

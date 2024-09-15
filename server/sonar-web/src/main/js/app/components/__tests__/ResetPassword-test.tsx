@@ -62,8 +62,8 @@ it('should navigate to the homepage after submission', async () => {
 
   // Make password strong
   await user.type(ui.oldPasswordInput.get(), '1234');
-  await user.type(ui.passwordInput.get(), 'strong');
-  await user.type(ui.passwordConfirmationInput.get(), 'strong');
+  await user.type(ui.passwordInput.get(), 'P@ssword12345');
+  await user.type(ui.passwordConfirmationInput.get(), 'P@ssword12345');
 
   await user.click(ui.submitButton.get());
 
@@ -76,7 +76,7 @@ function renderResetPassword(props: Partial<ResetPasswordProps> = {}) {
 
 const ui = {
   oldPasswordInput: byLabelText(/my_profile\.password\.old/),
-  passwordInput: byLabelText(/my_profile\.password\.new/),
-  passwordConfirmationInput: byLabelText(/my_profile\.password\.confirm/),
+  passwordInput: byLabelText(/^password/),
+  passwordConfirmationInput: byLabelText(/confirm_password\*/i),
   submitButton: byRole('button', { name: 'update_verb' }),
 };

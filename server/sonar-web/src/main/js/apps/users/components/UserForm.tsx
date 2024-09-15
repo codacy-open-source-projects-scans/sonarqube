@@ -30,6 +30,9 @@ import {
   addGlobalErrorMessage,
 } from 'design-system';
 import * as React from 'react';
+import UserPasswordInput, {
+  PasswordChangeHandlerParams,
+} from '../../../components/common/UserPasswordInput';
 import MandatoryFieldsExplanation from '../../../components/ui/MandatoryFieldsExplanation';
 import { translate, translateWithParameters } from '../../../helpers/l10n';
 import { parseErrorResponse } from '../../../helpers/request';
@@ -55,7 +58,10 @@ export default function UserForm(props: Props) {
   const [email, setEmail] = React.useState<string>(user?.email ?? '');
   const [login, setLogin] = React.useState<string>(user?.login ?? '');
   const [name, setName] = React.useState<string>(user?.name ?? '');
-  const [password, setPassword] = React.useState<string>('');
+  const [password, setPassword] = React.useState<PasswordChangeHandlerParams>({
+    value: '',
+    isValid: false,
+  });
   const [scmAccounts, setScmAccounts] = React.useState<string[]>(user?.scmAccounts ?? []);
   const [error, setError] = React.useState<string | undefined>(undefined);
 
@@ -88,7 +94,7 @@ export default function UserForm(props: Props) {
         email: email || undefined,
         login,
         name,
-        password,
+        password: password.value,
         scmAccounts,
       },
       { onSuccess: props.onClose, onError: handleError },
@@ -132,6 +138,7 @@ export default function UserForm(props: Props) {
   };
 
   const header = user ? translate('users.update_user') : translate('users.create_user');
+  const fieldsdMissing = user ? false : name === '' || login === '' || !password.isValid;
 
   return (
     <Modal
@@ -215,17 +222,10 @@ export default function UserForm(props: Props) {
           </FormField>
 
           {!user && (
-            <FormField required label={translate('password')} htmlFor="create-user-password">
-              <InputField
-                autoComplete="off"
-                size="full"
-                id="create-user-password"
-                name="password"
-                onChange={(e) => setPassword(e.currentTarget.value)}
-                type="password"
-                value={password}
-              />
-            </FormField>
+            <UserPasswordInput
+              value={password.value}
+              onChange={(password) => setPassword(password)}
+            />
           )}
 
           <FormField
@@ -255,7 +255,7 @@ export default function UserForm(props: Props) {
           <Spinner loading={isLoadingCreate || isLoadingUserUpdate} />
 
           <ButtonPrimary
-            disabled={isLoadingCreate || isLoadingUserUpdate}
+            disabled={isLoadingCreate || isLoadingUserUpdate || fieldsdMissing}
             type="submit"
             form="user-form"
           >

@@ -140,6 +140,8 @@ public class DefaultIssue implements Issue, Trackable, org.sonar.api.ce.measure.
   private Map<SoftwareQuality, org.sonar.api.issue.impact.Severity> impacts = new EnumMap<>(SoftwareQuality.class);
   private CleanCodeAttribute cleanCodeAttribute = null;
 
+  private String cveId = null;
+
   @Override
   public String key() {
     return key;
@@ -770,5 +772,16 @@ public class DefaultIssue implements Issue, Trackable, org.sonar.api.ce.measure.
   @Override
   public Date getUpdateDate() {
     return updateDate;
+  }
+
+  @Override
+  @CheckForNull
+  public String getCveId() {
+    return cveId;
+  }
+
+  public DefaultIssue setCveId(@Nullable String cveId) {
+    this.cveId = cveId;
+    return this;
   }
 }

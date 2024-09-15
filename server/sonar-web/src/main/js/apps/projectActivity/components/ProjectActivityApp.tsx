@@ -23,10 +23,7 @@ import { useLocation, useRouter } from '~sonar-aligned/components/hoc/withRouter
 import { getBranchLikeQuery } from '~sonar-aligned/helpers/branch-like';
 import { isPortfolioLike } from '~sonar-aligned/helpers/component';
 import { MetricKey } from '~sonar-aligned/types/metrics';
-import {
-  useComponent,
-  useTopLevelComponentKey,
-} from '../../../app/components/componentContext/withComponentContext';
+import { useComponent } from '../../../app/components/componentContext/withComponentContext';
 import { useMetrics } from '../../../app/components/metrics/withMetricsContext';
 import {
   DEFAULT_GRAPH,
@@ -38,7 +35,7 @@ import { mergeRatingMeasureHistory } from '../../../helpers/activity-graph';
 import { SOFTWARE_QUALITY_RATING_METRICS } from '../../../helpers/constants';
 import { parseDate } from '../../../helpers/dates';
 import useApplicationLeakQuery from '../../../queries/applications';
-import { useBranchesQuery } from '../../../queries/branch';
+import { useCurrentBranchQuery } from '../../../queries/branch';
 import { useAllMeasuresHistoryQuery } from '../../../queries/measures';
 import { useAllProjectAnalysesQuery } from '../../../queries/project-analyses';
 import { useIsLegacyCCTMode } from '../../../queries/settings';
@@ -65,14 +62,13 @@ export function ProjectActivityApp() {
   const router = useRouter();
   const { component } = useComponent();
   const metrics = useMetrics();
-  const { data: { branchLike } = {}, isFetching: isFetchingBranch } = useBranchesQuery(component);
+  const { data: branchLike, isFetching: isFetchingBranch } = useCurrentBranchQuery(component);
   const enabled =
     component?.key !== undefined &&
     (isPortfolioLike(component?.qualifier) || (Boolean(branchLike) && !isFetchingBranch));
 
-  const componentKey = useTopLevelComponentKey();
   const { data: appLeaks } = useApplicationLeakQuery(
-    componentKey ?? '',
+    component?.key ?? '',
     isApplication(component?.qualifier),
   );
 
@@ -81,7 +77,7 @@ export function ProjectActivityApp() {
 
   const { data: historyData, isLoading: isLoadingHistory } = useAllMeasuresHistoryQuery(
     {
-      component: componentKey,
+      component: component?.key,
       branchParams: getBranchLikeQuery(branchLike),
       metrics: getHistoryMetrics(query.graph || DEFAULT_GRAPH, parsedQuery.customMetrics).join(','),
     },
