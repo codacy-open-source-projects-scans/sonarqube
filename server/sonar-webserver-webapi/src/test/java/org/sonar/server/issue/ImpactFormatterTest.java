@@ -17,15 +17,22 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-package org.sonar.core.config;
+package org.sonar.server.issue;
 
 import org.junit.jupiter.api.Test;
+import org.sonar.api.issue.impact.Severity;
+import org.sonarqube.ws.Common;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
-class LegacyRatingPropertiesTest {
+class ImpactFormatterTest {
+
   @Test
-  void all_shouldGetProperties() {
-    assertThat(LegacyRatingProperties.all()).hasSize(1);
+  void mapImpactSeverity_shouldReturnExpectedValue() {
+    assertEquals(Common.ImpactSeverity.ImpactSeverity_BLOCKER, ImpactFormatter.mapImpactSeverity(Severity.BLOCKER));
+    assertEquals(Common.ImpactSeverity.HIGH, ImpactFormatter.mapImpactSeverity(Severity.HIGH));
+    assertEquals(Common.ImpactSeverity.MEDIUM, ImpactFormatter.mapImpactSeverity(Severity.MEDIUM));
+    assertEquals(Common.ImpactSeverity.LOW, ImpactFormatter.mapImpactSeverity(Severity.LOW));
+    assertEquals(Common.ImpactSeverity.ImpactSeverity_INFO, ImpactFormatter.mapImpactSeverity(Severity.INFO));
   }
 }

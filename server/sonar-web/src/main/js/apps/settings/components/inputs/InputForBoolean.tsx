@@ -20,28 +20,21 @@
 import { Note, Switch } from 'design-system';
 import * as React from 'react';
 import { translate } from '../../../../helpers/l10n';
-import { DefaultSpecializedInputProps, getPropertyName } from '../../utils';
+import { DefaultSpecializedInputProps } from '../../utils';
 
 interface Props extends DefaultSpecializedInputProps {
   value: string | boolean | undefined;
 }
 
-export default function InputForBoolean({ onChange, name, value, setting }: Props) {
+function InputForBoolean(
+  { onChange, name, value, ...other }: Readonly<Props>,
+  ref: React.ForwardedRef<HTMLButtonElement>,
+) {
   const toggleValue = getToggleValue(value != null ? value : false);
-
-  const propertyName = getPropertyName(setting.definition);
 
   return (
     <div className="sw-flex sw-items-center">
-      <Switch
-        name={name}
-        onChange={onChange}
-        value={toggleValue}
-        labels={{
-          on: propertyName,
-          off: propertyName,
-        }}
-      />
+      <Switch name={name} onChange={onChange} ref={ref} value={toggleValue} {...other} />
       {value == null && <Note className="sw-ml-2">{translate('settings.not_set')}</Note>}
     </div>
   );
@@ -50,3 +43,5 @@ export default function InputForBoolean({ onChange, name, value, setting }: Prop
 function getToggleValue(value: string | boolean) {
   return typeof value === 'string' ? value === 'true' : value;
 }
+
+export default React.forwardRef(InputForBoolean);

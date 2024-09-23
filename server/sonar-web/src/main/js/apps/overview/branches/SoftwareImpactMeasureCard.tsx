@@ -31,17 +31,11 @@ import {
   getIssueTypeBySoftwareQuality,
 } from '../../../helpers/issues';
 import { isDefined } from '../../../helpers/types';
-import { useIsLegacyCCTMode } from '../../../queries/settings';
 import { Branch } from '../../../types/branch-like';
-import {
-  SoftwareImpactMeasureData,
-  SoftwareImpactSeverity,
-  SoftwareQuality,
-} from '../../../types/clean-code-taxonomy';
+import { SoftwareImpactMeasureData, SoftwareQuality } from '../../../types/clean-code-taxonomy';
 import { QualityGateStatusConditionEnhanced } from '../../../types/quality-gates';
 import { Component, MeasureEnhanced } from '../../../types/types';
 import { Status, softwareQualityToMeasure } from '../utils';
-import SoftwareImpactMeasureBreakdownCard from './SoftwareImpactMeasureBreakdownCard';
 import SoftwareImpactMeasureRating from './SoftwareImpactMeasureRating';
 
 export interface SoftwareImpactBreakdownCardProps {
@@ -57,14 +51,12 @@ export function SoftwareImpactMeasureCard(props: Readonly<SoftwareImpactBreakdow
   const { component, conditions, softwareQuality, ratingMetricKey, measures, branch } = props;
 
   const intl = useIntl();
-  const { data: isLegacy } = useIsLegacyCCTMode();
+  // const { data: isLegacy } = useIsLegacyCCTMode();
 
   // Find measure for this software quality
   const metricKey = softwareQualityToMeasure(softwareQuality);
   const measureRaw = measures.find((m) => m.metric.key === metricKey);
-  const measure = isLegacy
-    ? undefined
-    : (JSON.parse(measureRaw?.value ?? 'null') as SoftwareImpactMeasureData);
+  const measure = JSON.parse(measureRaw?.value ?? 'null') as SoftwareImpactMeasureData;
   const alternativeMeasure = measures.find(
     (m) => m.metric.key === SOFTWARE_QUALITIES_METRIC_KEYS_MAP[softwareQuality].deprecatedMetric,
   );
@@ -78,13 +70,6 @@ export function SoftwareImpactMeasureCard(props: Readonly<SoftwareImpactBreakdow
       : { types: getIssueTypeBySoftwareQuality(softwareQuality) }),
     branch: branch?.name,
   });
-
-  // We highlight the highest severity breakdown card with non-zero count
-  const highlightedSeverity =
-    measure &&
-    [SoftwareImpactSeverity.High, SoftwareImpactSeverity.Medium, SoftwareImpactSeverity.Low].find(
-      (severity) => measure[severity] > 0,
-    );
 
   const countTooltipOverlay = intl.formatMessage({
     id: 'overview.measures.software_impact.count_tooltip',
@@ -149,25 +134,6 @@ export function SoftwareImpactMeasureCard(props: Readonly<SoftwareImpactBreakdow
             />
           </div>
         </div>
-        {measure && (
-          <div className="sw-flex sw-gap-2">
-            {[
-              SoftwareImpactSeverity.High,
-              SoftwareImpactSeverity.Medium,
-              SoftwareImpactSeverity.Low,
-            ].map((severity) => (
-              <SoftwareImpactMeasureBreakdownCard
-                branch={branch}
-                key={severity}
-                component={component}
-                softwareQuality={softwareQuality}
-                value={measure?.[severity]?.toString()}
-                severity={severity}
-                active={highlightedSeverity === severity}
-              />
-            ))}
-          </div>
-        )}
       </div>
     </div>
   );

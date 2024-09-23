@@ -41,6 +41,7 @@ import org.sonar.api.resources.Qualifiers;
 import org.sonar.api.server.ws.WebService;
 import org.sonar.api.server.ws.WebService.Param;
 import org.sonar.api.utils.System2;
+import org.sonar.api.web.UserRole;
 import org.sonar.core.platform.EditionProvider.Edition;
 import org.sonar.core.platform.PlatformEditionProvider;
 import org.sonar.db.DbClient;
@@ -99,11 +100,9 @@ import static org.sonar.api.utils.DateUtils.formatDateTime;
 import static org.sonar.core.metric.SoftwareQualitiesMetrics.NEW_SOFTWARE_QUALITY_MAINTAINABILITY_RATING_KEY;
 import static org.sonar.core.metric.SoftwareQualitiesMetrics.NEW_SOFTWARE_QUALITY_RELIABILITY_RATING_KEY;
 import static org.sonar.core.metric.SoftwareQualitiesMetrics.NEW_SOFTWARE_QUALITY_SECURITY_RATING_KEY;
-import static org.sonar.core.metric.SoftwareQualitiesMetrics.NEW_SOFTWARE_QUALITY_SECURITY_REVIEW_RATING_KEY;
 import static org.sonar.core.metric.SoftwareQualitiesMetrics.SOFTWARE_QUALITY_MAINTAINABILITY_RATING_KEY;
 import static org.sonar.core.metric.SoftwareQualitiesMetrics.SOFTWARE_QUALITY_RELIABILITY_RATING_KEY;
 import static org.sonar.core.metric.SoftwareQualitiesMetrics.SOFTWARE_QUALITY_SECURITY_RATING_KEY;
-import static org.sonar.core.metric.SoftwareQualitiesMetrics.SOFTWARE_QUALITY_SECURITY_REVIEW_RATING_KEY;
 import static org.sonar.server.ws.KeyExamples.KEY_PROJECT_EXAMPLE_001;
 import static org.sonar.server.ws.KeyExamples.KEY_PROJECT_EXAMPLE_002;
 import static org.sonar.server.ws.KeyExamples.KEY_PROJECT_EXAMPLE_003;
@@ -132,13 +131,13 @@ public class SearchProjectsActionIT {
 
   @DataProvider
   public static Object[][] rating_metric_keys() {
-    return new Object[][]{{SQALE_RATING_KEY}, {RELIABILITY_RATING_KEY}, {SECURITY_RATING_KEY}};
+    return new Object[][] {{SQALE_RATING_KEY}, {RELIABILITY_RATING_KEY}, {SECURITY_RATING_KEY}};
   }
 
   @DataProvider
   public static Object[][] software_quality_rating_metric_keys() {
-    return new Object[][]{{SOFTWARE_QUALITY_MAINTAINABILITY_RATING_KEY}, {SOFTWARE_QUALITY_RELIABILITY_RATING_KEY},
-      {SOFTWARE_QUALITY_SECURITY_RATING_KEY}, {SOFTWARE_QUALITY_SECURITY_REVIEW_RATING_KEY}};
+    return new Object[][] {{SOFTWARE_QUALITY_MAINTAINABILITY_RATING_KEY}, {SOFTWARE_QUALITY_RELIABILITY_RATING_KEY},
+      {SOFTWARE_QUALITY_SECURITY_RATING_KEY}};
   }
 
   @DataProvider
@@ -151,13 +150,13 @@ public class SearchProjectsActionIT {
 
   @DataProvider
   public static Object[][] new_rating_metric_keys() {
-    return new Object[][]{{NEW_MAINTAINABILITY_RATING_KEY}, {NEW_RELIABILITY_RATING_KEY}, {NEW_SECURITY_RATING_KEY}};
+    return new Object[][] {{NEW_MAINTAINABILITY_RATING_KEY}, {NEW_RELIABILITY_RATING_KEY}, {NEW_SECURITY_RATING_KEY}};
   }
 
   @DataProvider
   public static Object[][] new_software_quality_rating_metric_keys() {
-    return new Object[][]{{NEW_SOFTWARE_QUALITY_MAINTAINABILITY_RATING_KEY}, {NEW_SOFTWARE_QUALITY_RELIABILITY_RATING_KEY},
-      {NEW_SOFTWARE_QUALITY_SECURITY_RATING_KEY}, {NEW_SOFTWARE_QUALITY_SECURITY_REVIEW_RATING_KEY}};
+    return new Object[][] {{NEW_SOFTWARE_QUALITY_MAINTAINABILITY_RATING_KEY}, {NEW_SOFTWARE_QUALITY_RELIABILITY_RATING_KEY},
+      {NEW_SOFTWARE_QUALITY_SECURITY_RATING_KEY}};
   }
 
   @DataProvider
@@ -170,17 +169,17 @@ public class SearchProjectsActionIT {
 
   @DataProvider
   public static Object[][] component_qualifiers_for_valid_editions() {
-    return new Object[][]{
-      {new String[]{Qualifiers.PROJECT}, Edition.COMMUNITY},
-      {new String[]{Qualifiers.APP, Qualifiers.PROJECT}, Edition.DEVELOPER},
-      {new String[]{Qualifiers.APP, Qualifiers.PROJECT}, Edition.ENTERPRISE},
-      {new String[]{Qualifiers.APP, Qualifiers.PROJECT}, Edition.DATACENTER},
+    return new Object[][] {
+      {new String[] {Qualifiers.PROJECT}, Edition.COMMUNITY},
+      {new String[] {Qualifiers.APP, Qualifiers.PROJECT}, Edition.DEVELOPER},
+      {new String[] {Qualifiers.APP, Qualifiers.PROJECT}, Edition.ENTERPRISE},
+      {new String[] {Qualifiers.APP, Qualifiers.PROJECT}, Edition.DATACENTER},
     };
   }
 
   @DataProvider
   public static Object[][] community_or_developer_edition() {
-    return new Object[][]{
+    return new Object[][] {
       {Edition.COMMUNITY},
       {Edition.DEVELOPER},
     };
@@ -188,25 +187,25 @@ public class SearchProjectsActionIT {
 
   @DataProvider
   public static Object[][] enterprise_or_datacenter_edition() {
-    return new Object[][]{
+    return new Object[][] {
       {Edition.ENTERPRISE},
       {Edition.DATACENTER},
     };
   }
 
-  private DbClient dbClient = db.getDbClient();
-  private DbSession dbSession = db.getSession();
+  private final DbClient dbClient = db.getDbClient();
+  private final DbSession dbSession = db.getSession();
 
-  private PlatformEditionProvider editionProviderMock = mock(PlatformEditionProvider.class);
-  private PermissionIndexerTester authorizationIndexerTester = new PermissionIndexerTester(es, new ProjectMeasuresIndexer(dbClient,
+  private final PlatformEditionProvider editionProviderMock = mock(PlatformEditionProvider.class);
+  private final PermissionIndexerTester authorizationIndexerTester = new PermissionIndexerTester(es, new ProjectMeasuresIndexer(dbClient,
     es.client()));
-  private ProjectMeasuresIndex index = new ProjectMeasuresIndex(es.client(), new WebAuthorizationTypeSupport(userSession),
+  private final ProjectMeasuresIndex index = new ProjectMeasuresIndex(es.client(), new WebAuthorizationTypeSupport(userSession),
     System2.INSTANCE);
-  private ProjectMeasuresIndexer projectMeasuresIndexer = new ProjectMeasuresIndexer(db.getDbClient(), es.client());
+  private final ProjectMeasuresIndexer projectMeasuresIndexer = new ProjectMeasuresIndexer(db.getDbClient(), es.client());
 
-  private WsActionTester ws = new WsActionTester(new SearchProjectsAction(dbClient, index, userSession, editionProviderMock));
+  private final WsActionTester ws = new WsActionTester(new SearchProjectsAction(dbClient, index, userSession, editionProviderMock));
 
-  private RequestBuilder request = SearchProjectsRequest.builder();
+  private final RequestBuilder request = SearchProjectsRequest.builder();
 
   @Test
   public void verify_definition() {
@@ -248,11 +247,9 @@ public class SearchProjectsActionIT {
       "new_software_quality_maintainability_rating",
       "new_software_quality_reliability_rating",
       "new_software_quality_security_rating",
-      "new_software_quality_security_review_rating",
       "software_quality_maintainability_rating",
       "software_quality_reliability_rating",
-      "software_quality_security_rating",
-      "software_quality_security_review_rating");
+      "software_quality_security_rating");
 
     Param asc = def.param("asc");
     assertThat(asc.defaultValue()).isEqualTo("true");
@@ -264,19 +261,16 @@ public class SearchProjectsActionIT {
 
     Param facets = def.param("facets");
     assertThat(facets.defaultValue()).isNull();
-    assertThat(facets.possibleValues()).containsOnly("ncloc", "duplicated_lines_density", "coverage", "sqale_rating", "reliability_rating"
-      , "security_rating", "alert_status",
+    assertThat(facets.possibleValues()).containsOnly("ncloc", "duplicated_lines_density", "coverage", "sqale_rating", "reliability_rating", "security_rating", "alert_status",
       "languages", "tags", "qualifier", "new_reliability_rating", "new_security_rating", "new_maintainability_rating", "new_coverage",
       "new_duplicated_lines_density", "new_lines",
       "security_review_rating", "security_hotspots_reviewed", "new_security_hotspots_reviewed", "new_security_review_rating",
       "new_software_quality_maintainability_rating",
       "new_software_quality_reliability_rating",
       "new_software_quality_security_rating",
-      "new_software_quality_security_review_rating",
       "software_quality_maintainability_rating",
       "software_quality_reliability_rating",
-      "software_quality_security_rating",
-      "software_quality_security_review_rating");
+      "software_quality_security_rating");
   }
 
   @Test
@@ -1005,6 +999,8 @@ public class SearchProjectsActionIT {
     insertProject(new Measure(ratingMetric, c -> c.setValue(1d)));
     insertProject(new Measure(ratingMetric, c -> c.setValue(1d)));
     insertProject(new Measure(ratingMetric, c -> c.setValue(3d)));
+    insertProject(new Measure(ratingMetric, c -> c.setValue(5d)));
+    insertProject(new Measure(ratingMetric, c -> c.setValue(5d)));
     index();
 
     SearchProjectsWsResponse result = call(request.setFacets(singletonList(ratingMetricKey)));
@@ -1018,7 +1014,8 @@ public class SearchProjectsActionIT {
         tuple("1", 2L),
         tuple("2", 0L),
         tuple("3", 1L),
-        tuple("4", 0L));
+        tuple("4", 0L),
+        tuple("5", 2L));
   }
 
   @Test
@@ -1068,7 +1065,8 @@ public class SearchProjectsActionIT {
         tuple("1", 2L),
         tuple("2", 0L),
         tuple("3", 1L),
-        tuple("4", 0L));
+        tuple("4", 0L),
+        tuple("5", 0L));
   }
 
   @Test
@@ -1372,11 +1370,13 @@ public class SearchProjectsActionIT {
   @Test
   public void return_visibility_flag() {
     userSession.logIn();
-    ProjectDto privateProject = db.components().insertPublicProject(componentDto -> componentDto.setName("proj_A")).getProjectDto();
+    ProjectDto privateProject = db.components().insertPrivateProject(componentDto -> componentDto.setName("proj_A")).getProjectDto();
     authorizationIndexerTester.allowOnlyAnyone(privateProject);
-    ProjectDto publicProject = db.components().insertPrivateProject(componentDto -> componentDto.setName("proj_B")).getProjectDto();
+    ProjectDto publicProject = db.components().insertPublicProject(componentDto -> componentDto.setName("proj_B")).getProjectDto();
     authorizationIndexerTester.allowOnlyAnyone(publicProject);
     index();
+
+    userSession.addProjectPermission(UserRole.USER, privateProject);
 
     SearchProjectsWsResponse result = call(request);
 

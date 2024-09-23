@@ -27,21 +27,20 @@ import org.sonar.telemetry.core.Granularity;
 import org.sonar.telemetry.core.TelemetryDataProvider;
 import org.sonar.telemetry.core.TelemetryDataType;
 
-import static org.sonar.core.config.LegacyRatingConstants.LEGACY_RATING_MODE_ENABLED;
 import static org.sonar.telemetry.core.Dimension.INSTALLATION;
 import static org.sonar.telemetry.core.Granularity.WEEKLY;
 import static org.sonar.telemetry.core.TelemetryDataType.BOOLEAN;
 
-public class TelemetryLegacyModePropertyProvider implements TelemetryDataProvider<Boolean> {
+public class TelemetryPortfolioConfidentialFlagProvider implements TelemetryDataProvider<Boolean> {
   private final DbClient dbClient;
 
-  public TelemetryLegacyModePropertyProvider(DbClient dbClient) {
+  public TelemetryPortfolioConfidentialFlagProvider(DbClient dbClient) {
     this.dbClient = dbClient;
   }
 
   @Override
   public String getMetricKey() {
-    return "legacy_rating_mode_enabled";
+    return "portfolio_reports_confidential_flag";
   }
 
   @Override
@@ -61,7 +60,7 @@ public class TelemetryLegacyModePropertyProvider implements TelemetryDataProvide
 
   @Override
   public Optional<Boolean> getValue() {
-    PropertyDto property = dbClient.propertiesDao().selectGlobalProperty(LEGACY_RATING_MODE_ENABLED);
-    return property == null ? Optional.of(false) : Optional.of(Boolean.valueOf(property.getValue()));
+    PropertyDto property = dbClient.propertiesDao().selectGlobalProperty("sonar.portfolios.confidential.header");
+    return property == null ? Optional.of(true) : Optional.of(Boolean.valueOf(property.getValue()));
   }
 }

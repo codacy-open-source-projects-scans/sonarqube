@@ -18,16 +18,14 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 import styled from '@emotion/styled';
+import { ForwardedRef, forwardRef } from 'react';
 import tw from 'twin.macro';
 import { themeBorder, themeColor, themeContrast, themeShadow } from '../helpers';
 import { CheckIcon } from './icons';
 
 interface Props {
+  ariaDescribedby?: string;
   disabled?: boolean;
-  labels: {
-    off: string;
-    on: string;
-  };
   name?: string;
   onChange?: (value: boolean) => void;
   value: boolean | string;
@@ -37,8 +35,8 @@ const getValue = (value: boolean | string) => {
   return typeof value === 'string' ? value === 'true' : value;
 };
 
-export function Switch(props: Readonly<Props>) {
-  const { disabled, onChange, name, labels } = props;
+function SwitchWithRef(props: Readonly<Props>, ref: ForwardedRef<HTMLButtonElement>) {
+  const { ariaDescribedby, disabled, name, onChange } = props;
   const value = getValue(props.value);
 
   const handleClick = () => {
@@ -52,10 +50,11 @@ export function Switch(props: Readonly<Props>) {
     <StyledSwitch
       active={value}
       aria-checked={value}
-      aria-label={value ? labels.on : labels.off}
+      aria-describedby={ariaDescribedby}
       disabled={disabled}
       name={name}
       onClick={handleClick}
+      ref={ref}
       role="switch"
       type="button"
     >
@@ -118,3 +117,5 @@ const StyledSwitch = styled.button<StyledProps>`
       active ? themeBorder('focus', 'switchActive') : themeBorder('focus', 'switch')};
   }
 `;
+
+export const Switch = forwardRef(SwitchWithRef);

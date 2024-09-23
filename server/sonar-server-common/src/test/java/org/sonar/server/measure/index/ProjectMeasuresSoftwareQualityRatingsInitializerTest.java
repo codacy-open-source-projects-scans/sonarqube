@@ -24,7 +24,6 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.sonar.api.measures.CoreMetrics;
 import org.sonar.core.metric.SoftwareQualitiesMetrics;
-import org.sonar.server.measure.Rating;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -49,10 +48,8 @@ class ProjectMeasuresSoftwareQualityRatingsInitializerTest {
     initialMeasures.put(CoreMetrics.SQALE_RATING_KEY, 1.0);
     initialMeasures.put(CoreMetrics.RELIABILITY_RATING_KEY, 2.0);
     initialMeasures.put(CoreMetrics.SECURITY_RATING_KEY, 3.0);
-    initialMeasures.put(CoreMetrics.SECURITY_REVIEW_RATING_KEY, 4.0);
     initialMeasures.put(CoreMetrics.NEW_SECURITY_RATING_KEY, 4.0);
-    initialMeasures.put(CoreMetrics.NEW_SECURITY_REVIEW_RATING_KEY, 3.0);
-    initialMeasures.put(CoreMetrics.NEW_MAINTAINABILITY_RATING_KEY, 2.0);
+    initialMeasures.put(CoreMetrics.NEW_MAINTAINABILITY_RATING_KEY, 5.0);
     initialMeasures.put(CoreMetrics.NEW_RELIABILITY_RATING_KEY, 1.0);
 
     Map<String, Double> measures = new HashMap<>(initialMeasures);
@@ -64,38 +61,8 @@ class ProjectMeasuresSoftwareQualityRatingsInitializerTest {
       .containsEntry(SoftwareQualitiesMetrics.SOFTWARE_QUALITY_MAINTAINABILITY_RATING_KEY, 1.0)
       .containsEntry(SoftwareQualitiesMetrics.SOFTWARE_QUALITY_RELIABILITY_RATING_KEY, 2.0)
       .containsEntry(SoftwareQualitiesMetrics.SOFTWARE_QUALITY_SECURITY_RATING_KEY, 3.0)
-      .containsEntry(SoftwareQualitiesMetrics.SOFTWARE_QUALITY_SECURITY_REVIEW_RATING_KEY, 4.0)
       .containsEntry(SoftwareQualitiesMetrics.NEW_SOFTWARE_QUALITY_SECURITY_RATING_KEY, 4.0)
-      .containsEntry(SoftwareQualitiesMetrics.NEW_SOFTWARE_QUALITY_SECURITY_REVIEW_RATING_KEY, 3.0)
-      .containsEntry(SoftwareQualitiesMetrics.NEW_SOFTWARE_QUALITY_MAINTAINABILITY_RATING_KEY, 2.0)
+      .containsEntry(SoftwareQualitiesMetrics.NEW_SOFTWARE_QUALITY_MAINTAINABILITY_RATING_KEY, 5.0)
       .containsEntry(SoftwareQualitiesMetrics.NEW_SOFTWARE_QUALITY_RELIABILITY_RATING_KEY, 1.0);
-  }
-
-  @Test
-  void initializeSoftwareQualityRatings_whenERating_thenSoftwareQualityRatingCreatedWithD() {
-    Map<String, Double> initialMeasures = new HashMap<>();
-    initialMeasures.put(CoreMetrics.SQALE_RATING_KEY, (double) Rating.E.getIndex());
-    initialMeasures.put(CoreMetrics.RELIABILITY_RATING_KEY, (double) Rating.E.getIndex());
-    initialMeasures.put(CoreMetrics.SECURITY_RATING_KEY, (double) Rating.E.getIndex());
-    initialMeasures.put(CoreMetrics.SECURITY_REVIEW_RATING_KEY, (double) Rating.E.getIndex());
-    initialMeasures.put(CoreMetrics.NEW_SECURITY_RATING_KEY, (double) Rating.E.getIndex());
-    initialMeasures.put(CoreMetrics.NEW_SECURITY_REVIEW_RATING_KEY, (double) Rating.E.getIndex());
-    initialMeasures.put(CoreMetrics.NEW_MAINTAINABILITY_RATING_KEY, (double) Rating.E.getIndex());
-    initialMeasures.put(CoreMetrics.NEW_RELIABILITY_RATING_KEY, (double) Rating.E.getIndex());
-
-    Map<String, Double> measures = new HashMap<>(initialMeasures);
-
-    ProjectMeasuresSoftwareQualityRatingsInitializer.initializeSoftwareQualityRatings(measures);
-
-    assertThat(measures).hasSize(initialMeasures.size() * 2)
-      .containsAllEntriesOf(initialMeasures)
-      .containsEntry(SoftwareQualitiesMetrics.SOFTWARE_QUALITY_MAINTAINABILITY_RATING_KEY, (double) Rating.D.getIndex())
-      .containsEntry(SoftwareQualitiesMetrics.SOFTWARE_QUALITY_RELIABILITY_RATING_KEY, (double) Rating.D.getIndex())
-      .containsEntry(SoftwareQualitiesMetrics.SOFTWARE_QUALITY_SECURITY_RATING_KEY, (double) Rating.D.getIndex())
-      .containsEntry(SoftwareQualitiesMetrics.SOFTWARE_QUALITY_SECURITY_REVIEW_RATING_KEY, (double) Rating.D.getIndex())
-      .containsEntry(SoftwareQualitiesMetrics.NEW_SOFTWARE_QUALITY_SECURITY_RATING_KEY, (double) Rating.D.getIndex())
-      .containsEntry(SoftwareQualitiesMetrics.NEW_SOFTWARE_QUALITY_SECURITY_REVIEW_RATING_KEY, (double) Rating.D.getIndex())
-      .containsEntry(SoftwareQualitiesMetrics.NEW_SOFTWARE_QUALITY_MAINTAINABILITY_RATING_KEY, (double) Rating.D.getIndex())
-      .containsEntry(SoftwareQualitiesMetrics.NEW_SOFTWARE_QUALITY_RELIABILITY_RATING_KEY, (double) Rating.D.getIndex());
   }
 }

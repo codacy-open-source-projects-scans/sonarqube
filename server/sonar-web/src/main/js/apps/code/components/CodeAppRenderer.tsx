@@ -49,6 +49,7 @@ import {
   areCCTMeasuresComputed,
   areSoftwareQualityRatingsComputed,
 } from '../../../helpers/measures';
+import { useIsLegacyCCTMode } from '../../../queries/settings';
 import { BranchLike } from '../../../types/branch-like';
 import { isApplication } from '../../../types/component';
 import { Component, ComponentMeasure, Dict, Metric } from '../../../types/types';
@@ -108,6 +109,8 @@ export default function CodeAppRenderer(props: Readonly<Props>) {
 
   const showComponentList = sourceViewer === undefined && components.length > 0 && !showSearch;
 
+  const { data: isLegacy, isLoading: isLoadingLegacy } = useIsLegacyCCTMode();
+
   const metricKeys = intersection(
     getCodeMetrics(component.qualifier, branchLike, { newCode: newCodeSelected }),
     Object.keys(metrics),
@@ -124,7 +127,7 @@ export default function CodeAppRenderer(props: Readonly<Props>) {
     ...(allComponentsHaveSoftwareQualityMeasures
       ? OLD_TAXONOMY_METRICS
       : CCT_SOFTWARE_QUALITY_METRICS),
-    ...(allComponentsHaveRatings
+    ...(allComponentsHaveRatings && !isLegacy
       ? [...OLD_TAXONOMY_RATINGS, ...LEAK_OLD_TAXONOMY_RATINGS]
       : SOFTWARE_QUALITY_RATING_METRICS),
   ]).map((key) => metrics[key]);
@@ -156,7 +159,7 @@ export default function CodeAppRenderer(props: Readonly<Props>) {
         </FlagMessage>
       )}
 
-      <Spinner isLoading={loading}>
+      <Spinner isLoading={loading || isLoadingLegacy}>
         {!allComponentsHaveSoftwareQualityMeasures && (
           <AnalysisMissingInfoMessage
             qualifier={component.qualifier}

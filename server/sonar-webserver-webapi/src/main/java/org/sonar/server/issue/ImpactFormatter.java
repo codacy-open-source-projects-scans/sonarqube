@@ -17,15 +17,22 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-package org.sonar.core.config;
+package org.sonar.server.issue;
 
-public class LegacyRatingConstants {
+import org.sonar.api.issue.impact.Severity;
+import org.sonarqube.ws.Common;
 
-  public static final String LEGACY_RATING_CATEGORY = "Legacy rating mode";
-  public static final String LEGACY_RATING_SUB_CATEGORY = "Legacy rating mode";
-  public static final String LEGACY_RATING_MODE_ENABLED = "sonar.legacy.ratings.mode.enabled";
+public class ImpactFormatter {
+  private ImpactFormatter() {
+  }
 
-  private LegacyRatingConstants() {
-    //class cannot be instantiated
+  public static Common.ImpactSeverity mapImpactSeverity(Severity severity) {
+    return switch (severity) {
+      case BLOCKER -> Common.ImpactSeverity.ImpactSeverity_BLOCKER;
+      case HIGH -> Common.ImpactSeverity.HIGH;
+      case MEDIUM -> Common.ImpactSeverity.MEDIUM;
+      case LOW -> Common.ImpactSeverity.LOW;
+      case INFO -> Common.ImpactSeverity.ImpactSeverity_INFO;
+    };
   }
 }

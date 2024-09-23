@@ -18,12 +18,11 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 import { Popover } from '@sonarsource/echoes-react';
-import { Pill } from 'design-system';
+import { Pill, PillVariant } from 'design-system';
 import * as React from 'react';
 import DocumentationLink from '../../components/common/DocumentationLink';
 import { DocLink } from '../../helpers/doc-links';
 import { translate } from '../../helpers/l10n';
-import { useIsLegacyCCTMode } from '../../queries/settings';
 import { ComponentQualifier } from '../../sonar-aligned/types/component';
 
 interface Props {
@@ -32,11 +31,11 @@ interface Props {
 
 export default function ChangeInCalculation({ qualifier }: Readonly<Props>) {
   const [isPopoverOpen, setIsPopoverOpen] = React.useState(false);
-  const { data: isLegacy, isLoading } = useIsLegacyCCTMode();
+  // const { data: isLegacy, isLoading } = useIsLegacyCCTMode();
 
-  if (isLegacy || isLoading) {
-    return null;
-  }
+  // if (isLegacy || isLoading) {
+  //   return null;
+  // }
 
   return (
     <Popover
@@ -49,7 +48,11 @@ export default function ChangeInCalculation({ qualifier }: Readonly<Props>) {
         </DocumentationLink>
       }
     >
-      <Pill variant="info" className="sw-ml-2" onClick={() => setIsPopoverOpen(!isPopoverOpen)}>
+      <Pill
+        variant={PillVariant.Info}
+        className="sw-ml-2"
+        onClick={() => setIsPopoverOpen(!isPopoverOpen)}
+      >
         {translate('projects.awaiting_scan')}
       </Pill>
     </Popover>

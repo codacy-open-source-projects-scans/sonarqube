@@ -19,9 +19,9 @@
  */
 import { screen } from '@testing-library/react';
 import { render } from '../../helpers/testUtils';
-import { Pill } from '../Pill';
+import { Pill, PillVariant } from '../Pill';
 
 it('should render correctly', () => {
-  render(<Pill variant="accent">23</Pill>);
+  render(<Pill variant={PillVariant.Accent}>23</Pill>);
   expect(screen.getByText('23')).toBeInTheDocument();
 });

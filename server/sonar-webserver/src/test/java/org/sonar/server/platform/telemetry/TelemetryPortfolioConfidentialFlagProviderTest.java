@@ -24,6 +24,7 @@ import java.util.stream.Stream;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.mockito.Mockito;
 import org.sonar.db.DbClient;
 import org.sonar.db.property.PropertiesDao;
 import org.sonar.db.property.PropertyDto;
@@ -31,29 +32,29 @@ import org.sonar.db.property.PropertyDto;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
-import static org.sonar.core.config.LegacyRatingConstants.LEGACY_RATING_MODE_ENABLED;
 import static org.sonar.telemetry.core.Dimension.INSTALLATION;
 import static org.sonar.telemetry.core.Granularity.WEEKLY;
 import static org.sonar.telemetry.core.TelemetryDataType.BOOLEAN;
 
-class TelemetryLegacyModePropertyProviderTest {
-  private final DbClient dbClient = mock();
+class TelemetryPortfolioConfidentialFlagProviderTest {
+
+  private final DbClient dbClient = Mockito.mock();
   private final PropertiesDao propertiesDao = mock();
-  private final TelemetryLegacyModePropertyProvider underTest = new TelemetryLegacyModePropertyProvider(dbClient);
+  private final TelemetryPortfolioConfidentialFlagProvider underTest = new TelemetryPortfolioConfidentialFlagProvider(dbClient);
 
   @ParameterizedTest
   @MethodSource("getValues")
   void getter_should_return_correct_values(Boolean value, Boolean expected) {
     when(dbClient.propertiesDao()).thenReturn(propertiesDao);
     if (value == null) {
-      when(dbClient.propertiesDao().selectGlobalProperty(LEGACY_RATING_MODE_ENABLED))
+      when(dbClient.propertiesDao().selectGlobalProperty("sonar.portfolios.confidential.header"))
         .thenReturn(null);
     } else {
-      when(dbClient.propertiesDao().selectGlobalProperty(LEGACY_RATING_MODE_ENABLED))
+      when(dbClient.propertiesDao().selectGlobalProperty("sonar.portfolios.confidential.header"))
         .thenReturn(new PropertyDto().setValue(value.toString()));
     }
 
-    assertEquals("legacy_rating_mode_enabled", underTest.getMetricKey());
+    assertEquals("portfolio_reports_confidential_flag", underTest.getMetricKey());
     assertEquals(INSTALLATION, underTest.getDimension());
     assertEquals(WEEKLY, underTest.getGranularity());
     assertEquals(BOOLEAN, underTest.getType());
@@ -64,8 +65,7 @@ class TelemetryLegacyModePropertyProviderTest {
     return Stream.of(
       Arguments.of(true, true),
       Arguments.of(false, false),
-      Arguments.of(null, false)
+      Arguments.of(null, true)
     );
   }
-
 }

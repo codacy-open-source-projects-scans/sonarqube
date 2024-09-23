@@ -36,7 +36,7 @@ public interface ScimUserMapper {
 
   void insert(@Param("scimUserDto") ScimUserDto scimUserDto);
 
-  List<ScimUserDto> findScimUsers(@Param("query") ScimUserQuery scimUserQuery, @Param("pagination") Pagineable pagination);
+  List<ScimUserWithUsernameDto> findScimUsers(@Param("query") ScimUserQuery scimUserQuery, @Param("pagination") Pagineable pagination);
 
   int countScimUsers(@Param("query") ScimUserQuery scimUserQuery);
 
