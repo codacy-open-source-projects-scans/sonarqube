@@ -54,6 +54,7 @@ import org.sonar.db.measure.LiveMeasureDto;
 import org.sonar.db.metric.MetricDto;
 import org.sonar.db.project.ProjectDto;
 import org.sonar.db.property.PropertyDto;
+import org.sonar.server.ai.code.assurance.AiCodeAssuranceVerifier;
 import org.sonar.server.component.ws.SearchProjectsAction.RequestBuilder;
 import org.sonar.server.component.ws.SearchProjectsAction.SearchProjectsRequest;
 import org.sonar.server.es.EsTester;
@@ -74,6 +75,7 @@ import static java.util.Optional.ofNullable;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.sonar.api.measures.CoreMetrics.ALERT_STATUS_KEY;
@@ -203,7 +205,9 @@ public class SearchProjectsActionIT {
     System2.INSTANCE);
   private final ProjectMeasuresIndexer projectMeasuresIndexer = new ProjectMeasuresIndexer(db.getDbClient(), es.client());
 
-  private final WsActionTester ws = new WsActionTester(new SearchProjectsAction(dbClient, index, userSession, editionProviderMock));
+  private final AiCodeAssuranceVerifier aiCodeAssuranceVerifier = mock(AiCodeAssuranceVerifier.class);
+
+  private final WsActionTester ws = new WsActionTester(new SearchProjectsAction(dbClient, index, userSession, editionProviderMock, aiCodeAssuranceVerifier));
 
   private final RequestBuilder request = SearchProjectsRequest.builder();
 
@@ -217,7 +221,7 @@ public class SearchProjectsActionIT {
     assertThat(def.isPost()).isFalse();
     assertThat(def.responseExampleAsString()).isNotEmpty();
     assertThat(def.params().stream().map(Param::key).toList()).containsOnly("filter", "facets", "s", "asc", "ps", "p", "f");
-    assertThat(def.changelog()).hasSize(4);
+    assertThat(def.changelog()).hasSize(5);
 
     Param sort = def.param("s");
     assertThat(sort.defaultValue()).isEqualTo("name");
@@ -1384,6 +1388,23 @@ public class SearchProjectsActionIT {
       .containsExactly(
         tuple(privateProject.getKey(), privateProject.isPrivate() ? "private" : "public"),
         tuple(publicProject.getKey(), publicProject.isPrivate() ? "private" : "public"));
+  }
+
+  @Test
+  @DataProvider({"true", "false"})
+  public void return_ai_code_assured(Boolean aiCodeAssured) {
+    when(aiCodeAssuranceVerifier.isAiCodeAssured(any())).thenReturn(aiCodeAssured);
+    userSession.logIn();
+    ProjectDto project = db.components().insertPublicProject(componentDto -> componentDto.setName("proj_A"),
+      projectDto -> projectDto.setAiCodeAssurance(true)).getProjectDto();
+    authorizationIndexerTester.allowOnlyAnyone(project);
+    index();
+
+    SearchProjectsWsResponse result = call(request);
+
+    assertThat(result.getComponentsList()).extracting(Component::getKey, Component::getIsAiCodeAssured)
+      .containsExactly(
+        tuple(project.getKey(), aiCodeAssured));
   }
 
   @Test

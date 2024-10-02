@@ -25,6 +25,7 @@ export const DOC_URL = 'https://docs.sonarsource.com/sonarqube/latest';
 export enum DocLink {
   AccountTokens = '/user-guide/managing-tokens/',
   ActiveVersions = '/server-upgrade-and-maintenance/upgrade/upgrade-the-server/active-versions/',
+  AiCodeAssurance = '/user-guide/ai-features/',
   AlmAzureIntegration = '/devops-platform-integration/azure-devops-integration/',
   AlmBitBucketCloudAuth = '/instance-administration/authentication/bitbucket-cloud/',
   AlmBitBucketCloudIntegration = '/devops-platform-integration/bitbucket-integration/bitbucket-cloud-integration/',
@@ -33,8 +34,9 @@ export enum DocLink {
   AlmGitHubAuth = '/instance-administration/authentication/github/',
   AlmGitHubIntegration = '/devops-platform-integration/github-integration/introduction/',
   AlmGitHubMonorepoWorkfileExample = '/devops-platform-integration/github-integration/adding-analysis-to-github-actions-workflow/#configuring-the-buildyml-file',
-  AlmGitLabAuth = '/instance-administration/authentication/gitlab/',
-  AlmGitLabAuthProvisioningMethod = '/instance-administration/authentication/gitlab/#choosing-the-provisioning-method',
+  AlmGitLabAuth = '/instance-administration/authentication/gitlab/setting-up/',
+  AlmGitLabAuthJITProvisioningMethod = '/instance-administration/authentication/gitlab/provisioning-modes/just-in-time/',
+  AlmGitLabAuthAutoProvisioningMethod = '/instance-administration/authentication/gitlab/provisioning-modes/automatic/',
   AlmGitLabIntegration = '/devops-platform-integration/gitlab-integration/introduction/',
   AlmSamlAuth = '/instance-administration/authentication/saml/overview/',
   AlmSamlScimAuth = '/instance-administration/authentication/saml/scim/overview/',
@@ -82,6 +84,7 @@ export enum DocLink {
   SonarScannerDotNet = '/analyzing-source-code/scanners/dotnet/introduction/',
   SonarScannerGradle = '/analyzing-source-code/scanners/sonarscanner-for-gradle/',
   SonarScannerMaven = '/analyzing-source-code/scanners/sonarscanner-for-maven/',
+  SonarWayQualityGate = '/user-guide/quality-gates/#using-sonar-way-the-recommended-quality-gate', // to be confirmed
   Webhooks = '/project-administration/webhooks/',
 }
 

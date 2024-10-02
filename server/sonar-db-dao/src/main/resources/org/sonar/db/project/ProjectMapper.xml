@@ -11,6 +11,7 @@
       p.tags as tagsString,
       p.private as isPrivate,
       p.creation_method as creationMethod,
+      p.ai_code_assurance as aiCodeAssurance,
       p.created_at as createdAt,
       p.updated_at as updatedAt
     </sql>
@@ -128,15 +129,15 @@
 
   <select id="selectProjectUuidsAssociatedToDefaultQualityProfileByLanguage" parameterType="map" resultType="string">
     select
-      lm.project_uuid
+      p.uuid
     from
       live_measures lm
     inner join
-      projects p on p.uuid = lm.project_uuid
+      project_branches pb on pb.uuid = lm.component_uuid
+    inner join
+      projects p on p.uuid = pb.project_uuid
     inner join
       metrics m on m.uuid = lm.metric_uuid
-    inner join
-      project_branches pb on pb.uuid = lm.component_uuid
     where
       m.name = 'ncloc_language_distribution'
       and pb.is_main = ${_true}
@@ -153,7 +154,9 @@
     from
       live_measures lm
     inner join
-      projects p on p.uuid = lm.project_uuid
+      project_branches pb on pb.uuid = lm.project_uuid and pb.is_main = ${_true}
+    inner join
+      projects p on p.uuid = pb.project_uuid
     inner join
       metrics m on m.uuid = lm.metric_uuid
     where
@@ -174,6 +177,7 @@
       private,
       tags,
       creation_method,
+      ai_code_assurance,
       created_at,
       updated_at
     )
@@ -186,6 +190,7 @@
     #{isPrivate,jdbcType=BOOLEAN},
     #{tagsString, jdbcType=VARCHAR},
     #{creationMethod, jdbcType=VARCHAR},
+    #{aiCodeAssurance, jdbcType=BOOLEAN},
     #{createdAt,jdbcType=BIGINT},
     #{updatedAt,jdbcType=BIGINT}
     )
@@ -216,6 +221,13 @@
     uuid = #{uuid,jdbcType=VARCHAR}
   </update>
 
+  <update id="updateAiCodeAssurance">
+    update projects set
+    ai_code_assurance = #{aiCodeAssurance,jdbcType=BOOLEAN},
+    updated_at = #{updatedAt,jdbcType=BIGINT}
+    where
+    uuid = #{uuid,jdbcType=VARCHAR}
+  </update>
 
   <update id="updateNcloc">
     update projects set

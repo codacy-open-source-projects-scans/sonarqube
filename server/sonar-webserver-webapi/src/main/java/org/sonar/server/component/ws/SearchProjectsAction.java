@@ -56,6 +56,7 @@ import org.sonar.db.component.SnapshotDto;
 import org.sonar.db.project.ProjectDto;
 import org.sonar.db.property.PropertyDto;
 import org.sonar.db.property.PropertyQuery;
+import org.sonar.server.ai.code.assurance.AiCodeAssuranceVerifier;
 import org.sonar.db.user.TokenType;
 import org.sonar.server.component.ws.FilterParser.Criterion;
 import org.sonar.server.component.ws.SearchProjectsAction.SearchResults.SearchResultsBuilder;
@@ -111,13 +112,15 @@ public class SearchProjectsAction implements ComponentsWsAction {
   private final ProjectMeasuresIndex index;
   private final UserSession userSession;
   private final PlatformEditionProvider editionProvider;
+  private final AiCodeAssuranceVerifier aiCodeAssuranceVerifier;
 
   public SearchProjectsAction(DbClient dbClient, ProjectMeasuresIndex index, UserSession userSession,
-    PlatformEditionProvider editionProvider) {
+    PlatformEditionProvider editionProvider, AiCodeAssuranceVerifier aiCodeAssuranceVerifier) {
     this.dbClient = dbClient;
     this.index = index;
     this.userSession = userSession;
     this.editionProvider = editionProvider;
+    this.aiCodeAssuranceVerifier = aiCodeAssuranceVerifier;
   }
 
   @Override
@@ -128,6 +131,7 @@ public class SearchProjectsAction implements ComponentsWsAction {
       .addPagingParams(DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE)
       .setInternal(true)
       .setChangelog(
+        new Change("10.7", "Add 'isAiCodeAssured' response field"),
         new Change("10.3", "Add 'creationDate' sort parameter."),
         new Change("10.2", "Field 'needIssueSync' removed from response"),
         new Change("8.3", "Add 'qualifier' filter and facet"),
@@ -460,7 +464,7 @@ public class SearchProjectsAction implements ComponentsWsAction {
     }
   }
 
-  private static class DbToWsComponent implements Function<ProjectDto, Component> {
+  private class DbToWsComponent implements Function<ProjectDto, Component> {
     private final SearchProjectsRequest request;
     private final Component.Builder wsComponent;
     private final Set<String> favoriteProjectUuids;
@@ -484,7 +488,8 @@ public class SearchProjectsAction implements ComponentsWsAction {
         .setKey(dbProject.getKey())
         .setName(dbProject.getName())
         .setQualifier(dbProject.getQualifier())
-        .setVisibility(Visibility.getLabel(dbProject.isPrivate()));
+        .setVisibility(Visibility.getLabel(dbProject.isPrivate()))
+        .setIsAiCodeAssured(aiCodeAssuranceVerifier.isAiCodeAssured(dbProject));
       wsComponent.getTagsBuilder().addAllTags(dbProject.getTags());
 
       SnapshotDto snapshotDto = analysisByProjectUuid.get(dbProject.getUuid());
@@ -507,6 +512,8 @@ public class SearchProjectsAction implements ComponentsWsAction {
 
       return wsComponent.build();
     }
+
+
   }
 
   public static class SearchResults {
@@ -518,7 +525,8 @@ public class SearchProjectsAction implements ComponentsWsAction {
     private final ProjectMeasuresQuery query;
     private final int total;
 
-    private SearchResults(List<ProjectDto> projects, Set<String> favoriteProjectUuids, SearchIdResult<String> searchResults, Map<String, SnapshotDto> analysisByProjectUuid,
+    private SearchResults(List<ProjectDto> projects, Set<String> favoriteProjectUuids, SearchIdResult<String> searchResults, Map<String,
+      SnapshotDto> analysisByProjectUuid,
       Map<String, Long> applicationsLeakPeriods, ProjectMeasuresQuery query) {
       this.projects = projects;
       this.favoriteProjectUuids = favoriteProjectUuids;

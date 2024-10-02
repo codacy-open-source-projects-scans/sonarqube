@@ -18,44 +18,19 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 
-import { PageTitle, Table } from 'design-system';
+import { Heading } from '@sonarsource/echoes-react';
 import * as React from 'react';
+import NotificationsList from '../../../components/notifications/NotificationsList';
 import { translate } from '../../../helpers/l10n';
-import { Notification, NotificationGlobalType } from '../../../types/notifications';
-import NotificationsList from './NotificationsList';
 
-interface Props {
-  addNotification: (n: Notification) => void;
-  channels: string[];
-  header?: React.JSX.Element;
-  notifications: Notification[];
-  removeNotification: (n: Notification) => void;
-  types: NotificationGlobalType[];
-}
-
-export default function GlobalNotifications(props: Readonly<Props>) {
+export default function GlobalNotifications() {
   return (
     <>
-      <PageTitle className="sw-mb-4" text={translate('my_profile.overall_notifications.title')} />
+      <Heading as="h2" hasMarginBottom>
+        {translate('my_profile.overall_notifications.title')}
+      </Heading>
 
-      {!props.header && (
-        <div className="sw-body-sm-highlight sw-mb-2">{translate('notifications.send_email')}</div>
-      )}
-
-      <Table className="sw-w-full" columnCount={2} header={props.header ?? null}>
-        <NotificationsList
-          channels={props.channels}
-          checkboxId={getCheckboxId}
-          notifications={props.notifications}
-          onAdd={props.addNotification}
-          onRemove={props.removeNotification}
-          types={props.types}
-        />
-      </Table>
+      <NotificationsList />
     </>
   );
-}
-
-function getCheckboxId(type: string, channel: string) {
-  return `global-notification-${type}-${channel}`;
 }

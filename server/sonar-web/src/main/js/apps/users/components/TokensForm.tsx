@@ -18,14 +18,12 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 
+import { Button, ButtonVariety, Heading, Label, Spinner } from '@sonarsource/echoes-react';
 import {
-  ButtonPrimary,
   ContentCell,
   GreySeparator,
   InputField,
   InputSelect,
-  Spinner,
-  SubHeading,
   Table,
   TableRow,
 } from 'design-system';
@@ -197,13 +195,13 @@ export function TokensForm(props: Readonly<Props>) {
     <>
       <GreySeparator className="sw-mb-4 sw-mt-6" />
 
-      <SubHeading as="h2">{translate('users.tokens.generate')}</SubHeading>
+      <Heading as="h2" hasMarginBottom>
+        {translate('users.tokens.generate')}
+      </Heading>
 
       <form autoComplete="off" className="sw-flex sw-items-center" onSubmit={handleGenerateToken}>
         <div className="sw-flex sw-flex-col sw-mr-2">
-          <label htmlFor="token-name" className="sw-font-bold">
-            {translate('users.tokens.name')}
-          </label>
+          <Label htmlFor="token-name">{translate('users.tokens.name')}</Label>
 
           <InputField
             className="sw-mt-2 sw-w-auto it__token-name"
@@ -220,9 +218,7 @@ export function TokensForm(props: Readonly<Props>) {
         {displayTokenTypeInput && (
           <>
             <div className="sw-flex sw-flex-col sw-mr-2">
-              <label htmlFor="token-select-type" className="sw-font-bold">
-                {translate('users.tokens.type')}
-              </label>
+              <Label htmlFor="token-select-type">{translate('users.tokens.type')}</Label>
 
               <InputSelect
                 className="sw-mt-2 it__token-type"
@@ -241,9 +237,7 @@ export function TokensForm(props: Readonly<Props>) {
 
             {newTokenType === TokenType.Project && (
               <div className="sw-flex sw-flex-col sw-mr-2">
-                <label htmlFor="token-select-project" className="sw-font-bold">
-                  {translate('users.tokens.project')}
-                </label>
+                <Label htmlFor="token-select-project">{translate('users.tokens.project')}</Label>
 
                 <InputSelect
                   className="sw-mt-2 it__project"
@@ -259,9 +253,7 @@ export function TokensForm(props: Readonly<Props>) {
         )}
 
         <div className="sw-flex sw-flex-col sw-mr-2">
-          <label htmlFor="token-select-expiration" className="sw-font-bold">
-            {translate('users.tokens.expires_in')}
-          </label>
+          <Label htmlFor="token-select-expiration">{translate('users.tokens.expires_in')}</Label>
 
           <InputSelect
             className="sw-mt-2"
@@ -273,21 +265,22 @@ export function TokensForm(props: Readonly<Props>) {
           />
         </div>
 
-        <ButtonPrimary
+        <Button
           className="it__generate-token"
-          disabled={isSubmitButtonDisabled()}
+          isDisabled={isSubmitButtonDisabled()}
           style={{ marginTop: 'auto' }}
           type="submit"
+          variety={ButtonVariety.Primary}
         >
           {translate('users.generate')}
-        </ButtonPrimary>
+        </Button>
       </form>
 
       {newToken && <TokensFormNewToken token={newToken} />}
 
       <GreySeparator className="sw-mb-4 sw-mt-6" />
 
-      <Spinner loading={loading}>
+      <Spinner isLoading={loading}>
         <Table
           className="sw-min-h-40 sw-w-full"
           columnCount={COLUMN_WIDTHS.length}
@@ -297,9 +290,7 @@ export function TokensForm(props: Readonly<Props>) {
         >
           {tokens && tokens.length <= 0 ? (
             <TableRow>
-              <ContentCell className="sw-body-lg" colSpan={7}>
-                {translate('users.no_tokens')}
-              </ContentCell>
+              <ContentCell colSpan={7}>{translate('users.no_tokens')}</ContentCell>
             </TableRow>
           ) : (
             tokens?.map((token) => (

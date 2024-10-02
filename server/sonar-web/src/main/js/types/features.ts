@@ -30,4 +30,5 @@ export enum Feature {
   GitlabProvisioning = 'gitlab-provisioning',
   PrioritizedRules = 'prioritized-rules',
   FixSuggestions = 'fix-suggestions',
+  AiCodeAssurance = 'ai-code-assurance',
 }

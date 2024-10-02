@@ -11,8 +11,6 @@ definitions:
           - dotnetcore
           - sonar
         script:
-          - apt-get update
-          - apt-get install --yes --no-install-recommends openjdk-17-jre
           - dotnet tool install --global dotnet-sonarscanner
           - export PATH="$PATH:/root/.dotnet/tools"
           - dotnet sonarscanner begin /k:"my-project" /d:"sonar.token=\${SONAR_TOKEN}"  /d:"sonar.host.url=\${SONAR_HOST_URL}"
@@ -101,7 +99,7 @@ definitions:
     - step: &build-step
         name: Build the project, and run the SonarQube analysis
         script:
-          - export SONAR_SCANNER_VERSION=6.1.0.4477
+          - export SONAR_SCANNER_VERSION=6.2.0.4584
           - mkdir $HOME/.sonar
           - curl -sSLo $HOME/.sonar/build-wrapper-linux-aarch64.zip \${SONAR_HOST_URL}/static/cpp/build-wrapper-linux-aarch64.zip
           - unzip -o $HOME/.sonar/build-wrapper-linux-aarch64.zip -d $HOME/.sonar/
@@ -139,7 +137,7 @@ definitions:
     - step: &build-step
         name: Build the project, and run the SonarQube analysis
         script:
-          - export SONAR_SCANNER_VERSION=6.1.0.4477
+          - export SONAR_SCANNER_VERSION=6.2.0.4584
           - mkdir $HOME/.sonar
           - curl -sSLo $HOME/.sonar/build-wrapper-linux-aarch64.zip \${SONAR_HOST_URL}/static/cpp/build-wrapper-linux-aarch64.zip
           - unzip -o $HOME/.sonar/build-wrapper-linux-aarch64.zip -d $HOME/.sonar/
@@ -173,7 +171,7 @@ definitions:
     - step: &build-step
         name: Build the project, and run the SonarQube analysis
         script:
-          - export SONAR_SCANNER_VERSION=6.1.0.4477
+          - export SONAR_SCANNER_VERSION=6.2.0.4584
           - mkdir $HOME/.sonar
           - curl -sSLo $HOME/.sonar/build-wrapper-linux-x86.zip \${SONAR_HOST_URL}/static/cpp/build-wrapper-linux-x86.zip
           - unzip -o $HOME/.sonar/build-wrapper-linux-x86.zip -d $HOME/.sonar/
@@ -211,7 +209,7 @@ definitions:
     - step: &build-step
         name: Build the project, and run the SonarQube analysis
         script:
-          - export SONAR_SCANNER_VERSION=6.1.0.4477
+          - export SONAR_SCANNER_VERSION=6.2.0.4584
           - mkdir $HOME/.sonar
           - curl -sSLo $HOME/.sonar/build-wrapper-linux-x86.zip \${SONAR_HOST_URL}/static/cpp/build-wrapper-linux-x86.zip
           - unzip -o $HOME/.sonar/build-wrapper-linux-x86.zip -d $HOME/.sonar/
@@ -236,6 +234,39 @@ pipelines:
     '**':
       - step: *build-step"
 `;
+
+exports[`should follow and complete all steps: Dart: bitbucket-pipelines.yml 1`] = `
+"image: ghcr.io/cirruslabs/flutter:stable
+
+definitions:
+  steps:
+    - step: &build-step
+        name: Build the project, and run the SonarQube analysis
+        script:
+          - <commands to build your project>
+          - export SONAR_SCANNER_VERSION=6.2.0.4584
+          - mkdir $HOME/.sonar
+          - curl -sSLo $HOME/.sonar/sonar-scanner.zip https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-\${SONAR_SCANNER_VERSION}-linux-x64.zip
+          - unzip -o $HOME/.sonar/sonar-scanner.zip -d $HOME/.sonar/
+          - export PATH="$PATH:$HOME/.sonar/sonar-scanner-\${SONAR_SCANNER_VERSION}-linux-x64/bin"
+          - sonar-scanner
+  caches:
+    sonar: ~/.sonar
+
+clone:
+  depth: full
+
+pipelines:
+  branches:
+    '{main}':
+      - step: *build-step
+
+  pull-requests:
+    '**':
+      - step: *build-step"
+`;
+
+exports[`should follow and complete all steps: Dart: sonar-project.properties 1`] = `"sonar.projectKey=my-project"`;
 
 exports[`should follow and complete all steps: Gradle: bitbucket-pipelines.yml 1`] = `
 "image: eclipse-temurin:17
@@ -267,7 +298,7 @@ pipelines:
 
 exports[`should follow and complete all steps: Groovy: build.gradle 1`] = `
 "plugins {
-  id "org.sonarqube" version "5.0.0.4638"
+  id "org.sonarqube" version "5.1.0.4882"
 }
 
 sonar {
@@ -280,7 +311,7 @@ sonar {
 
 exports[`should follow and complete all steps: Kotlin: build.gradle.kts 1`] = `
 "plugins {
-  id("org.sonarqube") version "5.0.0.4638"
+  id("org.sonarqube") version "5.1.0.4882"
 }
     
 sonar {
@@ -302,7 +333,7 @@ definitions:
           - maven
           - sonar
         script:
-          - mvn verify sonar:sonar -Dsonar.projectKey=my-project -Dsonar.projectName='MyProject'
+          - mvn verify org.sonarsource.scanner.maven:sonar-maven-plugin:sonar -Dsonar.projectKey=my-project -Dsonar.projectName='MyProject'
   caches:
     sonar: ~/.sonar
 

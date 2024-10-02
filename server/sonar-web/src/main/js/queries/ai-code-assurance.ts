@@ -17,17 +17,16 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-package org.sonar.server.telemetry;
+import { queryOptions } from '@tanstack/react-query';
+import { isProjectAiCodeAssured } from '../api/ai-code-assurance';
+import { createQueryHook } from './common';
 
-import java.util.Optional;
-import org.sonar.api.server.ServerSide;
+export const AI_CODE_ASSURANCE_QUERY_PREFIX = 'ai-code-assurance';
 
-@ServerSide
-public interface LicenseReader {
-  Optional<License> read();
-
-  interface License {
-    String getType();
-    Boolean isValidLicense();
-  }
-}
+export const useProjectAiCodeAssuredQuery = createQueryHook(({ project }: { project: string }) => {
+  return queryOptions({
+    queryKey: [AI_CODE_ASSURANCE_QUERY_PREFIX, project], // - or _ ?
+    queryFn: ({ queryKey: [_, project] }) => isProjectAiCodeAssured(project),
+    enabled: project !== undefined,
+  });
+});

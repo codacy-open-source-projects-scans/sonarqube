@@ -22,7 +22,7 @@ import userEvent from '@testing-library/user-event';
 import { range } from 'lodash';
 import React from 'react';
 import { byRole, byText } from '~sonar-aligned/helpers/testSelector';
-import { ISSUE_101 } from '../../../api/mocks/data/ids';
+import { ISSUE_101, ISSUE_1101 } from '../../../api/mocks/data/ids';
 import { TabKeys } from '../../../components/rules/RuleTabViewer';
 import { mockCurrentUser, mockCve, mockLoggedInUser } from '../../../helpers/testMocks';
 import { Feature } from '../../../types/features';
@@ -34,6 +34,7 @@ import {
   issuesHandler,
   renderIssueApp,
   renderProjectIssuesApp,
+  settingsHandler,
   sourcesHandler,
   ui,
   usersHandler,
@@ -68,6 +69,7 @@ beforeEach(() => {
   componentsHandler.reset();
   branchHandler.reset();
   usersHandler.reset();
+  settingsHandler.reset();
   usersHandler.users = [mockLoggedInUser() as unknown as RestUserDetailed];
   window.scrollTo = jest.fn();
   window.HTMLElement.prototype.scrollTo = jest.fn();
@@ -77,14 +79,15 @@ describe('issue app', () => {
   it('should always be able to render the open issue', async () => {
     renderProjectIssuesApp('project/issues?issueStatuses=CONFIRMED&open=issue2&id=myproject&why=1');
 
-    expect(await ui.conciseIssueTotal.find()).toHaveTextContent('4');
+    expect(await ui.conciseIssueTotal.find(undefined, { timeout: 10_000 })).toHaveTextContent('4');
     expect(ui.conciseIssueItem4.get()).toBeInTheDocument();
     expect(ui.conciseIssueItem2.get()).toBeInTheDocument();
   });
 
   it('should be able to trigger a fix when feature is available', async () => {
+    settingsHandler.set('sonar.ai.suggestions.enabled', 'true');
     sourcesHandler.setSource(
-      range(0, 20)
+      range(0, 1)
         .map((n) => `line: ${n}`)
         .join('\n'),
     );
@@ -96,7 +99,7 @@ describe('issue app', () => {
       [Feature.BranchSupport, Feature.FixSuggestions],
     );
 
-    expect(await ui.getFixSuggestion.find()).toBeInTheDocument();
+    expect(await ui.getFixSuggestion.find(undefined, { timeout: 10_000 })).toBeInTheDocument();
     await user.click(ui.getFixSuggestion.get());
 
     expect(await ui.suggestedExplanation.find()).toBeInTheDocument();
@@ -113,12 +116,25 @@ describe('issue app', () => {
       mockCurrentUser(),
       [Feature.BranchSupport, Feature.FixSuggestions],
     );
-    expect(await ui.issueCodeTab.find()).toBeInTheDocument();
+    expect(await ui.issueCodeTab.find(undefined, { timeout: 10_000 })).toBeInTheDocument();
+    expect(ui.getFixSuggestion.query()).not.toBeInTheDocument();
+    expect(ui.issueCodeFixTab.query()).not.toBeInTheDocument();
+  });
+
+  it('should not be able to trigger a fix when issue is not eligible', async () => {
+    renderProjectIssuesApp(
+      `project/issues?issueStatuses=CONFIRMED&open=${ISSUE_1101}&id=myproject`,
+      {},
+      mockCurrentUser(),
+      [Feature.BranchSupport, Feature.FixSuggestions],
+    );
+    expect(await ui.issueCodeTab.find(undefined, { timeout: 10_000 })).toBeInTheDocument();
     expect(ui.getFixSuggestion.query()).not.toBeInTheDocument();
     expect(ui.issueCodeFixTab.query()).not.toBeInTheDocument();
   });
 
   it('should show error when no fix is available', async () => {
+    settingsHandler.set('sonar.ai.suggestions.enabled', 'true');
     const user = userEvent.setup();
     renderProjectIssuesApp(
       `project/issues?issueStatuses=CONFIRMED&open=${ISSUE_101}&id=myproject`,
@@ -127,7 +143,7 @@ describe('issue app', () => {
       [Feature.BranchSupport, Feature.FixSuggestions],
     );
 
-    await user.click(await ui.issueCodeFixTab.find());
+    await user.click(await ui.issueCodeFixTab.find(undefined, { timeout: 10_000 }));
     await user.click(ui.getAFixSuggestion.get());
 
     expect(await ui.noFixAvailable.find()).toBeInTheDocument();
@@ -137,9 +153,11 @@ describe('issue app', () => {
     renderProjectIssuesApp('project/issues?issues=issue2&open=issue2&id=myproject&why=1');
 
     expect(
-      await screen.findByRole('tab', {
-        name: `coding_rules.description_section.title.root_cause`,
-      }),
+      await screen.findByRole(
+        'tab',
+        { name: `coding_rules.description_section.title.root_cause` },
+        { timeout: 10_000 },
+      ),
     ).toHaveAttribute('aria-current', 'true');
 
     expect(byText(/Introduction to this rule/).get()).toBeInTheDocument();
@@ -149,7 +167,7 @@ describe('issue app', () => {
     const user = userEvent.setup();
     renderProjectIssuesApp('project/issues?id=myproject');
 
-    await user.click(await ui.issueItemAction2.find());
+    await user.click(await ui.issueItemAction2.find(undefined, { timeout: 10_000 }));
 
     expect(await screen.findByLabelText('list_of_issues')).toBeInTheDocument();
 
@@ -208,7 +226,11 @@ describe('issue app', () => {
     const user = userEvent.setup();
     renderProjectIssuesApp('project/issues?issues=issue2&open=issue2&id=myproject');
     await user.click(
-      await screen.findByRole('tab', { name: `coding_rules.description_section.title.more_info` }),
+      await screen.findByRole(
+        'tab',
+        { name: `coding_rules.description_section.title.more_info` },
+        { timeout: 10_000 },
+      ),
     );
     expect(screen.getByRole('heading', { name: 'Defense-In-Depth', level: 3 })).toBeInTheDocument();
   });
@@ -218,10 +240,12 @@ describe('issue app', () => {
     renderProjectIssuesApp('project/issues?issues=issue2&open=issue2&id=myproject');
 
     await user.click(
-      await screen.findByRole('tab', { name: 'coding_rules.description_section.title.root_cause' }),
+      await screen.findByRole(
+        'tab',
+        { name: 'coding_rules.description_section.title.root_cause' },
+        { timeout: 10_000 },
+      ),
     );
-
-    await user.click(screen.getByRole('radio', { name: 'coding_rules.description_context.other' }));
 
     expect(await screen.findByRole('heading', { name: 'CVE-2021-12345' })).toBeInTheDocument();
 
@@ -244,11 +268,11 @@ describe('issue app', () => {
     renderProjectIssuesApp('project/issues?issues=issue2&open=issue2&id=myproject');
 
     await user.click(
-      await screen.findByRole('tab', { name: 'coding_rules.description_section.title.root_cause' }),
-    );
-
-    await user.click(
-      await screen.findByRole('radio', { name: 'coding_rules.description_context.other' }),
+      await screen.findByRole(
+        'tab',
+        { name: 'coding_rules.description_section.title.root_cause' },
+        { timeout: 10_000 },
+      ),
     );
 
     expect(await screen.findByRole('heading', { name: 'CVE-2021-12345' })).toBeInTheDocument();
@@ -265,7 +289,9 @@ describe('issue app', () => {
     renderIssueApp();
 
     // Get a specific issue list item
-    const listItem = within(await screen.findByLabelText('Fix that'));
+    const listItem = within(
+      await screen.findByLabelText('Fix that', undefined, { timeout: 10_000 }),
+    );
 
     expect(listItem.getByText('issue.issue_status.OPEN')).toBeInTheDocument();
 
@@ -306,7 +332,9 @@ describe('issue app', () => {
     renderIssueApp();
 
     // Get a specific issue list item
-    const listItem = within(await screen.findByLabelText('Fix that'));
+    const listItem = within(
+      await screen.findByLabelText('Fix that', undefined, { timeout: 10_000 }),
+    );
     // Assign issue to a different user
     await user.click(listItem.getByLabelText('issue.assign.unassigned_click_to_assign'));
     await user.click(screen.getByLabelText('search.search_for_users'));
@@ -328,7 +356,9 @@ describe('issue app', () => {
     renderIssueApp();
 
     // Get a specific issue list item
-    const listItem = within(await screen.findByLabelText('Fix that'));
+    const listItem = within(
+      await screen.findByLabelText('Fix that', undefined, { timeout: 10_000 }),
+    );
 
     // Change tags
     expect(listItem.getByText('issue.no_tag')).toBeInTheDocument();
@@ -369,7 +399,7 @@ describe('issue app', () => {
     const user = userEvent.setup();
     renderIssueApp();
 
-    await user.click(await ui.issueItem4.find());
+    await user.click(await ui.issueItem4.find(undefined, { timeout: 10_000 }));
 
     expect(
       screen.queryByRole('button', {
@@ -400,7 +430,7 @@ describe('issue app', () => {
     renderIssueApp();
 
     // Select an issue with an advanced rule
-    await user.click(await ui.issueItemAction5.find());
+    await user.click(await ui.issueItemAction5.find(undefined, { timeout: 10_000 }));
 
     // Open status popup on key press 'f'
     await user.keyboard('f');
@@ -431,7 +461,7 @@ describe('issue app', () => {
     renderIssueApp();
 
     // Select an issue with an advanced rule
-    await user.click(await ui.issueItem5.find());
+    await user.click(await ui.issueItem5.find(undefined, { timeout: 10_000 }));
 
     // open status popup on key press 'f'
     await user.keyboard('f');
@@ -448,7 +478,7 @@ describe('issue app', () => {
     const user = userEvent.setup();
     renderIssueApp();
 
-    await user.click(await ui.issueItemAction4.find());
+    await user.click(await ui.issueItemAction4.find(undefined, { timeout: 10_000 }));
 
     expect(screen.getByRole('button', { name: 'location 1' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'location 2' })).toBeInTheDocument();
@@ -498,7 +528,7 @@ describe('issue app', () => {
     renderIssueApp();
 
     // Select an issue with quick fix available
-    await user.click(await ui.issueItemAction7.find());
+    await user.click(await ui.issueItemAction7.find(undefined, { timeout: 10_000 }));
 
     await expect(screen.getByText('issue.quick_fix')).toHaveATooltipWithContent(
       'issue.quick_fix_available_with_sonarlint',

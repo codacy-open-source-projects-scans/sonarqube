@@ -145,6 +145,23 @@ class ProjectDaoIT {
   }
 
   @Test
+  void selectProjects_returnsAiCodeAssurance() {
+    ProjectDto dto1 = createProject("o1", "p1").setAiCodeAssurance(true);
+    ProjectDto dto2 = createProject("o1", "p2");
+
+    projectDao.insert(db.getSession(), dto1);
+    projectDao.insert(db.getSession(), dto2);
+
+    List<ProjectDto> projects = projectDao.selectProjects(db.getSession());
+    Map<String, Boolean> projectToAiCodeAssurance = projects.stream().collect(Collectors.toMap(EntityDto::getName,
+      ProjectDto::getAiCodeAssurance));
+    assertThat(projectToAiCodeAssurance)
+      .hasSize(2)
+      .containsEntry("projectName_p1", true)
+      .containsEntry("projectName_p2", false);
+  }
+
+  @Test
   void select_all() {
     ProjectDto dto1 = createProject("o1", "p1");
     ProjectDto dto2 = createProject("o1", "p2");
@@ -243,6 +260,28 @@ class ProjectDaoIT {
     assertThat(projectsByUuids).hasSize(2);
     assertProject(projectsByUuids.get(0), "projectName_p1", "projectKee_o1_p1", "uuid_o1_p1", "desc_p1", "tag1,tag2", false);
     assertProject(projectsByUuids.get(1), "projectName_p2", "projectKee_o1_p2", "uuid_o1_p2", "desc_p2", "tag1,tag2", true);
+  }
+
+  @Test
+  void update_aiCodeAssurance() {
+    ProjectDto dto1 = createProject("o1", "p1").setAiCodeAssurance(true);
+    ProjectDto dto2 = createProject("o1", "p2");
+
+    projectDao.insert(db.getSession(), dto1);
+    projectDao.insert(db.getSession(), dto2);
+
+    List<ProjectDto> projectsByUuids = projectDao.selectByUuids(db.getSession(), new HashSet<>(Arrays.asList("uuid_o1_p1", "uuid_o1_p2")));
+    assertThat(projectsByUuids).hasSize(2);
+    assertProject(projectsByUuids.get(0), "projectName_p1", "projectKee_o1_p1", "uuid_o1_p1", "desc_p1", "tag1,tag2", false, true);
+    assertProject(projectsByUuids.get(1), "projectName_p2", "projectKee_o1_p2", "uuid_o1_p2", "desc_p2", "tag1,tag2", false, false);
+
+    projectDao.updateAiCodeAssurance(db.getSession(), dto1.getUuid(), false);
+    projectDao.updateAiCodeAssurance(db.getSession(), dto2.getUuid(), true);
+
+    projectsByUuids = projectDao.selectByUuids(db.getSession(), new HashSet<>(Arrays.asList("uuid_o1_p1", "uuid_o1_p2")));
+    assertThat(projectsByUuids).hasSize(2);
+    assertProject(projectsByUuids.get(0), "projectName_p1", "projectKee_o1_p1", "uuid_o1_p1", "desc_p1", "tag1,tag2", false, false);
+    assertProject(projectsByUuids.get(1), "projectName_p2", "projectKee_o1_p2", "uuid_o1_p2", "desc_p2", "tag1,tag2", false, true);
   }
 
   @Test
@@ -449,17 +488,17 @@ class ProjectDaoIT {
       .collect(Collectors.toSet());
   }
 
-  private Consumer<LiveMeasureDto> configureLiveMeasure(String language, MetricDto metric, ProjectDto project, ComponentDto componentDto) {
+  private Consumer<LiveMeasureDto> configureLiveMeasure(String language, MetricDto metric, ComponentDto componentDto) {
     return liveMeasure -> liveMeasure
       .setMetricUuid(metric.getUuid())
       .setComponentUuid(componentDto.uuid())
-      .setProjectUuid(project.getUuid())
+      .setProjectUuid(componentDto.uuid())
       .setData(language + "=" + random.nextInt(10));
   }
 
   private Consumer<ProjectData> insertLiveMeasure(String language, MetricDto metric) {
     return (projectData) -> db.measures().insertLiveMeasure(projectData.getMainBranchComponent(), metric,
-      configureLiveMeasure(language, metric, projectData.getProjectDto(), projectData.getMainBranchComponent()));
+      configureLiveMeasure(language, metric, projectData.getMainBranchComponent()));
   }
 
   private void insertProjectsLiveMeasures(String language, Set<ProjectData> projects) {
@@ -473,8 +512,12 @@ class ProjectDaoIT {
   }
 
   private void assertProject(ProjectDto dto, String name, String kee, String uuid, String desc, @Nullable String tags, boolean isPrivate) {
-    assertThat(dto).extracting("name", "kee", "key", "uuid", "description", "tagsString", "private")
-      .containsExactly(name, kee, kee, uuid, desc, tags, isPrivate);
+    assertProject(dto, name, kee, uuid, desc, tags, isPrivate, false);
+  }
+
+  private void assertProject(ProjectDto dto, String name, String kee, String uuid, String desc, @Nullable String tags, boolean isPrivate, boolean isAiCodeAssurance) {
+    assertThat(dto).extracting("name", "kee", "key", "uuid", "description", "tagsString", "private", "aiCodeAssurance")
+      .containsExactly(name, kee, kee, uuid, desc, tags, isPrivate, isAiCodeAssurance);
   }
 
   private ProjectDto createProject(String org, String name) {

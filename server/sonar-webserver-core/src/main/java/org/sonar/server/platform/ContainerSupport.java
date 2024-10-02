@@ -30,4 +30,7 @@ public interface ContainerSupport {
   @CheckForNull
   String getContainerContext();
 
+  boolean isRunningOnHelmOpenshift();
+
+  boolean isHelmAutoscalingEnabled();
 }

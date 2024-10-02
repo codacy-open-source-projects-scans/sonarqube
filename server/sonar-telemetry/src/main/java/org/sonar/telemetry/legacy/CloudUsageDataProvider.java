@@ -115,6 +115,8 @@ public class CloudUsageDataProvider {
       kubernetesPlatform,
       getKubernetesProvider(),
       getOfficialHelmChartVersion(),
+      containerSupport.isRunningOnHelmOpenshift(),
+      containerSupport.isHelmAutoscalingEnabled(),
       containerSupport.getContainerContext(),
       isOfficialImageUsed());
 

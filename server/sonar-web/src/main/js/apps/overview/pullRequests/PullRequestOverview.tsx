@@ -92,7 +92,7 @@ export default function PullRequestOverview(props: Readonly<Readonly<Props>>) {
 
   return (
     <CenteredLayout>
-      <PageContentFontWrapper className="it__pr-overview sw-mt-12 sw-mb-8 sw-grid sw-grid-cols-12 sw-body-sm">
+      <PageContentFontWrapper className="it__pr-overview sw-mt-12 sw-mb-8 sw-grid sw-grid-cols-12 sw-typo-default">
         <div className="sw-col-start-2 sw-col-span-10">
           <PullRequestMetaTopBar pullRequest={pullRequest} measures={measures} />
           <BasicSeparator className="sw-my-4" />
@@ -100,7 +100,7 @@ export default function PullRequestOverview(props: Readonly<Readonly<Props>>) {
           {ignoredConditions && <IgnoredConditionWarning />}
 
           <div className="sw-flex sw-justify-between sw-items-start sw-my-6">
-            <QGStatus status={status} titleSize="extra-large" />
+            <QGStatus status={status} />
             <LastAnalysisLabel analysisDate={pullRequest.analysisDate} />
           </div>
 

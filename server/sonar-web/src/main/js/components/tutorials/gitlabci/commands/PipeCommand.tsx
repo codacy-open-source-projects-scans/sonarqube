@@ -52,13 +52,11 @@ const BUILD_TOOL_SPECIFIC: {
   [BuildTools.Maven]: {
     image: 'maven:3-eclipse-temurin-17',
     script: () => `
-    - mvn verify sonar:sonar`,
+    - mvn verify org.sonarsource.scanner.maven:sonar-maven-plugin:sonar`,
   },
   [BuildTools.DotNet]: {
     image: 'mcr.microsoft.com/dotnet/sdk:7.0',
     script: (projectKey: string) => `
-      - "apt-get update"
-      - "apt-get install --yes --no-install-recommends openjdk-17-jre"
       - "dotnet tool install --global dotnet-sonarscanner"
       - "export PATH=\\"$PATH:$HOME/.dotnet/tools\\""
       - "dotnet sonarscanner begin /k:\\"${projectKey}\\" /d:sonar.token=\\"$SONAR_TOKEN\\" /d:\\"sonar.host.url=$SONAR_HOST_URL\\" "
@@ -68,23 +66,29 @@ const BUILD_TOOL_SPECIFIC: {
   [BuildTools.Cpp]: {
     image: 'gcc',
     script: (_, autoConfig?: AutoConfig) =>
-      `sonar-scanner/bin/sonar-scanner --define sonar.host.url="\${SONAR_HOST_URL}" ` +
+      `sonar-scanner/bin/sonar-scanner -Dsonar.host.url="\${SONAR_HOST_URL}" ` +
       (autoConfig === AutoConfig.Manual
-        ? `--define sonar.cfamily.compile-commands="\${BUILD_WRAPPER_OUT_DIR}/compile_commands.json"`
+        ? `-Dsonar.cfamily.compile-commands="\${BUILD_WRAPPER_OUT_DIR}/compile_commands.json"`
         : ''),
   },
   [BuildTools.ObjectiveC]: {
     image: 'gcc',
     script: (_) =>
-      `sonar-scanner/bin/sonar-scanner --define sonar.host.url="\${SONAR_HOST_URL}" ` +
-      `--define sonar.cfamily.compile-commands="\${BUILD_WRAPPER_OUT_DIR}/compile_commands.json"`,
+      `sonar-scanner/bin/sonar-scanner -Dsonar.host.url="\${SONAR_HOST_URL}" ` +
+      `-Dsonar.cfamily.compile-commands="\${BUILD_WRAPPER_OUT_DIR}/compile_commands.json"`,
+  },
+  [BuildTools.Dart]: {
+    image: 'ghcr.io/cirruslabs/flutter:stable',
+    script: () => `
+    - <commands to build your project>
+    - sonar-scanner/bin/sonar-scanner --define sonar.host.url="\${SONAR_HOST_URL}"`,
   },
   [BuildTools.Other]: {
     image: `
-    name: sonarsource/sonar-scanner-cli:latest
+    name: sonarsource/sonar-scanner-cli:11
     entrypoint: [""]`,
     script: () => `
-    - sonar-scanner --define sonar.host.url="\${SONAR_HOST_URL}"`,
+    - sonar-scanner -Dsonar.host.url="\${SONAR_HOST_URL}"`,
   },
 };
 
@@ -187,7 +191,7 @@ export default function PipeCommand(props: Readonly<PipeCommandProps>) {
     stageDeclaration = ['sonarqube-check', ...stageDeclaration];
   }
 
-  if (isCFamily(buildTool)) {
+  if (isCFamily(buildTool) || buildTool === BuildTools.Dart) {
     stages = [getBinaries, ...stages];
     stageDeclaration = ['get-binaries', ...stageDeclaration];
   }

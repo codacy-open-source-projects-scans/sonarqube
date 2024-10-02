@@ -19,17 +19,24 @@
  */
 package org.sonar.scanner.http;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.net.InetSocketAddress;
 import java.net.Proxy;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.security.KeyStore;
-import java.security.Security;
+import java.security.KeyStoreException;
+import java.security.NoSuchAlgorithmException;
+import java.security.cert.CertificateException;
 import java.time.Duration;
 import java.time.format.DateTimeParseException;
 import nl.altindag.ssl.SSLFactory;
-import nl.altindag.ssl.util.KeyStoreUtils;
+import nl.altindag.ssl.exception.GenericKeyStoreException;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.sonar.api.CoreProperties;
 import org.sonar.api.notifications.AnalysisWarnings;
 import org.sonar.api.utils.System2;
@@ -51,6 +58,9 @@ import static org.sonar.core.config.ProxyProperties.HTTP_PROXY_PASSWORD;
 import static org.sonar.core.config.ProxyProperties.HTTP_PROXY_USER;
 
 public class ScannerWsClientProvider {
+
+  private static final Logger LOG = LoggerFactory.getLogger(ScannerWsClientProvider.class);
+
   static final int DEFAULT_CONNECT_TIMEOUT = 5;
   static final int DEFAULT_RESPONSE_TIMEOUT = 0;
   static final String READ_TIMEOUT_SEC_PROPERTY = "sonar.ws.timeout";
@@ -148,15 +158,28 @@ public class ScannerWsClientProvider {
     }
     var trustStoreConfig = sslConfig.getTrustStore();
     if (trustStoreConfig != null && Files.exists(trustStoreConfig.getPath())) {
-      Security.addProvider(new BouncyCastleProvider());
-      KeyStore trustStore = KeyStoreUtils.loadKeyStore(
-        trustStoreConfig.getPath(),
-        trustStoreConfig.getKeyStorePassword().toCharArray(),
-        trustStoreConfig.getKeyStoreType(),
-        BouncyCastleProvider.PROVIDER_NAME);
+      KeyStore trustStore;
+      try {
+        trustStore = loadKeyStoreWithBouncyCastle(
+          trustStoreConfig.getPath(),
+          trustStoreConfig.getKeyStorePassword().toCharArray(),
+          trustStoreConfig.getKeyStoreType());
+        LOG.debug("Loaded truststore from '{}' containing {} certificates", trustStoreConfig.getPath(), trustStore.size());
+      } catch (KeyStoreException | IOException | CertificateException | NoSuchAlgorithmException e) {
+        throw new GenericKeyStoreException("Unable to read truststore from '" + trustStoreConfig.getPath() + "'", e);
+      }
       sslFactoryBuilder.withTrustMaterial(trustStore);
     }
     return sslFactoryBuilder.build();
+  }
+
+  static KeyStore loadKeyStoreWithBouncyCastle(Path keystorePath, char[] keystorePassword, String keystoreType) throws IOException,
+    KeyStoreException, CertificateException, NoSuchAlgorithmException {
+    try (InputStream keystoreInputStream = Files.newInputStream(keystorePath, StandardOpenOption.READ)) {
+      KeyStore keystore = KeyStore.getInstance(keystoreType, new BouncyCastleProvider());
+      keystore.load(keystoreInputStream, keystorePassword);
+      return keystore;
+    }
   }
 
 }

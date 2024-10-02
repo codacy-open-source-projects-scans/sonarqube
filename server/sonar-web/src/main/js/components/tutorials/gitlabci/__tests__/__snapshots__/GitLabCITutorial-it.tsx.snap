@@ -15,8 +15,6 @@ sonarqube-check:
   stage: sonarqube-check
   
   script: 
-      - "apt-get update"
-      - "apt-get install --yes --no-install-recommends openjdk-17-jre"
       - "dotnet tool install --global dotnet-sonarscanner"
       - "export PATH=\\"$PATH:$HOME/.dotnet/tools\\""
       - "dotnet sonarscanner begin /k:\\"my-project\\" /d:sonar.token=\\"$SONAR_TOKEN\\" /d:\\"sonar.host.url=$SONAR_HOST_URL\\" "
@@ -69,9 +67,9 @@ get-binaries:
       - build-wrapper/
   script:
     # Download sonar-scanner
-    - curl -sSLo ./sonar-scanner.zip 'https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-6.1.0.4477-linux-x64.zip'
+    - curl -sSLo ./sonar-scanner.zip 'https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-6.2.0.4584-linux-x64.zip'
     - unzip -o sonar-scanner.zip
-    - mv sonar-scanner-6.1.0.4477-linux-x64 sonar-scanner
+    - mv sonar-scanner-6.2.0.4584-linux-x64 sonar-scanner
     # Download build-wrapper
     - curl -sSLo ./build-wrapper-linux-x86.zip "$SONAR_HOST_URL/static/cpp/build-wrapper-linux-x86.zip"
     - unzip -o build-wrapper-linux-x86.zip
@@ -87,7 +85,7 @@ build:
   stage: build-analyze
   script:
     - build-wrapper/build-wrapper-linux-x86-64 --out-dir "\${BUILD_WRAPPER_OUT_DIR}" <your clean build command>
-    - sonar-scanner/bin/sonar-scanner --define sonar.host.url="\${SONAR_HOST_URL}" --define sonar.cfamily.compile-commands="\${BUILD_WRAPPER_OUT_DIR}/compile_commands.json"
+    - sonar-scanner/bin/sonar-scanner -Dsonar.host.url="\${SONAR_HOST_URL}" -Dsonar.cfamily.compile-commands="\${BUILD_WRAPPER_OUT_DIR}/compile_commands.json"
   cache:
     policy: pull
     key: "\${CI_COMMIT_SHORT_SHA}"
@@ -135,9 +133,9 @@ get-binaries:
       
   script:
     # Download sonar-scanner
-    - curl -sSLo ./sonar-scanner.zip 'https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-6.1.0.4477-linux-x64.zip'
+    - curl -sSLo ./sonar-scanner.zip 'https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-6.2.0.4584-linux-x64.zip'
     - unzip -o sonar-scanner.zip
-    - mv sonar-scanner-6.1.0.4477-linux-x64 sonar-scanner
+    - mv sonar-scanner-6.2.0.4584-linux-x64 sonar-scanner
     
   rules:
     - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
@@ -155,7 +153,7 @@ sonarqube-check:
     paths:
       - sonar-scanner/
 
-  script: sonar-scanner/bin/sonar-scanner --define sonar.host.url="\${SONAR_HOST_URL}" 
+  script: sonar-scanner/bin/sonar-scanner -Dsonar.host.url="\${SONAR_HOST_URL}" 
   allow_failure: true
   rules:
     - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
@@ -181,6 +179,74 @@ sonarqube-vulnerability-report:
 `;
 
 exports[`should follow and complete all steps: CPP: sonar-project.properties 1`] = `
+"sonar.projectKey=my-project
+sonar.qualitygate.wait=true
+"
+`;
+
+exports[`should follow and complete all steps: Dart: gitlab-ci.yml 1`] = `
+"image: ghcr.io/cirruslabs/flutter:stable
+
+variables:
+  SONAR_USER_HOME: "\${CI_PROJECT_DIR}/.sonar"  # Defines the location of the analysis task cache
+  GIT_DEPTH: "0"  # Tells git to fetch all the branches of the project, required by the analysis task
+
+stages:
+  - get-binaries
+  - sonarqube-check
+  - sonarqube-vulnerability-report
+
+get-binaries:
+  stage: get-binaries
+  cache:
+    policy: push
+    key: "\${CI_COMMIT_SHORT_SHA}"
+    paths:
+      - sonar-scanner/
+      
+  script:
+    # Download sonar-scanner
+    - curl -sSLo ./sonar-scanner.zip 'https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-6.2.0.4584-linux-x64.zip'
+    - unzip -o sonar-scanner.zip
+    - mv sonar-scanner-6.2.0.4584-linux-x64 sonar-scanner
+    
+  rules:
+    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
+    - if: $CI_COMMIT_BRANCH == 'master'
+    - if: $CI_COMMIT_BRANCH == 'main'
+    - if: $CI_COMMIT_BRANCH == 'develop'
+
+sonarqube-check:
+  stage: sonarqube-check
+  
+  script: 
+    - <commands to build your project>
+    - sonar-scanner/bin/sonar-scanner --define sonar.host.url="\${SONAR_HOST_URL}"
+  allow_failure: true
+  rules:
+    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
+    - if: $CI_COMMIT_BRANCH == 'master'
+    - if: $CI_COMMIT_BRANCH == 'main'
+    - if: $CI_COMMIT_BRANCH == 'develop'
+
+sonarqube-vulnerability-report:
+  stage: sonarqube-vulnerability-report
+  script:
+    - 'curl -u "\${SONAR_TOKEN}:" "\${SONAR_HOST_URL}/api/issues/gitlab_sast_export?projectKey=my-project&branch=\${CI_COMMIT_BRANCH}&pullRequest=\${CI_MERGE_REQUEST_IID}" -o gl-sast-sonar-report.json'
+  allow_failure: true
+  rules:
+    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
+    - if: $CI_COMMIT_BRANCH == 'master'
+    - if: $CI_COMMIT_BRANCH == 'main'
+    - if: $CI_COMMIT_BRANCH == 'develop'
+  artifacts:
+    expire_in: 1 day
+    reports:
+      sast: gl-sast-sonar-report.json
+"
+`;
+
+exports[`should follow and complete all steps: Dart: sonar-project.properties 1`] = `
 "sonar.projectKey=my-project
 sonar.qualitygate.wait=true
 "
@@ -227,7 +293,7 @@ sonarqube-vulnerability-report:
 
 exports[`should follow and complete all steps: Groovy: build.gradle 1`] = `
 "plugins {
-  id "org.sonarqube" version "5.0.0.4638"
+  id "org.sonarqube" version "5.1.0.4882"
 }
 
 sonar {
@@ -241,7 +307,7 @@ sonar {
 
 exports[`should follow and complete all steps: Kotlin: build.gradle.kts 1`] = `
 "plugins {
-  id ("org.sonarqube") version "5.0.0.4638"
+  id ("org.sonarqube") version "5.1.0.4882"
 }
 
 sonar {
@@ -268,7 +334,7 @@ sonarqube-check:
   stage: sonarqube-check
   
   script: 
-    - mvn verify sonar:sonar
+    - mvn verify org.sonarsource.scanner.maven:sonar-maven-plugin:sonar
   allow_failure: true
   rules:
     - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
@@ -303,7 +369,7 @@ exports[`should follow and complete all steps: Maven: pom.xml 1`] = `
 
 exports[`should follow and complete all steps: Other: gitlab-ci.yml 1`] = `
 "image: 
-    name: sonarsource/sonar-scanner-cli:latest
+    name: sonarsource/sonar-scanner-cli:11
     entrypoint: [""]
 
 variables:
@@ -318,7 +384,7 @@ sonarqube-check:
   stage: sonarqube-check
   
   script: 
-    - sonar-scanner --define sonar.host.url="\${SONAR_HOST_URL}"
+    - sonar-scanner -Dsonar.host.url="\${SONAR_HOST_URL}"
   allow_failure: true
   rules:
     - if: $CI_PIPELINE_SOURCE == 'merge_request_event'

@@ -53,10 +53,11 @@ export default function AnalysisCommand(props: Readonly<AnalysisCommandProps>) {
     case BuildTools.DotNet:
       return <DotNet baseUrl={baseUrl} component={component} token={token} />;
 
+    case BuildTools.Dart:
     case BuildTools.Other:
       return (
         <Other
-          arch={Arch.X86_64}
+          arch={arch}
           baseUrl={baseUrl}
           os={os}
           component={component}
