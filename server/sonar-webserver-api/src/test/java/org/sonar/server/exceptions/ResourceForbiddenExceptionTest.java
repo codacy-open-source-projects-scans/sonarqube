@@ -17,7 +17,20 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-@ParametersAreNonnullByDefault
-package org.sonar.ce.db;
+package org.sonar.server.exceptions;
 
-import javax.annotation.ParametersAreNonnullByDefault;
+import org.junit.Test;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+public class ResourceForbiddenExceptionTest {
+
+  // Test the default constructor
+  @Test
+  public void defaultConstructor_shouldSetDefaultErrorMessage() {
+    ResourceForbiddenException exception = new ResourceForbiddenException();
+
+    assertThat(exception.getMessage()).isEqualTo("You do not have access to this resource or it does not exist.");
+  }
+
+}

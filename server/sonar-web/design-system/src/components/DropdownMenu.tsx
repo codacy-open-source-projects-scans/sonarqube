@@ -23,7 +23,7 @@ import classNames from 'classnames';
 import React, { ForwardedRef, forwardRef } from 'react';
 import tw from 'twin.macro';
 import { INPUT_SIZES } from '../helpers/constants';
-import { themeBorder, themeColor, themeContrast } from '../helpers/theme';
+import { themeColor, themeContrast } from '../helpers/theme';
 import { InputSizeKeys, ThemedProps } from '../types/theme';
 import { BaseLink, LinkProps } from './Link';
 import NavLink from './NavLink';
@@ -49,7 +49,7 @@ export function DropdownMenu({
   maxHeight = 'inherit',
   size = 'small',
   ...menuProps
-}: Props) {
+}: Readonly<Props>) {
   return (
     <DropdownMenuWrapper
       className={classNames('dropdown-menu', className)}
@@ -273,25 +273,48 @@ export const ItemHeaderHighlight = styled.span`
 /** @deprecated Use DropdownMenu.Root and other DropdownMenu.* elements from Echoes instead.
  * See the {@link https://xtranet-sonarsource.atlassian.net/wiki/spaces/Platform/pages/3354918914/DropdownMenus | Migration Guide}
  */
-export const ItemHeader = styled.li`
+export const ItemHeader = styled(UnstyledItemHeader)`
   background-color: ${themeColor('dropdownMenuHeader')};
   color: ${themeContrast('dropdownMenuHeader')};
 
   ${tw`sw-py-2 sw-px-3`}
 `;
-ItemHeader.defaultProps = { className: 'dropdown-menu-header', role: 'menuitem' };
+
+function UnstyledItemHeader({
+  children,
+  className = 'dropdown-menu-header',
+  role = 'menuitem',
+  ...props
+}: Readonly<React.HtmlHTMLAttributes<HTMLLIElement>>) {
+  return (
+    <li className={className} role={role} {...props}>
+      {children}
+    </li>
+  );
+}
 
 /** @deprecated Use DropdownMenu.Root and other DropdownMenu.* elements from Echoes instead.
  * See the {@link https://xtranet-sonarsource.atlassian.net/wiki/spaces/Platform/pages/3354918914/DropdownMenus | Migration Guide}
  */
-export const ItemDivider = styled.li`
+export const ItemDivider = styled(UnstyledItemDivider)`
   height: 1px;
   background-color: ${themeColor('popupBorder')};
 
   ${tw`sw-my-1 sw--mx-2`}
   ${tw`sw-overflow-hidden`};
 `;
-ItemDivider.defaultProps = { role: 'separator' };
+
+function UnstyledItemDivider({
+  children,
+  role = 'separator',
+  ...props
+}: Readonly<React.HtmlHTMLAttributes<HTMLLIElement>>) {
+  return (
+    <li role={role} {...props}>
+      {children}
+    </li>
+  );
+}
 
 export const DropdownMenuWrapper = styled.ul`
   background-color: ${themeColor('dropdownMenu')};
@@ -347,10 +370,13 @@ const itemStyle = (props: ThemedProps) => css`
     color: var(--color);
     background-color: ${themeColor('dropdownMenuFocus')(props)};
     text-decoration: none;
-    outline: ${themeBorder('focus', 'dropdownMenuFocusBorder')(props)};
-    outline-offset: -4px;
     border: none;
     border-bottom: none;
+  }
+
+  &:focus-visible {
+    borderLeft: '2px solid var(--echoes-color-focus-default)',
+    marginLeft: '-2px',
   }
 
   &:disabled,

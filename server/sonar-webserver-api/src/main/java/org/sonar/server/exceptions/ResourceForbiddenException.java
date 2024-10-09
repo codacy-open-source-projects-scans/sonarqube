@@ -17,41 +17,16 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { sanitize } from 'dompurify';
+package org.sonar.server.exceptions;
 
-export function sanitizeStringRestricted(html: string) {
-  return sanitize(html, {
-    ALLOWED_TAGS: ['b', 'br', 'code', 'i', 'li', 'p', 'strong', 'ul', 'a'],
-    ALLOWED_ATTR: ['target', 'href'],
-  });
-}
+import static java.net.HttpURLConnection.HTTP_NOT_FOUND;
 
-export function sanitizeString(html: string) {
-  return sanitize(html, { USE_PROFILES: { html: true } });
-}
+public class ResourceForbiddenException extends ServerException {
 
-export function sanitizeUserInput(html: string) {
-  return sanitize(html, {
-    ALLOWED_TAGS: [
-      'b',
-      'br',
-      'code',
-      'i',
-      'li',
-      'p',
-      'strong',
-      'ul',
-      'ol',
-      'a',
-      'h1',
-      'h2',
-      'h3',
-      'h4',
-      'h5',
-      'h6',
-      'blockquote',
-      'pre',
-    ],
-    ALLOWED_ATTR: ['target', 'href', 'rel'],
-  });
+  private static final String ERROR_MESSAGE = "You do not have access to this resource or it does not exist.";
+
+  public ResourceForbiddenException() {
+    super(HTTP_NOT_FOUND, ERROR_MESSAGE);
+  }
+
 }

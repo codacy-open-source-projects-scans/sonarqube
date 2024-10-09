@@ -29,14 +29,12 @@ interface InputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, '
   as?: React.ElementType;
   className?: string;
   isInvalid?: boolean;
-  isValid?: boolean;
   size?: InputSizeKeys;
 }
 
 interface InputTextAreaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
   className?: string;
   isInvalid?: boolean;
-  isValid?: boolean;
   size?: InputSizeKeys;
 }
 
@@ -61,27 +59,19 @@ InputTextArea.displayName = 'InputTextArea';
 const defaultStyle = (props: ThemedProps) => css`
   --border: ${themeBorder('default', 'inputBorder')(props)};
   --focusBorder: ${themeBorder('default', 'inputFocus')(props)};
-  --focusOutline: ${themeBorder('focus', 'inputFocus')(props)};
+  --focusOutline: var(--echoes-focus-border-width-default) solid var(--echoes-color-focus-default);
 `;
 
 const dangerStyle = (props: ThemedProps) => css`
   --border: ${themeBorder('default', 'inputDanger')(props)};
   --focusBorder: ${themeBorder('default', 'inputDangerFocus')(props)};
-  --focusOutline: ${themeBorder('focus', 'inputDangerFocus')(props)};
-`;
-
-const successStyle = (props: ThemedProps) => css`
-  --border: ${themeBorder('default', 'inputSuccess')(props)};
-  --focusBorder: ${themeBorder('default', 'inputSuccessFocus')(props)};
-  --focusOutline: ${themeBorder('focus', 'inputSuccessFocus')(props)};
+  --focusOutline: var(--echoes-focus-border-width-default) solid var(--echoes-color-focus-default);
 `;
 
 const getInputVariant = (props: ThemedProps & { isInvalid?: boolean; isValid?: boolean }) => {
-  const { isValid, isInvalid } = props;
+  const { isInvalid } = props;
   if (isInvalid) {
     return dangerStyle;
-  } else if (isValid) {
-    return successStyle;
   }
   return defaultStyle;
 };
@@ -112,6 +102,7 @@ const baseStyle = (props: ThemedProps) => css`
   &:focus-visible {
     border: var(--focusBorder);
     outline: var(--focusOutline);
+    outline-offset: var(--echoes-focus-border-offset-default);
   }
 
   &:disabled,
