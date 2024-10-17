@@ -23,62 +23,50 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import org.sonar.api.measures.CoreMetrics;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
-import org.sonar.db.project.ProjectDto;
+import org.sonar.db.measure.ProjectMainBranchMeasureDto;
 import org.sonar.db.property.PropertyDto;
 import org.sonar.db.property.PropertyQuery;
+import org.sonar.telemetry.core.AbstractTelemetryDataProvider;
 import org.sonar.telemetry.core.Dimension;
 import org.sonar.telemetry.core.Granularity;
-import org.sonar.telemetry.core.TelemetryDataProvider;
 import org.sonar.telemetry.core.TelemetryDataType;
 
-public class ProjectCppAutoconfigTelemetryProvider implements TelemetryDataProvider<String> {
+public class ProjectCppAutoconfigTelemetryProvider extends AbstractTelemetryDataProvider<String> {
 
   private final DbClient dbClient;
 
   public ProjectCppAutoconfigTelemetryProvider(DbClient dbClient) {
+    super("project_cpp_config_type", Dimension.PROJECT, Granularity.WEEKLY, TelemetryDataType.STRING);
     this.dbClient = dbClient;
-  }
-
-  @Override
-  public String getMetricKey() {
-    return "project_cpp_config_type";
-  }
-
-  @Override
-  public Dimension getDimension() {
-    return Dimension.PROJECT;
-  }
-
-  @Override
-  public Granularity getGranularity() {
-    return Granularity.WEEKLY;
-  }
-
-  @Override
-  public TelemetryDataType getType() {
-    return TelemetryDataType.STRING;
   }
 
   @Override
   public Map<String, String> getValues() {
     Map<String, String> cppConfigTypePerProjectUuid = new HashMap<>();
     try (DbSession dbSession = dbClient.openSession(true)) {
-      // In the future ideally languages should be defined in the codebase as enums, using strings is error-prone
-      List<ProjectDto> cppProjects = dbClient.projectDao().selectProjectsByLanguage(dbSession, Set.of("cpp", "c"));
-      for (ProjectDto cppProject : cppProjects) {
-        CppConfigType cppConfigType = getCppConfigType(cppProject, dbSession);
-        cppConfigTypePerProjectUuid.put(cppProject.getUuid(), cppConfigType.name());
+      List<ProjectMainBranchMeasureDto> measureDtos = dbClient.measureDao().selectAllForProjectMainBranches(dbSession);
+      for (ProjectMainBranchMeasureDto measureDto : measureDtos) {
+        String distribution = (String) measureDto.getMetricValues().get(CoreMetrics.NCLOC_LANGUAGE_DISTRIBUTION_KEY);
+        if (distribution != null && Set.of("cpp", "c").stream().anyMatch(language -> distributionContainsLanguage(distribution, language))) {
+          CppConfigType cppConfigType = getCppConfigType(measureDto.getProjectUuid(), dbSession);
+          cppConfigTypePerProjectUuid.put(measureDto.getProjectUuid(), cppConfigType.name());
+        }
       }
     }
     return cppConfigTypePerProjectUuid;
   }
 
-  private CppConfigType getCppConfigType(ProjectDto project, DbSession dbSession) {
+  private static boolean distributionContainsLanguage(String distribution, String language) {
+    return distribution.startsWith(language + "=") || distribution.contains(";" + language + "=");
+  }
+
+  private CppConfigType getCppConfigType(String entityUuid, DbSession dbSession) {
     List<PropertyDto> propertyDtos = dbClient.propertiesDao().selectByQuery(PropertyQuery
       .builder()
-      .setEntityUuid(project.getUuid())
+      .setEntityUuid(entityUuid)
       .build(), dbSession);
     for (PropertyDto propertyDto : propertyDtos) {
       if (propertyDto.getKey().equals("sonar.cfamily.build-wrapper-output")) {

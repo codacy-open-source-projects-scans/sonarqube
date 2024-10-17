@@ -106,7 +106,7 @@ describe('rendering', () => {
   });
 
   it('should correctly render the default overview and navigation in legacy mode', async () => {
-    settingsHandler.set(SettingsKey.LegacyMode, 'true');
+    settingsHandler.set(SettingsKey.MQRMode, 'false');
     const { ui, user } = getPageObject();
     renderMeasuresApp();
 
@@ -164,11 +164,11 @@ describe('rendering', () => {
     // Check one of the domains.
     await user.click(ui.maintainabilityDomainBtn.get());
     [
-      'component_measures.metric.new_code_smells.name 9',
+      'component_measures.leak_awaiting_analysis.name 9',
       'Added Technical Debt work_duration.x_minutes.1',
       'Technical Debt Ratio on New Code 1.0%',
       'Maintainability Rating on New Code metric.has_rating_X.E metric.sqale_rating.tooltip.E.0.0%',
-      'component_measures.metric.code_smells.name 9',
+      'component_measures.awaiting_analysis.name 9',
       'Technical Debt work_duration.x_minutes.1',
       'Technical Debt Ratio 1.0%',
       'Maintainability Rating metric.has_rating_X.E metric.sqale_rating.tooltip.E.0.0%',
@@ -212,7 +212,7 @@ describe('rendering', () => {
   });
 
   it('should show old measures and no flag message if no rating measures and legacy mode', async () => {
-    settingsHandler.set(SettingsKey.LegacyMode, 'true');
+    settingsHandler.set(SettingsKey.MQRMode, 'false');
     measuresHandler.deleteComponentMeasure(
       'foo',
       MetricKey.software_quality_maintainability_rating,
@@ -592,7 +592,7 @@ describe('redirects', () => {
     const { ui } = getPageObject();
     renderMeasuresApp('component_measures/metric/bugs?id=foo');
     await ui.appLoaded();
-    expect(ui.measureLink('component_measures.metric.bugs.name 0').get()).toHaveAttribute(
+    expect(ui.measureLink('component_measures.awaiting_analysis.name 0').get()).toHaveAttribute(
       'aria-current',
       'true',
     );

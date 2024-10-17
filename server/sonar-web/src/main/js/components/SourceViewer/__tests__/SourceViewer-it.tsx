@@ -17,19 +17,21 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { queryHelpers, screen, within } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import * as React from 'react';
 import { byLabelText } from '~sonar-aligned/helpers/testSelector';
 import { MetricKey } from '~sonar-aligned/types/metrics';
 import ComponentsServiceMock from '../../../api/mocks/ComponentsServiceMock';
 import IssuesServiceMock from '../../../api/mocks/IssuesServiceMock';
+import SettingsServiceMock from '../../../api/mocks/SettingsServiceMock';
 import UsersServiceMock from '../../../api/mocks/UsersServiceMock';
 import { CCT_SOFTWARE_QUALITY_METRICS } from '../../../helpers/constants';
 import { isDiffMetric } from '../../../helpers/measures';
 import { HttpStatus } from '../../../helpers/request';
 import { mockIssue, mockLoggedInUser, mockMeasure } from '../../../helpers/testMocks';
 import { renderComponent } from '../../../helpers/testReactTestingUtils';
+import { SettingsKey } from '../../../types/settings';
 import { RestUserDetailed } from '../../../types/users';
 import SourceViewer, { Props } from '../SourceViewer';
 import loadIssues from '../helpers/loadIssues';
@@ -56,12 +58,14 @@ jest.mock('../helpers/lines', () => {
 const componentsHandler = new ComponentsServiceMock();
 const issuesHandler = new IssuesServiceMock();
 const usersHandler = new UsersServiceMock();
+const settingsHandler = new SettingsServiceMock();
 const message = 'First Issue';
 
 beforeEach(() => {
   issuesHandler.reset();
   componentsHandler.reset();
   usersHandler.reset();
+  settingsHandler.reset();
   usersHandler.users = [mockLoggedInUser() as unknown as RestUserDetailed];
 });
 
@@ -79,23 +83,13 @@ it('should show a permalink on line number', async () => {
   );
 
   expect(
-    /* eslint-disable-next-line testing-library/prefer-presence-queries */
-    queryHelpers.queryByAttribute(
-      'data-clipboard-text',
-      row,
-      'http://localhost/code?id=foo&selected=foo%3Atest1.js&line=1',
-    ),
+    rowScreen.getByRole('menuitem', { name: 'source_viewer.copy_permalink' }),
   ).toBeInTheDocument();
 
   await user.keyboard('[Escape]');
 
   expect(
-    /* eslint-disable-next-line testing-library/prefer-presence-queries */
-    queryHelpers.queryByAttribute(
-      'data-clipboard-text',
-      row,
-      'http://localhost/code?id=foo&selected=foo%3Atest1.js&line=1',
-    ),
+    rowScreen.queryByRole('menuitem', { name: 'source_viewer.copy_permalink' }),
   ).not.toBeInTheDocument();
 
   row = await screen.findByRole('row', { name: / \* 6$/ });
@@ -230,7 +224,11 @@ it('should show SCM information', async () => {
   expect(within(row).queryByRole('button')).not.toBeInTheDocument();
 });
 
-it('should show issue indicator', async () => {
+it.each([
+  ['MQR mode', 'true', ''],
+  ['Legacy mode', 'false', '.legacy'],
+])('should show issue indicator in %s', async (_, mode, translationKey) => {
+  settingsHandler.set(SettingsKey.MQRMode, mode);
   jest.mocked(loadIssues).mockResolvedValueOnce([
     mockIssue(false, {
       key: 'first-issue',
@@ -258,11 +256,12 @@ it('should show issue indicator', async () => {
   const issueRow = within(row);
   expect(issueRow.getByText('2')).toBeInTheDocument();
 
-  await user.click(
-    issueRow.getByRole('button', {
-      name: 'source_viewer.issues_on_line.multiple_issues_same_category.true.2.issue.clean_code_attribute_category.responsible',
-    }),
-  );
+  const issueIndicator = await issueRow.findByRole('button', {
+    name: `source_viewer.issues_on_line.multiple_issues_same_category${translationKey}.true.2.issue.type.bug.plural.issue.clean_code_attribute_category.responsible`,
+  });
+  await user.click(issueIndicator);
+
+  expect(await screen.findByRole('tooltip')).toBeInTheDocument();
 });
 
 it('should show coverage information', async () => {

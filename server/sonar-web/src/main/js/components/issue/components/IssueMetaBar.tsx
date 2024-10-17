@@ -19,7 +19,7 @@
  */
 import styled from '@emotion/styled';
 import classNames from 'classnames';
-import { Badge, CommentIcon, SeparatorCircleIcon, themeColor } from 'design-system';
+import { Badge, CommentIcon, SeparatorCircleIcon } from 'design-system';
 import * as React from 'react';
 import { translate, translateWithParameters } from '../../../helpers/l10n';
 import { isDefined } from '../../../helpers/types';
@@ -28,8 +28,6 @@ import Tooltip from '../../controls/Tooltip';
 import DateFromNow from '../../intl/DateFromNow';
 import { WorkspaceContext } from '../../workspace/context';
 import IssuePrioritized from './IssuePrioritized';
-import IssueSeverity from './IssueSeverity';
-import IssueType from './IssueType';
 import SonarLintBadge from './SonarLintBadge';
 
 interface Props {
@@ -141,14 +139,6 @@ export default function IssueMetaBar(props: Readonly<Props>) {
         <DateFromNow date={issue.creationDate} />
       </IssueMetaListItem>
 
-      <SeparatorCircleIcon aria-hidden as="li" />
-
-      <IssueType issue={issue} height={12} width={12} />
-
-      <SeparatorCircleIcon data-guiding-id="issue-4" aria-hidden as="li" />
-
-      <IssueSeverity issue={issue} height={12} width={12} />
-
       {issue.prioritizedRule && (
         <>
           <SeparatorCircleIcon aria-hidden as="li" />
@@ -163,5 +153,5 @@ export default function IssueMetaBar(props: Readonly<Props>) {
 }
 
 const IssueMetaListItem = styled.li`
-  color: ${themeColor('pageContentLight')};
+  color: var(--echoes-color-text-subdued);
 `;

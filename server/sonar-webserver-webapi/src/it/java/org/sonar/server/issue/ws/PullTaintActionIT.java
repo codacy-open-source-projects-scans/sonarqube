@@ -32,6 +32,7 @@ import org.sonar.api.issue.impact.Severity;
 import org.sonar.api.issue.impact.SoftwareQuality;
 import org.sonar.api.resources.Qualifiers;
 import org.sonar.api.utils.System2;
+import org.sonar.core.rule.ImpactFormatter;
 import org.sonar.db.DbTester;
 import org.sonar.db.component.ComponentDto;
 import org.sonar.db.component.ProjectData;
@@ -48,7 +49,6 @@ import org.sonar.db.user.UserDto;
 import org.sonar.server.component.ComponentFinder;
 import org.sonar.server.exceptions.ForbiddenException;
 import org.sonar.server.exceptions.NotFoundException;
-import org.sonar.server.issue.ImpactFormatter;
 import org.sonar.server.issue.TaintChecker;
 import org.sonar.server.issue.ws.pull.PullTaintActionProtobufObjectGenerator;
 import org.sonar.server.tester.UserSessionRule;
@@ -61,7 +61,7 @@ import org.sonarqube.ws.Issues;
 
 import static java.lang.String.format;
 import static java.util.stream.Collectors.toList;
-import static org.apache.commons.lang3.RandomStringUtils.randomAlphabetic;
+import static org.apache.commons.lang3.RandomStringUtils.secure;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.groups.Tuple.tuple;
@@ -409,7 +409,7 @@ public class PullTaintActionIT {
     RuleDto javaRule = db.rules().insert(r -> r.setRepositoryKey("javasecurity"));
     RuleDto javaScriptRule = db.rules().insert(r -> r.setRepositoryKey("javascript"));
 
-    String ruledescriptionContextKey = randomAlphabetic(6);
+    String ruledescriptionContextKey = secure().nextAlphabetic(6);
     IssueDto issueDto = issueDbTester.insertIssue(p -> p.setSeverity("MINOR")
       .setManualSeverity(true)
       .setMessage("openIssue")

@@ -25,6 +25,8 @@ import {
   CleanCodeAttribute,
   CleanCodeAttributeCategory,
   SoftwareImpact,
+  SoftwareImpactSeverity,
+  SoftwareQuality,
 } from './clean-code-taxonomy';
 import { MessageFormatting, RawIssue } from './issues';
 import { NewCodeDefinitionType } from './new-code-definition';
@@ -519,6 +521,7 @@ export interface RestRule {
 
 export interface RuleActivation {
   createdAt: string;
+  impacts: { severity: SoftwareImpactSeverity; softwareQuality: SoftwareQuality }[];
   inherit: RuleInheritance;
   params: { key: string; value: string }[];
   prioritizedRule: boolean;
@@ -598,7 +601,14 @@ export interface RuleParameter {
 
 export type RuleScope = 'MAIN' | 'TEST' | 'ALL';
 
-export type RuleType = 'BUG' | 'VULNERABILITY' | 'CODE_SMELL' | 'SECURITY_HOTSPOT' | 'UNKNOWN';
+export const RuleTypes = [
+  'BUG',
+  'VULNERABILITY',
+  'CODE_SMELL',
+  'SECURITY_HOTSPOT',
+  'UNKNOWN',
+] as const;
+export type RuleType = (typeof RuleTypes)[number];
 
 export interface Snippet {
   end: number;

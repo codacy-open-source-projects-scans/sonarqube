@@ -26,6 +26,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.sonar.api.impl.utils.AlwaysIncreasingSystem2;
 import org.sonar.api.utils.System2;
+import org.sonar.core.util.SequenceUuidFactory;
 import org.sonar.core.util.UuidFactoryFast;
 import org.sonar.db.DbSession;
 import org.sonar.db.DbTester;
@@ -50,6 +51,8 @@ import static org.mockito.Mockito.verify;
 
 class PortfolioDaoIT {
   private final System2 system2 = new AlwaysIncreasingSystem2(1L, 1);
+  private final SequenceUuidFactory uuidFactory = new SequenceUuidFactory();
+
   @RegisterExtension
   private final DbTester db = DbTester.create(system2);
   private final AuditPersister audit = mock(AuditPersister.class);
@@ -523,7 +526,8 @@ class PortfolioDaoIT {
 
   @Test
   void deleteReferencesTo_with_non_existing_reference_doesnt_fail() {
-    portfolioDao.deleteReferencesTo(session, "portfolio3");
+    assertThatCode(() -> portfolioDao.deleteReferencesTo(session, "portfolio3"))
+      .doesNotThrowAnyException();
   }
 
   @Test
@@ -737,7 +741,7 @@ class PortfolioDaoIT {
   }
 
   private PortfolioDto addPortfolio(PortfolioDto parent) {
-    return addPortfolio(parent, UuidFactoryFast.getInstance().create());
+    return addPortfolio(parent, uuidFactory.create());
   }
 
   private PortfolioDto addPortfolio(PortfolioDto parent, String uuid) {

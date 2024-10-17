@@ -551,8 +551,26 @@ export function mockCompareResult(overrides: Partial<CompareResponse> = {}): Com
         impacts: [],
         key: 'java:S1698',
         name: '== and != should not be used when equals is overridden',
-        left: { params: {}, severity: 'MINOR' },
-        right: { params: {}, severity: 'CRITICAL' },
+        left: {
+          params: {},
+          severity: 'MINOR',
+          impacts: [
+            {
+              softwareQuality: SoftwareQuality.Security,
+              severity: SoftwareImpactSeverity.Blocker,
+            },
+          ],
+        },
+        right: {
+          params: {},
+          severity: 'CRITICAL',
+          impacts: [
+            {
+              softwareQuality: SoftwareQuality.Security,
+              severity: SoftwareImpactSeverity.Low,
+            },
+          ],
+        },
       },
     ],
     ...overrides,
@@ -641,6 +659,9 @@ export function mockRuleActivation(overrides: Partial<RuleActivation> = {}): Rul
     qProfile: 'baz',
     severity: 'MAJOR',
     prioritizedRule: false,
+    impacts: [
+      { softwareQuality: SoftwareQuality.Maintainability, severity: SoftwareImpactSeverity.Medium },
+    ],
     ...overrides,
   };
 }

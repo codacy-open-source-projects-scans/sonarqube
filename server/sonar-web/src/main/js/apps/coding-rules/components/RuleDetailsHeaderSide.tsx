@@ -23,6 +23,8 @@ import React from 'react';
 import { CleanCodeAttributePill } from '../../../components/shared/CleanCodeAttributePill';
 import SoftwareImpactPillList from '../../../components/shared/SoftwareImpactPillList';
 import { translate } from '../../../helpers/l10n';
+import { useStandardExperienceMode } from '../../../queries/settings';
+import { IssueSeverity } from '../../../types/issues';
 import { RuleDetails } from '../../../types/types';
 
 interface Props {
@@ -33,6 +35,7 @@ export default function RuleDetailsHeaderSide({ ruleDetails }: Readonly<Props>) 
   const hasCleanCodeAttribute =
     ruleDetails.cleanCodeAttributeCategory && ruleDetails.cleanCodeAttribute;
   const hasSoftwareImpact = ruleDetails.impacts.length > 0;
+  const { data: isStandardMode } = useStandardExperienceMode();
 
   if (!hasCleanCodeAttribute && !hasSoftwareImpact) {
     return null;
@@ -40,25 +43,33 @@ export default function RuleDetailsHeaderSide({ ruleDetails }: Readonly<Props>) 
 
   return (
     <StyledSection className="sw-flex sw-flex-col sw-pl-4 sw-gap-6 sw-max-w-[250px]">
-      {ruleDetails.cleanCodeAttributeCategory && ruleDetails.cleanCodeAttribute && (
-        <RuleHeaderInfo title={translate('coding_rules.cct_attribute.label')}>
-          <CleanCodeAttributePill
-            cleanCodeAttributeCategory={ruleDetails.cleanCodeAttributeCategory}
-            cleanCodeAttribute={ruleDetails.cleanCodeAttribute}
-            type="rule"
-          />
-        </RuleHeaderInfo>
-      )}
-
       {hasSoftwareImpact && (
-        <RuleHeaderInfo title={translate('coding_rules.software_qualities.label')}>
+        <RuleHeaderInfo
+          title={
+            isStandardMode ? translate('type') : translate('coding_rules.software_qualities.label')
+          }
+        >
           <SoftwareImpactPillList
             className="sw-flex-wrap"
+            issueType={ruleDetails.type}
+            issueSeverity={ruleDetails.severity as IssueSeverity}
             softwareImpacts={ruleDetails.impacts}
             type="rule"
           />
         </RuleHeaderInfo>
       )}
+
+      {ruleDetails.cleanCodeAttributeCategory &&
+        ruleDetails.cleanCodeAttribute &&
+        !isStandardMode && (
+          <RuleHeaderInfo title={translate('coding_rules.cct_attribute.label')}>
+            <CleanCodeAttributePill
+              cleanCodeAttributeCategory={ruleDetails.cleanCodeAttributeCategory}
+              cleanCodeAttribute={ruleDetails.cleanCodeAttribute}
+              type="rule"
+            />
+          </RuleHeaderInfo>
+        )}
     </StyledSection>
   );
 }

@@ -21,6 +21,7 @@ import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { byRole, byText } from '~sonar-aligned/helpers/testSelector';
 import QualityProfilesServiceMock from '../../../../api/mocks/QualityProfilesServiceMock';
+import SettingsServiceMock from '../../../../api/mocks/SettingsServiceMock';
 import { mockQualityProfileChangelogEvent } from '../../../../helpers/testMocks';
 import { renderAppRoutes } from '../../../../helpers/testReactTestingUtils';
 import routes from '../../routes';
@@ -28,6 +29,7 @@ import routes from '../../routes';
 jest.mock('../../../../api/quality-profiles');
 
 const serviceMock = new QualityProfilesServiceMock();
+const settingsMock = new SettingsServiceMock();
 const ui = {
   row: byRole('row'),
   cell: byRole('cell'),
@@ -75,6 +77,7 @@ afterEach(() => {
   jest.useRealTimers();
 
   serviceMock.reset();
+  settingsMock.reset();
 });
 
 it('should see the changelog', async () => {
@@ -86,27 +89,15 @@ it('should see the changelog', async () => {
   expect(rows).toHaveLength(6);
   expect(ui.emptyPage.query()).not.toBeInTheDocument();
   ui.checkRow(1, 'May 23, 2019', 'System', 'quality_profiles.changelog.ACTIVATED', 'Rule 0');
-  ui.checkRow(
-    2,
-    'April 23, 2019',
-    'System',
-    'quality_profiles.changelog.DEACTIVATED',
-    'Rule 0issue.clean_code_attribute_category.RESPONSIBLEsoftware_quality.SECURITYsoftware_quality.MAINTAINABILITY',
-    [/quality_profiles.deprecated_severity_set_to severity.MAJOR/],
-  );
-  ui.checkRow(
-    3,
-    '',
-    '',
-    '',
-    'Rule 1issue.clean_code_attribute_category.RESPONSIBLEsoftware_quality.SECURITYsoftware_quality.MAINTAINABILITY',
-    [
-      /quality_profiles.deprecated_severity_set_to severity.CRITICAL/,
-      /quality_profiles.changelog.cca_and_category_changed.*COMPLETE.*INTENTIONAL.*LAWFUL.*RESPONSIBLE/,
-      /quality_profiles.changelog.impact_added.severity.*MEDIUM.*RELIABILITY/,
-      /quality_profiles.changelog.impact_removed.severity.HIGH.*MAINTAINABILITY/,
-    ],
-  );
+  ui.checkRow(2, 'April 23, 2019', 'System', 'quality_profiles.changelog.DEACTIVATED', 'Rule 0', [
+    /quality_profiles.deprecated_severity_set_to severity.MAJOR/,
+  ]);
+  ui.checkRow(3, '', '', '', 'Rule 1', [
+    /quality_profiles.deprecated_severity_set_to severity.CRITICAL/,
+    /quality_profiles.changelog.cca_and_category_changed.*COMPLETE.*INTENTIONAL.*LAWFUL.*RESPONSIBLE/,
+    /quality_profiles.changelog.impact_added.severity_impact.*MEDIUM.*RELIABILITY/,
+    /quality_profiles.changelog.impact_removed.severity_impact.HIGH.*MAINTAINABILITY/,
+  ]);
   await user.click(ui.link.get(rows[1]));
   expect(screen.getByText('/coding_rules?rule_key=c%3Arule0')).toBeInTheDocument();
 });

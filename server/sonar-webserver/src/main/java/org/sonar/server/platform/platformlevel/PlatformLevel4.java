@@ -190,6 +190,7 @@ import org.sonar.server.platform.WebCoreExtensionsInstaller;
 import org.sonar.server.platform.db.CheckAnyonePermissionsAtStartup;
 import org.sonar.server.platform.telemetry.ProjectCppAutoconfigTelemetryProvider;
 import org.sonar.server.platform.telemetry.TelemetryFipsEnabledProvider;
+import org.sonar.server.platform.telemetry.TelemetryMQRModePropertyProvider;
 import org.sonar.server.platform.telemetry.TelemetryNclocProvider;
 import org.sonar.server.platform.telemetry.TelemetryPortfolioConfidentialFlagProvider;
 import org.sonar.server.platform.telemetry.TelemetryUserEnabledProvider;
@@ -291,9 +292,10 @@ import org.sonar.server.webhook.WebhookQGChangeEventListener;
 import org.sonar.server.webhook.ws.WebhooksWsModule;
 import org.sonar.server.ws.WebServiceEngine;
 import org.sonar.server.ws.ws.WebServicesWsModule;
-import org.sonar.telemetry.TelemetryClient;
+import org.sonar.telemetry.core.TelemetryClient;
 import org.sonar.telemetry.TelemetryDaemon;
 import org.sonar.telemetry.legacy.CloudUsageDataProvider;
+import org.sonar.telemetry.legacy.ProjectLocDistributionDataProvider;
 import org.sonar.telemetry.legacy.QualityProfileDataProvider;
 import org.sonar.telemetry.legacy.TelemetryDataJsonWriter;
 import org.sonar.telemetry.legacy.TelemetryDataLoaderImpl;
@@ -674,6 +676,7 @@ public class PlatformLevel4 extends PlatformLevel {
       // new telemetry metrics
       ProjectCppAutoconfigTelemetryProvider.class,
       TelemetryVersionProvider.class,
+      TelemetryMQRModePropertyProvider.class,
       TelemetryNclocProvider.class,
       TelemetryUserEnabledProvider.class,
       TelemetryFipsEnabledProvider.class,
@@ -687,6 +690,7 @@ public class PlatformLevel4 extends PlatformLevel {
       TelemetryClient.class,
       CloudUsageDataProvider.class,
       QualityProfileDataProvider.class,
+      ProjectLocDistributionDataProvider.class,
 
       // monitoring
       ServerMonitoringMetrics.class,

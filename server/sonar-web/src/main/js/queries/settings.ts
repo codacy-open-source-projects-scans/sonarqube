@@ -57,10 +57,10 @@ export const useGetValueQuery = createQueryHook(
   },
 );
 
-export const useIsLegacyCCTMode = () => {
+export const useStandardExperienceMode = () => {
   return useGetValueQuery(
-    { key: SettingsKey.LegacyMode },
-    { staleTime: Infinity, select: (data) => data?.value === 'true' },
+    { key: SettingsKey.MQRMode },
+    { staleTime: Infinity, select: (data) => data?.value === 'false' },
   );
 };
 

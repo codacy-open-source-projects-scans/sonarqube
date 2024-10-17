@@ -28,7 +28,6 @@ import org.sonar.db.DbTester;
 import org.sonar.db.component.BranchDto;
 import org.sonar.db.component.ComponentDto;
 import org.sonar.db.component.ProjectData;
-import org.sonar.db.metric.MetricDto;
 import org.sonar.db.project.ProjectDto;
 import org.sonar.server.component.TestComponentFinder;
 import org.sonar.server.exceptions.ForbiddenException;
@@ -37,7 +36,7 @@ import org.sonar.server.tester.UserSessionRule;
 import org.sonar.server.ws.TestRequest;
 import org.sonar.server.ws.WsActionTester;
 
-import static org.apache.commons.lang3.RandomStringUtils.randomAlphanumeric;
+import static org.apache.commons.lang3.RandomStringUtils.secure;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.sonar.api.measures.CoreMetrics.COVERAGE_KEY;
@@ -144,18 +143,12 @@ public class AppActionIT {
   public void file_with_measures() {
     ComponentDto directory = db.components().insertComponent(newDirectory(mainBranchComponent, "src"));
     ComponentDto file = db.components().insertComponent(newFileDto(mainBranchComponent, directory));
-    MetricDto lines = db.measures().insertMetric(m -> m.setKey(LINES_KEY));
-    db.measures().insertLiveMeasure(file, lines, m -> m.setValue(200d));
-    MetricDto duplicatedLines = db.measures().insertMetric(m -> m.setKey(DUPLICATED_LINES_DENSITY_KEY));
-    db.measures().insertLiveMeasure(file, duplicatedLines, m -> m.setValue(7.4));
-    MetricDto tests = db.measures().insertMetric(m -> m.setKey(TESTS_KEY));
-    db.measures().insertLiveMeasure(file, tests, m -> m.setValue(3d));
-    MetricDto technicalDebt = db.measures().insertMetric(m -> m.setKey(TECHNICAL_DEBT_KEY));
-    db.measures().insertLiveMeasure(file, technicalDebt, m -> m.setValue(182d));
-    MetricDto issues = db.measures().insertMetric(m -> m.setKey(VIOLATIONS_KEY));
-    db.measures().insertLiveMeasure(file, issues, m -> m.setValue(231d));
-    MetricDto coverage = db.measures().insertMetric(m -> m.setKey(COVERAGE_KEY));
-    db.measures().insertLiveMeasure(file, coverage, m -> m.setValue(95.4d));
+    db.measures().insertMeasure(file, m -> m.addValue(LINES_KEY, 200d));
+    db.measures().insertMeasure(file, m -> m.addValue(DUPLICATED_LINES_DENSITY_KEY, 7.4));
+    db.measures().insertMeasure(file, m -> m.addValue(TESTS_KEY, 3d));
+    db.measures().insertMeasure(file, m -> m.addValue(TECHNICAL_DEBT_KEY, 182d));
+    db.measures().insertMeasure(file, m -> m.addValue(VIOLATIONS_KEY, 231d));
+    db.measures().insertMeasure(file, m -> m.addValue(COVERAGE_KEY, 95.4d));
     userSession.logIn("john").addProjectPermission(USER, projectData.getProjectDto())
       .registerBranches(projectData.getMainBranchDto());
 
@@ -179,8 +172,7 @@ public class AppActionIT {
   @Test
   public void get_by_component() {
     ComponentDto file = db.components().insertComponent(newFileDto(mainBranchComponent, mainBranchComponent));
-    MetricDto coverage = db.measures().insertMetric(m -> m.setKey(COVERAGE_KEY));
-    db.measures().insertLiveMeasure(file, coverage, m -> m.setValue(95.4d));
+    db.measures().insertMeasure(file, m -> m.addValue(COVERAGE_KEY, 95.4d));
     userSession.logIn("john").addProjectPermission(USER, projectData.getProjectDto())
       .registerBranches(projectData.getMainBranchDto());
 
@@ -265,13 +257,12 @@ public class AppActionIT {
   @Test
   public void branch() {
     userSession.logIn("john").addProjectPermission(USER, projectData.getProjectDto());
-    String branchName = randomAlphanumeric(248);
+    String branchName = secure().nextAlphanumeric(248);
     ComponentDto branch = db.components().insertProjectBranch(mainBranchComponent, b -> b.setKey(branchName));
     userSession.addProjectBranchMapping(projectData.getProjectDto().getUuid(), branch);
     ComponentDto directory = db.components().insertComponent(newDirectory(branch, "src"));
     ComponentDto file = db.components().insertComponent(newFileDto(mainBranchComponent.uuid(), branch, directory));
-    MetricDto coverage = db.measures().insertMetric(m -> m.setKey(COVERAGE_KEY));
-    db.measures().insertLiveMeasure(file, coverage, m -> m.setValue(95.4d));
+    db.measures().insertMeasure(file, m -> m.addValue(COVERAGE_KEY, 95.4d));
 
     String result = ws.newRequest()
       .setParam("component", file.getKey())
@@ -308,7 +299,7 @@ public class AppActionIT {
   @Test
   public void component_and_branch_parameters_provided() {
     userSession.logIn("john").addProjectPermission(USER, projectData.getProjectDto());
-    String branchName = randomAlphanumeric(248);
+    String branchName = secure().nextAlphanumeric(248);
     ComponentDto branch = db.components().insertProjectBranch(mainBranchComponent, b -> b.setKey(branchName));
     userSession.addProjectBranchMapping(projectData.projectUuid(), branch);
     ComponentDto file = db.components().insertComponent(newFileDto(branch, mainBranchComponent.uuid()));
@@ -339,7 +330,7 @@ public class AppActionIT {
   public void component_and_pull_request_parameters_provided() {
     userSession.logIn("john").addProjectPermission(USER, projectData.getProjectDto())
       .registerBranches(projectData.getMainBranchDto());
-    String pullRequestKey = RandomStringUtils.randomAlphanumeric(100);
+    String pullRequestKey = RandomStringUtils.secure().nextAlphanumeric(100);
     ComponentDto branch = db.components().insertProjectBranch(mainBranchComponent, b -> b.setBranchType(PULL_REQUEST).setKey(pullRequestKey));
     userSession.addProjectBranchMapping(projectData.projectUuid(), branch);
     ComponentDto file = db.components().insertComponent(newFileDto(branch, mainBranchComponent.uuid()));

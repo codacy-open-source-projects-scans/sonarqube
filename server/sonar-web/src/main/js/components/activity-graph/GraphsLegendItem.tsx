@@ -17,18 +17,10 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { useTheme } from '@emotion/react';
+
 import styled from '@emotion/styled';
 import classNames from 'classnames';
-import {
-  Badge,
-  CloseIcon,
-  FlagWarningIcon,
-  InteractiveIcon,
-  Theme,
-  themeBorder,
-  themeColor,
-} from 'design-system';
+import { Badge, CloseIcon, FlagWarningIcon, InteractiveIcon, themeBorder } from 'design-system';
 import * as React from 'react';
 import { FormattedMessage, useIntl } from 'react-intl';
 import { MetricKey } from '~sonar-aligned/types/metrics';
@@ -56,7 +48,6 @@ export function GraphsLegendItem({
   showWarning,
 }: Props) {
   const intl = useIntl();
-  const theme = useTheme() as Theme;
 
   const isActionable = removeMetric !== undefined;
   const isDeprecated = DEPRECATED_ACTIVITY_METRICS.includes(metric as MetricKey);
@@ -71,10 +62,7 @@ export function GraphsLegendItem({
       ) : (
         <ChartLegend className="sw-mr-2" index={index} />
       )}
-      <span
-        className="sw-typo-default"
-        style={{ color: themeColor('graphCursorLineColor')({ theme }) }}
-      >
+      <span className="sw-typo-default" style={{ color: 'var(--echoes-color-text-subdued)' }}>
         {name}
       </span>
       {isDeprecated && (

@@ -17,9 +17,10 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+
 import styled from '@emotion/styled';
 import tw from 'twin.macro';
-import { themeBorder, themeColor, themeContrast } from '../../helpers';
+import { themeBorder, themeColor } from '../../helpers';
 import { BareButton } from '../../sonar-aligned/components/buttons';
 
 interface CodeViewerExpanderProps {
@@ -33,11 +34,10 @@ export const CodeViewerExpander = styled(BareButton)<CodeViewerExpanderProps>`
   ${tw`sw-w-full`}
   ${tw`sw-box-border`}
 
-  color: ${themeContrast('codeLineEllipsis')};
+  color: var(--echoes-color-text-subdued);
   background-color: ${themeColor('codeLineEllipsis')};
 
   &:hover {
-    color: ${themeContrast('codeLineEllipsisHover')};
     background-color: ${themeColor('codeLineEllipsisHover')};
   }
 
@@ -49,7 +49,7 @@ export const CodeViewerExpander = styled(BareButton)<CodeViewerExpanderProps>`
 `;
 
 export const IssueIndicatorButton = styled(BareButton)`
-  color: ${themeColor('codeLineMeta')};
+  color: var(--echoes-color-text-subdued);
   text-decoration: none;
 
   ${tw`sw-whitespace-nowrap`}
@@ -75,6 +75,6 @@ export const LineSCMStyled = styled(BareButton)`
   ${tw`sw-w-full sw-h-full`}
 
   &:hover {
-    color: ${themeColor('codeLineMetaHover')};
+    color: var(--echoes-color-text-subdued);
   }
 `;

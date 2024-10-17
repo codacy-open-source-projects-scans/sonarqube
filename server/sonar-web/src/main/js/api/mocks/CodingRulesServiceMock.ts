@@ -31,8 +31,9 @@ import {
   mockRuleActivation,
   mockRuleRepository,
 } from '../../helpers/testMocks';
+import { SoftwareImpactSeverity, SoftwareQuality } from '../../types/clean-code-taxonomy';
 import { RuleRepository, SearchRulesResponse } from '../../types/coding-rules';
-import { RawIssuesResponse } from '../../types/issues';
+import { IssueSeverity, RawIssuesResponse } from '../../types/issues';
 import { RuleStatus, SearchRulesQuery } from '../../types/rules';
 import { SecurityStandard } from '../../types/security';
 import {
@@ -90,6 +91,7 @@ type FacetFilter = Pick<
   | 'repositories'
   | 'qprofile'
   | 'activation'
+  | 'severities'
   | 'sonarsourceSecurity'
   | 'owaspTop10'
   | 'owaspTop10-2021'
@@ -105,6 +107,22 @@ const FACET_RULE_MAP: { [key: string]: keyof Rule } = {
   severities: 'severity',
   statuses: 'status',
   tags: 'tags',
+};
+
+const MQRtoStandardSeverityMap = {
+  [SoftwareImpactSeverity.Info]: IssueSeverity.Info,
+  [SoftwareImpactSeverity.Low]: IssueSeverity.Minor,
+  [SoftwareImpactSeverity.Medium]: IssueSeverity.Major,
+  [SoftwareImpactSeverity.High]: IssueSeverity.Critical,
+  [SoftwareImpactSeverity.Blocker]: IssueSeverity.Blocker,
+};
+
+const StandardtoMQRSeverityMap = {
+  [IssueSeverity.Info]: SoftwareImpactSeverity.Info,
+  [IssueSeverity.Minor]: SoftwareImpactSeverity.Low,
+  [IssueSeverity.Major]: SoftwareImpactSeverity.Medium,
+  [IssueSeverity.Critical]: SoftwareImpactSeverity.High,
+  [IssueSeverity.Blocker]: SoftwareImpactSeverity.Blocker,
 };
 
 export const RULE_TAGS_MOCK = ['awesome', 'cute', 'nice'];
@@ -179,6 +197,7 @@ export default class CodingRulesServiceMock {
     is_template,
     repositories,
     qprofile,
+    severities,
     sonarsourceSecurity,
     owaspTop10,
     'owaspTop10-2021': owasp2021Top10,
@@ -206,6 +225,12 @@ export default class CodingRulesServiceMock {
     if (impactSeverities) {
       filteredRules = filteredRules.filter(
         (r) => r.impacts && r.impacts.some(({ severity }) => impactSeverities.includes(severity)),
+      );
+    }
+    if (severities) {
+      filteredRules = filteredRules.filter(
+        (r) =>
+          r.severity && severities.split(',').some((severity: string) => r.severity === severity),
       );
     }
     if (types) {
@@ -434,6 +459,7 @@ export default class CodingRulesServiceMock {
     available_since,
     impactSeverities,
     impactSoftwareQualities,
+    severities,
     repositories,
     qprofile,
     sonarsourceSecurity,
@@ -501,6 +527,7 @@ export default class CodingRulesServiceMock {
         types,
         tags,
         is_template,
+        severities,
         sonarsourceSecurity,
         owaspTop10,
         'owaspTop10-2021': owasp2021Top10,
@@ -558,6 +585,12 @@ export default class CodingRulesServiceMock {
       activation.inherit = 'INHERITED';
       activation.prioritizedRule = parentActivation?.prioritizedRule ?? false;
       activation.severity = parentActivation?.severity ?? 'MAJOR';
+      activation.impacts = parentActivation?.impacts ?? [
+        {
+          softwareQuality: SoftwareQuality.Maintainability,
+          severity: SoftwareImpactSeverity.Medium,
+        },
+      ];
       activation.params = parentParams;
 
       return this.reply(undefined);
@@ -572,16 +605,55 @@ export default class CodingRulesServiceMock {
         currentActivation.params,
         Object.entries(data.params ?? {}).map(([key, value]) => ({ key, value })),
       ) &&
-      currentActivation.severity === data.severity &&
-      currentActivation.prioritizedRule === data.prioritizedRule
+      (!data.severity || currentActivation.severity === data.severity) &&
+      currentActivation.prioritizedRule === data.prioritizedRule &&
+      (!data.impacts ||
+        isEqual(
+          currentActivation.impacts,
+          Object.entries(data.impacts).map(([softwareQuality, severity]) => ({
+            softwareQuality,
+            severity,
+          })),
+        ))
     ) {
       return this.reply(undefined);
     }
 
+    const ruleImpacts = this.rules.find((r) => r.key === data.rule)?.impacts ?? [];
+    const inheritedImpacts =
+      this.rulesActivations[data.rule]?.find(({ qProfile }) => qProfile === data.key)?.impacts ??
+      [];
+    const severity = data.impacts
+      ? MQRtoStandardSeverityMap[data.impacts[SoftwareQuality.Maintainability]]
+      : data.severity;
+    const impacts = data.severity
+      ? [
+          ...ruleImpacts.filter(
+            (impact) =>
+              impact.softwareQuality !== SoftwareQuality.Maintainability &&
+              !inheritedImpacts.some((i) => i.softwareQuality === impact.softwareQuality),
+          ),
+          ...inheritedImpacts.filter(
+            (impact) => impact.softwareQuality !== SoftwareQuality.Maintainability,
+          ),
+          {
+            softwareQuality: SoftwareQuality.Maintainability,
+            severity:
+              StandardtoMQRSeverityMap[data.severity as keyof typeof StandardtoMQRSeverityMap],
+          },
+        ]
+      : Object.entries(data.impacts ?? {}).map(
+          ([softwareQuality, severity]: [SoftwareQuality, SoftwareImpactSeverity]) => ({
+            softwareQuality,
+            severity,
+          }),
+        );
+
     const nextActivations = [
       mockRuleActivation({
         qProfile: data.key,
-        severity: data.severity,
+        severity,
+        impacts,
         prioritizedRule: data.prioritizedRule,
         params: Object.entries(data.params ?? {}).map(([key, value]) => ({ key, value })),
       }),
@@ -594,7 +666,8 @@ export default class CodingRulesServiceMock {
       ...inheritingProfiles.map((profile) =>
         mockRuleActivation({
           qProfile: profile.key,
-          severity: data.severity,
+          severity,
+          impacts,
           prioritizedRule: data.prioritizedRule,
           inherit: 'INHERITED',
           params: Object.entries(data.params ?? {}).map(([key, value]) => ({ key, value })),

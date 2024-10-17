@@ -17,6 +17,7 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+
 import { css } from '@emotion/react';
 import styled from '@emotion/styled';
 import classNames from 'classnames';
@@ -124,7 +125,7 @@ const buttonIconStyle = (props: ThemedProps & { size: InteractiveIconSize }) => 
 
   &:disabled,
   &:disabled:hover {
-    color: ${themeContrast('buttonDisabled')(props)};
+    color: var(--echoes-color-icon-disabled);
     background-color: var(--background);
 
     ${tw`sw-cursor-not-allowed`}
@@ -180,7 +181,7 @@ export const InteractiveIcon = styled(InteractiveIconBase)`
  * See the {@link https://xtranet-sonarsource.atlassian.net/wiki/spaces/Platform/pages/3382706231/Button | Migration Guide} for more information.
  */
 export const DiscreetInteractiveIcon = styled(InteractiveIcon)`
-  --color: ${themeColor('discreetInteractiveIcon')};
+  --color: var(--echoes-color-icon-subdued);
 `;
 
 /**

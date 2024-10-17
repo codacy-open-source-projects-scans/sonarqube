@@ -125,7 +125,7 @@ const StyledText = styled.span`
  */
 export const StyledMutedText = styled(StyledText)`
   ${tw`sw-font-regular`};
-  color: ${themeColor('dropdownMenuSubTitle')};
+  color: var(--echoes-color-text-subdued);
 `;
 
 /** @deprecated Use Heading from Echoes instead.
@@ -148,13 +148,13 @@ const StyledTextSuccess = styled(StyledText)`
  */
 export const TextSubdued = styled.span`
   ${tw`sw-font-regular`};
-  color: ${themeColor('textSubdued')};
+  color: var(--echoes-color-text-subdued);
 `;
 
 /** @deprecated Use Text (with `isSubdued` prop) from Echoes instead.
  */
 export const LightLabel = styled.span`
-  color: ${themeColor('pageContentLight')};
+  color: var(--echoes-color-text-subdued);
 `;
 
 /** @deprecated Use Label or Text (with `isHighlighted` prop) from Echoes instead.

@@ -32,6 +32,7 @@ import {
   hasMessage,
   translate,
 } from '../../../helpers/l10n';
+import { useStandardExperienceMode } from '../../../queries/settings';
 import { MeasureEnhanced } from '../../../types/types';
 import { useBubbleChartMetrics } from '../hooks';
 import {
@@ -54,6 +55,7 @@ interface Props {
 
 export default function DomainSubnavigation(props: Readonly<Props>) {
   const { componentKey, domain, onChange, open, selected, showFullMeasures, measures } = props;
+  const { data: isStandardMode = false } = useStandardExperienceMode();
   const helperMessageKey = `component_measures.domain_subnavigation.${domain.name}.help`;
   const helper = hasMessage(helperMessageKey) ? translate(helperMessageKey) : undefined;
   const items = addMeasureCategories(domain.name, domain.measures);
@@ -112,7 +114,7 @@ export default function DomainSubnavigation(props: Readonly<Props>) {
             key={item.metric.key}
             componentKey={componentKey}
             measure={item}
-            name={getMetricSubnavigationName(item.metric, translateMetric)}
+            name={getMetricSubnavigationName(item.metric, translateMetric, false, isStandardMode)}
             onChange={onChange}
             selected={selected}
           />

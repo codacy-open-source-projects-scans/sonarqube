@@ -23,7 +23,12 @@ import { getJSON } from '~sonar-aligned/helpers/request';
 import { Exporter, ProfileChangelogEvent } from '../apps/quality-profiles/types';
 import { csvEscape } from '../helpers/csv';
 import { RequestData, post, postJSON } from '../helpers/request';
-import { CleanCodeAttributeCategory, SoftwareImpact } from '../types/clean-code-taxonomy';
+import {
+  CleanCodeAttributeCategory,
+  SoftwareImpact,
+  SoftwareImpactSeverity,
+  SoftwareQuality,
+} from '../types/clean-code-taxonomy';
 import { Dict, Paging, ProfileInheritanceDetails, UserSelected } from '../types/types';
 
 export interface ProfileActions {
@@ -81,7 +86,10 @@ export function getQualityProfile({
 }: {
   compareToSonarWay?: boolean;
   profile: Profile;
-}): Promise<any> {
+}): Promise<{
+  compareToSonarWay?: { missingRuleCount: number; profile: string; profileName: string };
+  profile: Profile;
+}> {
   return getJSON('/api/qualityprofiles/show', { compareToSonarWay, key });
 }
 
@@ -191,23 +199,18 @@ export function getProfileChangelog(
 
 export interface RuleCompare {
   cleanCodeAttributeCategory?: CleanCodeAttributeCategory;
-  impacts: SoftwareImpact[];
+  impacts?: SoftwareImpact[];
   key: string;
-  left?: { params: Dict<string>; severity: string };
+  left?: { impacts?: SoftwareImpact[]; params?: Dict<string>; severity?: string };
   name: string;
-  right?: { params: Dict<string>; severity: string };
+  right?: { impacts?: SoftwareImpact[]; params?: Dict<string>; severity?: string };
 }
 
 export interface CompareResponse {
   inLeft: Array<RuleCompare>;
   inRight: Array<RuleCompare>;
   left: { name: string };
-  modified: Array<
-    RuleCompare & {
-      left: { params: Dict<string>; severity: string };
-      right: { params: Dict<string>; severity: string };
-    }
-  >;
+  modified: Array<RuleCompare & Required<Pick<RuleCompare, 'left' | 'right'>>>;
   right: { name: string };
 }
 
@@ -318,8 +321,9 @@ export function bulkDeactivateRules(data: BulkActivateParameters) {
 }
 
 export interface ActivateRuleParameters {
+  impacts?: Record<SoftwareQuality, SoftwareImpactSeverity>;
   key: string;
-  params?: Dict<string>;
+  params?: Record<string, string>;
   prioritizedRule?: boolean;
   reset?: boolean;
   rule: string;
@@ -329,7 +333,12 @@ export interface ActivateRuleParameters {
 export function activateRule(data: ActivateRuleParameters) {
   const params =
     data.params && map(data.params, (value, key) => `${key}=${csvEscape(value)}`).join(';');
-  return post('/api/qualityprofiles/activate_rule', { ...data, params }).catch(throwGlobalError);
+  const impacts = data.impacts && map(data.impacts, (value, key) => `${key}=${value}`).join(';');
+  return post('/api/qualityprofiles/activate_rule', {
+    ...data,
+    params,
+    impacts,
+  }).catch(throwGlobalError);
 }
 
 export interface DeactivateRuleParameters {

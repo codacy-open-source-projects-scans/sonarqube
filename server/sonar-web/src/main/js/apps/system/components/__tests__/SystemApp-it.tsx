@@ -39,10 +39,7 @@ describe('System Info Standalone', () => {
     renderSystemApp();
     await ui.appIsLoaded();
 
-    expect(ui.copyIdInformation.get()).toHaveAttribute(
-      'data-clipboard-text',
-      expect.stringContaining(`Server ID: asd564-asd54a-5dsfg45`),
-    );
+    expect(byText('asd564-asd54a-5dsfg45').get()).toBeInTheDocument();
 
     expect(ui.sectionButton('System').get()).toBeInTheDocument();
     expect(screen.queryByRole('cell', { name: 'High Availability' })).not.toBeInTheDocument();
@@ -103,10 +100,7 @@ describe('System Info Cluster', () => {
     expect(ui.downloadLogsButton.query()).not.toBeInTheDocument();
     expect(ui.downloadSystemInfoButton.get()).toBeInTheDocument();
 
-    expect(ui.copyIdInformation.get()).toHaveAttribute(
-      'data-clipboard-text',
-      expect.stringContaining(`Server ID: asd564-asd54a-5dsfg45`),
-    );
+    expect(byText('asd564-asd54a-5dsfg45').get()).toBeInTheDocument();
 
     // Renders health checks
     expect(ui.healthCauseWarning.get()).toBeInTheDocument();
@@ -151,7 +145,7 @@ function getPageObjects() {
     versionLabel: (version?: string) =>
       version ? byText(/footer\.version\s*(\d.\d)/) : byText(/footer\.version/),
     ltaDocumentationLinkActive: byRole('link', {
-      name: `footer.version.status.active open_in_new_tab`,
+      name: `footer.version.status.active`,
     }),
   };
 

@@ -60,7 +60,7 @@ import static java.util.Collections.emptySet;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
 import static java.util.stream.Collectors.toSet;
-import static org.apache.commons.lang3.RandomStringUtils.randomAlphabetic;
+import static org.apache.commons.lang3.RandomStringUtils.secure;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.entry;
@@ -127,7 +127,7 @@ class ComponentDaoIT {
       .setKey("org.struts:struts")
       .setName("Struts")
       .setLongName("Apache Struts")).getMainBranchComponent();
-    ComponentDto anotherProject = db.components().insertPrivateProject().getMainBranchComponent();
+    db.components().insertPrivateProject().getMainBranchComponent();
 
     ComponentDto result = underTest.selectByUuid(dbSession, project.uuid()).get();
     assertThat(result).isNotNull();
@@ -174,7 +174,6 @@ class ComponentDaoIT {
 
   @Test
   void selectByUuid_on_disabled_component() {
-    ComponentDto enabledProject = db.components().insertPublicProject(p -> p.setEnabled(true)).getMainBranchComponent();
     ComponentDto disabledProject = db.components().insertPublicProject(p -> p.setEnabled(false)).getMainBranchComponent();
 
     ComponentDto result = underTest.selectByUuid(dbSession, disabledProject.uuid()).get();
@@ -605,7 +604,7 @@ class ComponentDaoIT {
   @MethodSource("oneOrMoreProjects")
   void selectViewKeysWithEnabledCopyOfProject_returns_empty_when_there_is_no_view(int projectCount) {
     Set<String> projectUuids = IntStream.range(0, projectCount)
-      .mapToObj(i -> randomAlphabetic(5))
+      .mapToObj(i -> secure().nextAlphabetic(5))
       .collect(toSet());
 
     assertThat(underTest.selectViewKeysWithEnabledCopyOfProject(dbSession, projectUuids)).isEmpty();
@@ -1402,11 +1401,11 @@ class ComponentDaoIT {
     db.components().insertPublicProject(p -> p.setKey("-key")).getMainBranchComponent();
 
     ComponentQuery privateProjectsQuery = ComponentQuery.builder().setPrivate(true).setQualifiers(PROJECT).build();
-    ComponentQuery ProjectsQuery = ComponentQuery.builder().setPrivate(false).setQualifiers(PROJECT).build();
+    ComponentQuery projectsQuery = ComponentQuery.builder().setPrivate(false).setQualifiers(PROJECT).build();
     ComponentQuery allProjectsQuery = ComponentQuery.builder().setPrivate(null).setQualifiers(PROJECT).build();
 
     assertThat(underTest.selectByQuery(dbSession, privateProjectsQuery, forPage(1).andSize(10))).extracting(ComponentDto::getKey).containsExactly("private-key");
-    assertThat(underTest.selectByQuery(dbSession, ProjectsQuery, forPage(1).andSize(10))).extracting(ComponentDto::getKey).containsExactly("-key");
+    assertThat(underTest.selectByQuery(dbSession, projectsQuery, forPage(1).andSize(10))).extracting(ComponentDto::getKey).containsExactly("-key");
     assertThat(underTest.selectByQuery(dbSession, allProjectsQuery, forPage(1).andSize(10))).extracting(ComponentDto::getKey).containsOnly("-key", "private-key");
   }
 
@@ -1789,7 +1788,7 @@ class ComponentDaoIT {
 
   @Test
   void selectByKeyCaseInsensitive_shouldFindProject_whenCaseIsDifferent() {
-    String projectKey = randomAlphabetic(5).toLowerCase();
+    String projectKey = secure().nextAlphabetic(5).toLowerCase();
     db.components().insertPrivateProject(c -> c.setKey(projectKey)).getMainBranchComponent();
 
     List<ComponentDto> result = underTest.selectByKeyCaseInsensitive(db.getSession(), projectKey.toUpperCase());
@@ -1800,7 +1799,7 @@ class ComponentDaoIT {
 
   @Test
   void selectByKeyCaseInsensitive_should_not_match_non_main_branch() {
-    String projectKey = randomAlphabetic(5).toLowerCase();
+    String projectKey = secure().nextAlphabetic(5).toLowerCase();
     ProjectDto project = db.components().insertPrivateProject(c -> c.setKey(projectKey)).getProjectDto();
     BranchDto projectBranch = db.components().insertProjectBranch(project);
     ComponentDto file = db.components().insertFile(projectBranch);
@@ -1812,10 +1811,10 @@ class ComponentDaoIT {
 
   @Test
   void selectByKeyCaseInsensitive_shouldNotFindProject_whenKeyIsDifferent() {
-    String projectKey = randomAlphabetic(5).toLowerCase();
+    String projectKey = secure().nextAlphabetic(5).toLowerCase();
     db.components().insertPrivateProject(c -> c.setKey(projectKey)).getMainBranchComponent();
 
-    List<ComponentDto> result = underTest.selectByKeyCaseInsensitive(db.getSession(), projectKey + randomAlphabetic(1));
+    List<ComponentDto> result = underTest.selectByKeyCaseInsensitive(db.getSession(), projectKey + secure().nextAlphabetic(1));
 
     assertThat(result).isEmpty();
   }
@@ -1826,7 +1825,7 @@ class ComponentDaoIT {
 
   private static Set<String> shuffleWithNonExistentUuids(String... uuids) {
     return Stream.concat(
-        IntStream.range(0, 1 + new Random().nextInt(5)).mapToObj(i -> randomAlphabetic(9)),
+        IntStream.range(0, 1 + new Random().nextInt(5)).mapToObj(i -> secure().nextAlphabetic(9)),
         Arrays.stream(uuids))
       .collect(toSet());
   }

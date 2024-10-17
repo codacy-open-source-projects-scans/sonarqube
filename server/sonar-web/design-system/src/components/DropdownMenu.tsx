@@ -17,6 +17,7 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+
 import { css } from '@emotion/react';
 import styled from '@emotion/styled';
 import classNames from 'classnames';
@@ -28,7 +29,7 @@ import { InputSizeKeys, ThemedProps } from '../types/theme';
 import { BaseLink, LinkProps } from './Link';
 import NavLink from './NavLink';
 import { Tooltip } from './Tooltip';
-import { ClipboardBase } from './clipboard';
+import { useCopyClipboardEffect } from './clipboard';
 import { Checkbox } from './input/Checkbox';
 
 interface Props extends React.HtmlHTMLAttributes<HTMLMenuElement> {
@@ -222,23 +223,17 @@ interface ItemCopyProps {
 
 export function ItemCopy(props: ItemCopyProps) {
   const { children, className, copyValue, tooltipOverlay } = props;
+
+  const [copySuccess, handleCopy] = useCopyClipboardEffect(copyValue);
+
   return (
-    <ClipboardBase>
-      {({ setCopyButton, copySuccess }) => (
-        <Tooltip content={tooltipOverlay} visible={copySuccess}>
-          <li role="none">
-            <ItemButtonStyled
-              className={className}
-              data-clipboard-text={copyValue}
-              ref={setCopyButton}
-              role="menuitem"
-            >
-              {children}
-            </ItemButtonStyled>
-          </li>
-        </Tooltip>
-      )}
-    </ClipboardBase>
+    <Tooltip content={tooltipOverlay} visible={copySuccess}>
+      <li role="none">
+        <ItemButtonStyled className={className} onClick={handleCopy} role="menuitem">
+          {children}
+        </ItemButtonStyled>
+      </li>
+    </Tooltip>
   );
 }
 
@@ -275,7 +270,7 @@ export const ItemHeaderHighlight = styled.span`
  */
 export const ItemHeader = styled(UnstyledItemHeader)`
   background-color: ${themeColor('dropdownMenuHeader')};
-  color: ${themeContrast('dropdownMenuHeader')};
+  color: var(--echoes-color-text-subdued);
 
   ${tw`sw-py-2 sw-px-3`}
 `;
@@ -381,7 +376,7 @@ const itemStyle = (props: ThemedProps) => css`
 
   &:disabled,
   &.disabled {
-    color: ${themeContrast('dropdownMenuDisabled')(props)};
+    color: var(--echoes-color-text-disabled);
     background-color: ${themeColor('dropdownMenuDisabled')(props)};
     pointer-events: none !important;
 
