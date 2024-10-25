@@ -17,9 +17,9 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+
 import { within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import React from 'react';
 import { Route } from 'react-router-dom';
 import { byRole, byText } from '~sonar-aligned/helpers/testSelector';
 import SettingsServiceMock from '../../../../api/mocks/SettingsServiceMock';
@@ -154,6 +154,14 @@ describe('Global Settings', () => {
     await user.click(ui.searchItem(searchResultsKeys[1]).get());
 
     expect(await ui.generalComputeEngineHeading.find()).toBeInTheDocument();
+  });
+
+  it('can open mode and see custom implementation', async () => {
+    const user = userEvent.setup();
+    renderSettingsApp();
+
+    await user.click(await ui.categoryLink('settings.mode.title').find());
+    expect(byRole('radio', { name: /settings.mode.standard/ }).get()).toBeInTheDocument();
   });
 });
 

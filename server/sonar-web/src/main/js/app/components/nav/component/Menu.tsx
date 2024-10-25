@@ -19,8 +19,7 @@
  */
 
 import { DropdownMenu } from '@sonarsource/echoes-react';
-import { DisabledTabLink, NavBarTabLink, NavBarTabs } from 'design-system';
-import * as React from 'react';
+import { DisabledTabLink, NavBarTabLink, NavBarTabs } from '~design-system';
 import { useLocation } from '~sonar-aligned/components/hoc/withRouter';
 import { getBranchLikeQuery, isPullRequest } from '~sonar-aligned/helpers/branch-like';
 import { isPortfolioLike } from '~sonar-aligned/helpers/component';
@@ -205,6 +204,17 @@ export function Menu(props: Readonly<Props>) {
       renderMenuLink({
         label: translate('layout.security_hotspots'),
         pathname: '/security_hotspots',
+      })
+    );
+  };
+
+  const renderDependenciesLink = () => {
+    const isPortfolio = isPortfolioLike(qualifier);
+    return (
+      !isPortfolio &&
+      renderMenuLink({
+        label: translate('layout.dependencies'),
+        pathname: '/dependencies',
       })
     );
   };
@@ -551,6 +561,7 @@ export function Menu(props: Readonly<Props>) {
         {renderBreakdownLink()}
         {renderIssuesLink()}
         {renderSecurityHotspotsLink()}
+        {renderDependenciesLink()}
         {renderSecurityReports()}
         {renderComponentMeasuresLink()}
         {renderCodeLink()}

@@ -22,8 +22,6 @@ import { ThemeProvider } from '@emotion/react';
 import styled from '@emotion/styled';
 import { EchoesProvider } from '@sonarsource/echoes-react';
 import { QueryClientProvider } from '@tanstack/react-query';
-import { ToastMessageContainer, lightTheme } from 'design-system';
-import * as React from 'react';
 import { createRoot } from 'react-dom/client';
 import { Helmet, HelmetProvider } from 'react-helmet-async';
 import { IntlShape, RawIntlProvider } from 'react-intl';
@@ -33,13 +31,15 @@ import {
   createBrowserRouter,
   createRoutesFromElements,
 } from 'react-router-dom';
+import { ToastMessageContainer, lightTheme } from '~design-system';
+import { lazyLoadComponent } from '~sonar-aligned/helpers/lazyLoadComponent';
 import accountRoutes from '../../apps/account/routes';
 import auditLogsRoutes from '../../apps/audit-logs/routes';
 import backgroundTasksRoutes from '../../apps/background-tasks/routes';
-import ChangeAdminPasswordApp from '../../apps/change-admin-password/ChangeAdminPasswordApp';
 import codeRoutes from '../../apps/code/routes';
 import codingRulesRoutes from '../../apps/coding-rules/routes';
 import componentMeasuresRoutes from '../../apps/component-measures/routes';
+import { dependenciesRoutes } from '../../apps/dependencies/routes';
 import groupsRoutes from '../../apps/groups/routes';
 import { globalIssuesRoutes, projectIssuesRoutes } from '../../apps/issues/routes';
 import maintenanceRoutes from '../../apps/maintenance/routes';
@@ -49,11 +49,11 @@ import permissionTemplatesRoutes from '../../apps/permission-templates/routes';
 import { globalPermissionsRoutes, projectPermissionsRoutes } from '../../apps/permissions/routes';
 import projectActivityRoutes from '../../apps/projectActivity/routes';
 import projectBranchesRoutes from '../../apps/projectBranches/routes';
-import ProjectDeletionApp from '../../apps/projectDeletion/App';
+import projectDeletionRoutes from '../../apps/projectDeletion/routes';
 import projectDumpRoutes from '../../apps/projectDump/routes';
 import projectInfoRoutes from '../../apps/projectInformation/routes';
-import ProjectKeyApp from '../../apps/projectKey/ProjectKeyApp';
-import ProjectLinksApp from '../../apps/projectLinks/ProjectLinksApp';
+import projectKeyRoutes from '../../apps/projectKey/routes';
+import projectLinksRoutes from '../../apps/projectLinks/routes';
 import projectNewCodeDefinitionRoutes from '../../apps/projectNewCode/routes';
 import projectQualityGateRoutes from '../../apps/projectQualityGate/routes';
 import projectQualityProfilesRoutes from '../../apps/projectQualityProfiles/routes';
@@ -61,7 +61,7 @@ import projectsRoutes from '../../apps/projects/routes';
 import projectsManagementRoutes from '../../apps/projectsManagement/routes';
 import qualityGatesRoutes from '../../apps/quality-gates/routes';
 import qualityProfilesRoutes from '../../apps/quality-profiles/routes';
-import SecurityHotspotsApp from '../../apps/security-hotspots/SecurityHotspotsApp';
+import securityHotspotsRoutes from '../../apps/security-hotspots/routes';
 import sessionsRoutes from '../../apps/sessions/routes';
 import settingsRoutes from '../../apps/settings/routes';
 import systemRoutes from '../../apps/system/routes';
@@ -80,17 +80,13 @@ import AdminContainer from '../components/AdminContainer';
 import App from '../components/App';
 import ComponentContainer from '../components/ComponentContainer';
 import DocumentationRedirect from '../components/DocumentationRedirect';
-import FormattingHelp from '../components/FormattingHelp';
 import GlobalContainer from '../components/GlobalContainer';
 import Landing from '../components/Landing';
 import MigrationContainer from '../components/MigrationContainer';
 import NonAdminPagesContainer from '../components/NonAdminPagesContainer';
 import NotFound from '../components/NotFound';
-import PluginRiskConsent from '../components/PluginRiskConsent';
 import ProjectAdminContainer from '../components/ProjectAdminContainer';
-import ResetPassword from '../components/ResetPassword';
 import SimpleContainer from '../components/SimpleContainer';
-import SonarLintConnection from '../components/SonarLintConnection';
 import { DEFAULT_APP_STATE } from '../components/app-state/AppStateContext';
 import AppStateContextProvider from '../components/app-state/AppStateContextProvider';
 import {
@@ -122,7 +118,8 @@ function renderComponentRoutes() {
           element={<ProjectPageExtension />}
         />
         {projectIssuesRoutes()}
-        <Route path="security_hotspots" element={<SecurityHotspotsApp />} />
+        {dependenciesRoutes()}
+        {securityHotspotsRoutes()}
         {projectQualityGateRoutes()}
         {projectQualityProfilesRoutes()}
         {projectInfoRoutes()}
@@ -142,9 +139,9 @@ function renderComponentRoutes() {
           {settingsRoutes()}
           {webhooksRoutes()}
 
-          <Route path="deletion" element={<ProjectDeletionApp />} />
-          <Route path="links" element={<ProjectLinksApp />} />
-          <Route path="key" element={<ProjectKeyApp />} />
+          {projectDeletionRoutes()}
+          {projectLinksRoutes()}
+          {projectKeyRoutes()}
         </Route>
         {projectPermissionsRoutes()}
       </Route>
@@ -182,6 +179,14 @@ function renderRedirects() {
     </>
   );
 }
+
+const FormattingHelp = lazyLoadComponent(() => import('../components/FormattingHelp'));
+const SonarLintConnection = lazyLoadComponent(() => import('../components/SonarLintConnection'));
+const ResetPassword = lazyLoadComponent(() => import('../components/ResetPassword'));
+const ChangeAdminPasswordApp = lazyLoadComponent(
+  () => import('../../apps/change-admin-password/ChangeAdminPasswordApp'),
+);
+const PluginRiskConsent = lazyLoadComponent(() => import('../components/PluginRiskConsent'));
 
 const router = createBrowserRouter(
   createRoutesFromElements(

@@ -17,8 +17,8 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { waitFor } from '@testing-library/react';
-import React from 'react';
+
+import { waitForElementToBeRemoved } from '@testing-library/react';
 import { Outlet, Route } from 'react-router-dom';
 import { byPlaceholderText, byRole, byTestId, byText } from '~sonar-aligned/helpers/testSelector';
 import BranchesServiceMock from '../../api/mocks/BranchesServiceMock';
@@ -50,14 +50,14 @@ export const cveHandler = new CveServiceMock();
 export const componentsHandler = new ComponentsServiceMock();
 export const sourcesHandler = new SourcesServiceMock();
 export const branchHandler = new BranchesServiceMock();
-export const fixIssueHanlder = new FixIssueServiceMock();
+export const fixIssueHandler = new FixIssueServiceMock();
 export const settingsHandler = new SettingsServiceMock();
 
 export const ui = {
   loading: byText('issues.loading_issues'),
   fixGenerated: byText('issues.code_fix.fix_is_being_generated'),
   noFixAvailable: byText('issues.code_fix.something_went_wrong'),
-  suggestedExplanation: byText(fixIssueHanlder.fixSuggestion.explanation),
+  suggestedExplanation: byText(fixIssueHandler.fixSuggestion.explanation),
   issuePageHeadering: byRole('heading', { level: 1, name: 'issues.page' }),
   issueItemAction1: byRole('link', { name: 'Issue with no location message' }),
   issueItemAction2: byRole('link', { name: 'FlowIssue' }),
@@ -183,9 +183,8 @@ export const ui = {
 };
 
 export async function waitOnDataLoaded() {
-  await waitFor(() => {
-    expect(ui.loading.query()).not.toBeInTheDocument();
-  });
+  expect(await ui.loading.find()).toBeInTheDocument();
+  await waitForElementToBeRemoved(ui.loading.query());
 }
 
 export function renderIssueApp(

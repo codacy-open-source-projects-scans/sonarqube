@@ -17,6 +17,7 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+
 import * as React from 'react';
 import { translate } from '../../../helpers/l10n';
 import { ExtendedSettingDefinition } from '../../../types/settings';
@@ -28,12 +29,14 @@ import {
   CODE_FIX_CATEGORY,
   EMAIL_NOTIFICATION_CATEGORY,
   LANGUAGES_CATEGORY,
+  MODE_CATEGORY,
   NEW_CODE_PERIOD_CATEGORY,
   PULL_REQUEST_DECORATION_BINDING_CATEGORY,
 } from '../constants';
 import { AnalysisScope } from './AnalysisScope';
 import CodeFixAdmin from './CodeFixAdmin';
 import Languages from './Languages';
+import { Mode } from './Mode';
 import NewCodeDefinition from './NewCodeDefinition';
 import AlmIntegration from './almIntegration/AlmIntegration';
 import Authentication from './authentication/Authentication';
@@ -123,6 +126,14 @@ export const ADDITIONAL_CATEGORIES: AdditionalCategory[] = [
     availableForProject: false,
     displayTab: true,
   },
+  {
+    key: MODE_CATEGORY,
+    name: translate('settings.mode.title'),
+    renderComponent: getModeComponent,
+    availableGlobally: true,
+    availableForProject: false,
+    displayTab: true,
+  },
 ];
 
 function getLanguagesComponent(props: AdditionalCategoryComponentProps) {
@@ -155,4 +166,8 @@ function getPullRequestDecorationBindingComponent(props: AdditionalCategoryCompo
 
 function getEmailNotificationComponent() {
   return <EmailNotification />;
+}
+
+function getModeComponent() {
+  return <Mode />;
 }

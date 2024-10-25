@@ -17,6 +17,7 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+
 import { axiosToCatch } from '../helpers/request';
 import { SuggestedFix } from '../types/fix-suggestions';
 
@@ -29,10 +30,25 @@ export interface AiIssue {
   id: string;
 }
 
+export type SuggestionServiceStatus =
+  | 'SUCCESS'
+  | 'TIMEOUT'
+  | 'UNAUTHORIZED'
+  | 'CONNECTION_ERROR'
+  | 'SERVICE_ERROR';
+
+export interface SuggestionServiceStatusCheckResponse {
+  status: SuggestionServiceStatus;
+}
+
 export function getSuggestions(data: FixParam): Promise<SuggestedFix> {
   return axiosToCatch.post<SuggestedFix>('/api/v2/fix-suggestions/ai-suggestions', data);
 }
 
 export function getFixSuggestionsIssues(data: FixParam): Promise<AiIssue> {
   return axiosToCatch.get(`/api/v2/fix-suggestions/issues/${data.issueId}`);
+}
+
+export function checkSuggestionServiceStatus(): Promise<SuggestionServiceStatusCheckResponse> {
+  return axiosToCatch.post(`/api/v2/fix-suggestions/service-status-checks`);
 }

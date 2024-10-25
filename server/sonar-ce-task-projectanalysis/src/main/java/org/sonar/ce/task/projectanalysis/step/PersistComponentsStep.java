@@ -27,8 +27,8 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.apache.commons.lang3.StringUtils;
-import org.sonar.api.resources.Qualifiers;
-import org.sonar.api.resources.Scopes;
+import org.sonar.db.component.ComponentQualifiers;
+import org.sonar.db.component.ComponentScopes;
 import org.sonar.api.utils.System2;
 import org.sonar.ce.task.projectanalysis.component.BranchPersister;
 import org.sonar.ce.task.projectanalysis.component.Component;
@@ -37,6 +37,8 @@ import org.sonar.ce.task.projectanalysis.component.MutableDisabledComponentsHold
 import org.sonar.ce.task.projectanalysis.component.PathAwareCrawler;
 import org.sonar.ce.task.projectanalysis.component.PathAwareVisitor;
 import org.sonar.ce.task.projectanalysis.component.PathAwareVisitorAdapter;
+import org.sonar.ce.task.projectanalysis.dependency.ProjectDependenciesHolder;
+import org.sonar.ce.task.projectanalysis.dependency.ProjectDependency;
 import org.sonar.ce.task.projectanalysis.component.ProjectPersister;
 import org.sonar.ce.task.projectanalysis.component.TreeRootHolder;
 import org.sonar.ce.task.step.ComputationStep;
@@ -46,9 +48,10 @@ import org.sonar.db.component.ComponentDto;
 import org.sonar.db.component.ComponentUpdateDto;
 
 import static java.util.Optional.ofNullable;
-import static org.sonar.api.resources.Qualifiers.PROJECT;
+import static org.sonar.db.component.ComponentQualifiers.PROJECT;
 import static org.sonar.ce.task.projectanalysis.component.ComponentVisitor.Order.PRE_ORDER;
 import static org.sonar.db.component.ComponentDto.UUID_PATH_OF_ROOT;
+import static org.sonar.db.component.ComponentDto.UUID_PATH_SEPARATOR;
 import static org.sonar.db.component.ComponentDto.formatUuidPathFromParent;
 
 /**
@@ -61,15 +64,18 @@ public class PersistComponentsStep implements ComputationStep {
   private final MutableDisabledComponentsHolder disabledComponentsHolder;
   private final BranchPersister branchPersister;
   private final ProjectPersister projectPersister;
+  private final ProjectDependenciesHolder projectDependenciesHolder;
 
   public PersistComponentsStep(DbClient dbClient, TreeRootHolder treeRootHolder, System2 system2,
-    MutableDisabledComponentsHolder disabledComponentsHolder, BranchPersister branchPersister, ProjectPersister projectPersister) {
+    MutableDisabledComponentsHolder disabledComponentsHolder, BranchPersister branchPersister, ProjectPersister projectPersister,
+    ProjectDependenciesHolder projectDependenciesHolder) {
     this.dbClient = dbClient;
     this.treeRootHolder = treeRootHolder;
     this.system2 = system2;
     this.disabledComponentsHolder = disabledComponentsHolder;
     this.branchPersister = branchPersister;
     this.projectPersister = projectPersister;
+    this.projectDependenciesHolder = projectDependenciesHolder;
   }
 
   @Override
@@ -155,7 +161,7 @@ public class PersistComponentsStep implements ComputationStep {
 
           @Override
           public ComponentDtoHolder createForProjectView(Component projectView) {
-            // no need to create holder for file since they are always leaves of the Component tree
+            // no need to create holder for project views since they are always leaves of the Component tree
             return null;
           }
         });
@@ -166,7 +172,17 @@ public class PersistComponentsStep implements ComputationStep {
     @Override
     public void visitProject(Component project, Path<ComponentDtoHolder> path) {
       ComponentDto dto = createForProject(project);
-      path.current().setDto(persistComponent(dto));
+      ComponentDto persistedProject = persistComponent(dto);
+      path.current().setDto(persistedProject);
+
+      persistDependencies(persistedProject);
+    }
+
+    private void persistDependencies(ComponentDto projectDto) {
+      for (ProjectDependency dep : projectDependenciesHolder.getDependencies()) {
+        ComponentDto dto = createForDependency(dep, projectDto);
+        persistComponent(dto, false);
+      }
     }
 
     @Override
@@ -238,7 +254,7 @@ public class PersistComponentsStep implements ComputationStep {
     public ComponentDto createForProject(Component project) {
       ComponentDto res = createBase(project);
 
-      res.setScope(Scopes.PROJECT);
+      res.setScope(ComponentScopes.PROJECT);
       res.setQualifier(PROJECT);
       res.setName(project.getName());
       res.setLongName(res.name());
@@ -253,8 +269,8 @@ public class PersistComponentsStep implements ComputationStep {
     public ComponentDto createForDirectory(Component directory, PathAwareVisitor.Path<ComponentDtoHolder> path) {
       ComponentDto res = createBase(directory);
 
-      res.setScope(Scopes.DIRECTORY);
-      res.setQualifier(Qualifiers.DIRECTORY);
+      res.setScope(ComponentScopes.DIRECTORY);
+      res.setQualifier(ComponentQualifiers.DIRECTORY);
       res.setName(directory.getShortName());
       res.setLongName(directory.getName());
       res.setPath(directory.getName());
@@ -267,7 +283,7 @@ public class PersistComponentsStep implements ComputationStep {
     public ComponentDto createForFile(Component file, PathAwareVisitor.Path<ComponentDtoHolder> path) {
       ComponentDto res = createBase(file);
 
-      res.setScope(Scopes.FILE);
+      res.setScope(ComponentScopes.FILE);
       res.setQualifier(getFileQualifier(file));
       res.setName(file.getShortName());
       res.setLongName(file.getName());
@@ -282,7 +298,7 @@ public class PersistComponentsStep implements ComputationStep {
     private ComponentDto createForView(Component view) {
       ComponentDto res = createBase(view);
 
-      res.setScope(Scopes.PROJECT);
+      res.setScope(ComponentScopes.PROJECT);
       res.setQualifier(view.getViewAttributes().getType().getQualifier());
       res.setName(view.getName());
       res.setDescription(view.getDescription());
@@ -297,8 +313,8 @@ public class PersistComponentsStep implements ComputationStep {
     private ComponentDto createForSubView(Component subView, PathAwareVisitor.Path<ComponentDtoHolder> path) {
       ComponentDto res = createBase(subView);
 
-      res.setScope(Scopes.PROJECT);
-      res.setQualifier(Qualifiers.SUBVIEW);
+      res.setScope(ComponentScopes.PROJECT);
+      res.setQualifier(ComponentQualifiers.SUBVIEW);
       res.setName(subView.getName());
       res.setDescription(subView.getDescription());
       res.setLongName(res.name());
@@ -312,7 +328,7 @@ public class PersistComponentsStep implements ComputationStep {
     private ComponentDto createForProjectView(Component projectView, PathAwareVisitor.Path<ComponentDtoHolder> path) {
       ComponentDto res = createBase(projectView);
 
-      res.setScope(Scopes.FILE);
+      res.setScope(ComponentScopes.FILE);
       res.setQualifier(PROJECT);
       res.setName(projectView.getName());
       res.setLongName(res.name());
@@ -321,6 +337,26 @@ public class PersistComponentsStep implements ComputationStep {
       setRootAndParentModule(res, path);
 
       return res;
+    }
+
+    private ComponentDto createForDependency(ProjectDependency dependency, ComponentDto projectDto) {
+      ComponentDto componentDto = new ComponentDto();
+      componentDto.setUuid(dependency.getUuid());
+      componentDto.setKey(dependency.getKey());
+      componentDto.setEnabled(true);
+      componentDto.setCreatedAt(new Date(system2.now()));
+
+      componentDto.setScope("DEP");
+      componentDto.setQualifier("DEP");
+      componentDto.setName(dependency.getName());
+      componentDto.setLongName(dependency.getFullName());
+      componentDto.setDescription(dependency.getDescription());
+
+      var projectUuid = projectDto.uuid();
+      componentDto.setBranchUuid(projectUuid);
+      componentDto.setUuidPath(UUID_PATH_OF_ROOT + projectUuid + UUID_PATH_SEPARATOR);
+
+      return componentDto;
     }
 
     private ComponentDto createBase(Component component) {
@@ -379,7 +415,7 @@ public class PersistComponentsStep implements ComputationStep {
   }
 
   private static String getFileQualifier(Component component) {
-    return component.getFileAttributes().isUnitTest() ? Qualifiers.UNIT_TEST_FILE : Qualifiers.FILE;
+    return component.getFileAttributes().isUnitTest() ? ComponentQualifiers.UNIT_TEST_FILE : ComponentQualifiers.FILE;
   }
 
   private static class ComponentDtoHolder {

@@ -17,6 +17,7 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+
 import { MetricKey, MetricType } from '~sonar-aligned/types/metrics';
 import {
   QualityGateStatusCondition,
@@ -122,6 +123,18 @@ export function areSoftwareQualityRatingsComputed(measures?: Measure[] | Measure
     MetricKey.software_quality_reliability_rating,
     MetricKey.software_quality_security_rating,
     MetricKey.software_quality_maintainability_rating,
+  ].every((metric) =>
+    measures?.find((measure) =>
+      isMeasureEnhanced(measure) ? measure.metric.key === metric : measure.metric === metric,
+    ),
+  );
+}
+
+export function areLeakSoftwareQualityRatingsComputed(measures?: Measure[] | MeasureEnhanced[]) {
+  return [
+    MetricKey.new_software_quality_reliability_rating,
+    MetricKey.new_software_quality_security_rating,
+    MetricKey.new_software_quality_maintainability_rating,
   ].every((metric) =>
     measures?.find((measure) =>
       isMeasureEnhanced(measure) ? measure.metric.key === metric : measure.metric === metric,
