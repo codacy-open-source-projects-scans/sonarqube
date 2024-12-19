@@ -29,7 +29,7 @@ import org.sonar.db.Dao;
 import org.sonar.db.DbSession;
 import org.sonar.db.Pagination;
 import org.sonar.db.audit.AuditPersister;
-import org.sonar.db.audit.model.ComponentNewValue;
+import org.sonar.db.audit.model.ProjectNewValue;
 
 import static java.util.Collections.emptyList;
 import static org.sonar.db.DatabaseUtils.executeLargeInputs;
@@ -49,7 +49,7 @@ public class ProjectDao implements Dao {
 
   public void insert(DbSession session, ProjectDto project, boolean track) {
     if (track) {
-      auditPersister.addComponent(session, new ComponentNewValue(project));
+      auditPersister.addComponent(session, new ProjectNewValue(project));
     }
     mapper(session).insert(project);
   }
@@ -119,8 +119,12 @@ public class ProjectDao implements Dao {
     mapper(session).updateVisibility(uuid, isPrivate, system2.now());
   }
 
-  public void updateAiCodeAssurance(DbSession session, String uuid, boolean aiCodeAssurance) {
-    mapper(session).updateAiCodeAssurance(uuid, aiCodeAssurance, system2.now());
+  public void updateContainsAiCode(DbSession session, String uuid, boolean containsAiCode) {
+    mapper(session).updateContainsAiCode(uuid, containsAiCode, system2.now());
+  }
+
+  public void updateAiCodeFixEnablementForAllProjects(DbSession dbSession, boolean featureEnablement) {
+    mapper(dbSession).updateAiCodeFixEnablementForAllProjects(featureEnablement, system2.now());
   }
 
   public void updateTags(DbSession session, ProjectDto project) {
@@ -128,7 +132,7 @@ public class ProjectDao implements Dao {
   }
 
   public void update(DbSession session, ProjectDto project) {
-    auditPersister.updateComponent(session, new ComponentNewValue(project));
+    auditPersister.updateComponent(session, new ProjectNewValue(project));
     mapper(session).update(project);
   }
 
@@ -154,5 +158,17 @@ public class ProjectDao implements Dao {
 
   public int countProjects(DbSession session) {
     return mapper(session).countProjects();
+  }
+
+  public int countApplications(DbSession session) {
+    return mapper(session).countApplications();
+  }
+
+  public int countAiCodeFixEnabledProjects(DbSession session) {
+    return mapper(session).countProjectsByAiCodeFixEnablement(true);
+  }
+
+  public int countAiCodeFixDisabledProjects(DbSession session) {
+    return mapper(session).countProjectsByAiCodeFixEnablement(false);
   }
 }

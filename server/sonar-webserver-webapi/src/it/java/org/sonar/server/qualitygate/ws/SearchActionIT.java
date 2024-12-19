@@ -19,8 +19,11 @@
  */
 package org.sonar.server.qualitygate.ws;
 
-import org.junit.Rule;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.RegisterExtension;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.sonar.api.server.ws.WebService;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbTester;
@@ -28,7 +31,7 @@ import org.sonar.db.component.ComponentDto;
 import org.sonar.db.project.ProjectDto;
 import org.sonar.db.qualitygate.QualityGateDto;
 import org.sonar.db.user.UserDto;
-import org.sonar.server.ai.code.assurance.AiCodeAssuranceVerifier;
+import org.sonar.server.ai.code.assurance.AiCodeAssuranceEntitlement;
 import org.sonar.server.component.TestComponentFinder;
 import org.sonar.server.exceptions.NotFoundException;
 import org.sonar.server.tester.UserSessionRule;
@@ -52,22 +55,27 @@ import static org.sonar.server.qualitygate.ws.QualityGatesWsParameters.PARAM_PAG
 import static org.sonar.server.qualitygate.ws.QualityGatesWsParameters.PARAM_PAGE_SIZE;
 import static org.sonarqube.ws.client.user.UsersWsParameters.PARAM_SELECTED;
 
-public class SearchActionIT {
+class SearchActionIT {
 
-  @Rule
-  public UserSessionRule userSession = UserSessionRule.standalone();
+  @RegisterExtension
+  UserSessionRule userSession = UserSessionRule.standalone();
 
-  @Rule
-  public DbTester db = DbTester.create();
+  @RegisterExtension
+  DbTester db = DbTester.create();
 
   private final DbClient dbClient = db.getDbClient();
-  private final AiCodeAssuranceVerifier aiCodeAssuranceVerifier = mock(AiCodeAssuranceVerifier.class);
+  private final AiCodeAssuranceEntitlement entitlement = mock(AiCodeAssuranceEntitlement.class);
   private final SearchAction underTest = new SearchAction(dbClient, userSession,
-    new QualityGatesWsSupport(dbClient, userSession, TestComponentFinder.from(db)), aiCodeAssuranceVerifier);
+    new QualityGatesWsSupport(dbClient, userSession, TestComponentFinder.from(db)), entitlement);
   private final WsActionTester ws = new WsActionTester(underTest);
 
+  @BeforeEach
+  void setUp() {
+    when(entitlement.isEnabled()).thenReturn(true);
+  }
+
   @Test
-  public void search_projects_of_a_quality_gate() {
+  void search_projects_of_a_quality_gate() {
     ComponentDto project = db.components().insertPublicProject().getMainBranchComponent();
     QualityGateDto qualityGate = db.qualityGates().insertQualityGate();
     db.qualityGates().associateProjectToQualityGate(db.components().getProjectDtoByMainBranch(project), qualityGate);
@@ -82,7 +90,7 @@ public class SearchActionIT {
   }
 
   @Test
-  public void return_empty_association() {
+  void return_empty_association() {
     QualityGateDto qualityGate = db.qualityGates().insertQualityGate();
 
     SearchResponse response = ws.newRequest()
@@ -93,7 +101,7 @@ public class SearchActionIT {
   }
 
   @Test
-  public void return_all_projects() {
+  void return_all_projects() {
     QualityGateDto qualityGate = db.qualityGates().insertQualityGate();
     ProjectDto unassociatedProject = db.components().insertPublicProject().getProjectDto();
     ProjectDto associatedProject = db.components().insertPublicProject().getProjectDto();
@@ -112,7 +120,7 @@ public class SearchActionIT {
   }
 
   @Test
-  public void return_only_associated_project() {
+  void return_only_associated_project() {
     QualityGateDto qualityGate = db.qualityGates().insertQualityGate();
     ProjectDto associatedProject = db.components().insertPublicProject().getProjectDto();
     ProjectDto unassociatedProject = db.components().insertPublicProject().getProjectDto();
@@ -130,7 +138,7 @@ public class SearchActionIT {
   }
 
   @Test
-  public void return_only_unassociated_project() {
+  void return_only_unassociated_project() {
     QualityGateDto qualityGate = db.qualityGates().insertQualityGate();
     ProjectDto associatedProject = db.components().insertPublicProject().getProjectDto();
     ProjectDto unassociatedProject = db.components().insertPublicProject().getProjectDto();
@@ -148,7 +156,7 @@ public class SearchActionIT {
   }
 
   @Test
-  public void return_only_authorized_projects() {
+  void return_only_authorized_projects() {
     QualityGateDto qualityGate = db.qualityGates().insertQualityGate();
     ComponentDto project1 = db.components().insertPrivateProject().getMainBranchComponent();
     ComponentDto project2 = db.components().insertPrivateProject().getMainBranchComponent();
@@ -169,7 +177,7 @@ public class SearchActionIT {
   }
 
   @Test
-  public void test_paging() {
+  void test_paging() {
     QualityGateDto qualityGate = db.qualityGates().insertQualityGate();
     ProjectDto project1 = db.components().insertPublicProject(dto -> dto.setName("proj_1")).getProjectDto();
     ProjectDto project2 = db.components().insertPublicProject(dto -> dto.setName("proj_2")).getProjectDto();
@@ -233,7 +241,7 @@ public class SearchActionIT {
   }
 
   @Test
-  public void test_pagination_on_many_pages() {
+  void test_pagination_on_many_pages() {
     QualityGateDto qualityGate = db.qualityGates().insertQualityGate();
     for (int i = 0; i < 20; i++) {
       ProjectDto project = db.components().insertPublicProject().getProjectDto();
@@ -256,7 +264,7 @@ public class SearchActionIT {
   }
 
   @Test
-  public void test_pagination_on_one_page() {
+  void test_pagination_on_one_page() {
     QualityGateDto qualityGate = db.qualityGates().insertQualityGate();
     for (int i = 0; i < 20; i++) {
       ProjectDto project = db.components().insertPublicProject().getProjectDto();
@@ -279,7 +287,7 @@ public class SearchActionIT {
   }
 
   @Test
-  public void fail_on_unknown_quality_gate() {
+  void fail_on_unknown_quality_gate() {
     assertThatThrownBy(() -> ws.newRequest()
       .setParam(PARAM_GATE_NAME, "unknown")
       .executeProtobuf(SearchResponse.class))
@@ -287,17 +295,13 @@ public class SearchActionIT {
       .hasMessageContaining("No quality gate has been found for name unknown");
   }
 
-
-  @Test
-  public void return_disabled_property_in_projects() {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void return_ai_code_assurance(boolean containsAiCode) {
     QualityGateDto qualityGate = db.qualityGates().insertQualityGate();
-    ProjectDto project1 = db.components().insertPublicProject(componentDto -> componentDto.setName("proj1"),
-      projectDto -> projectDto.setAiCodeAssurance(true)).getProjectDto();
-    ProjectDto project2 = db.components().insertPublicProject(componentDto -> componentDto.setName("proj2"),
-      projectDto -> projectDto.setAiCodeAssurance(false)).getProjectDto();
-
-    when(aiCodeAssuranceVerifier.isAiCodeAssured(project1.getAiCodeAssurance())).thenReturn(true);
-    when(aiCodeAssuranceVerifier.isAiCodeAssured(project2.getAiCodeAssurance())).thenReturn(false);
+    ProjectDto project = db.components().insertPublicProject(componentDto -> componentDto.setName("proj1"),
+      projectDto -> projectDto.setContainsAiCode(containsAiCode)).getProjectDto();
+    db.qualityGates().associateProjectToQualityGate(project, qualityGate);
 
     SearchResponse response = ws.newRequest()
       .setParam(PARAM_GATE_NAME, valueOf(qualityGate.getName()))
@@ -305,14 +309,33 @@ public class SearchActionIT {
       .executeProtobuf(SearchResponse.class);
 
     assertThat(response.getResultsList())
-      .extracting(Result::getName, Result::getKey, Result::getIsAiCodeAssured)
+      .extracting(Result::getName, Result::getKey, Result::getContainsAiCode)
       .containsExactlyInAnyOrder(
-        tuple(project1.getName(), project1.getKey(), true),
-        tuple(project2.getName(), project2.getKey(), false));
+        tuple(project.getName(), project.getKey(), containsAiCode));
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void contains_ai_code_is_false_for_community_edition(boolean containsAiCode) {
+    when(entitlement.isEnabled()).thenReturn(false);
+    QualityGateDto qualityGate = db.qualityGates().insertQualityGate();
+    ProjectDto project = db.components().insertPublicProject(componentDto -> componentDto.setName("proj1"),
+      projectDto -> projectDto.setContainsAiCode(containsAiCode)).getProjectDto();
+    db.qualityGates().associateProjectToQualityGate(project, qualityGate);
+
+    SearchResponse response = ws.newRequest()
+      .setParam(PARAM_GATE_NAME, valueOf(qualityGate.getName()))
+      .setParam(PARAM_SELECTED, ALL.value())
+      .executeProtobuf(SearchResponse.class);
+
+    assertThat(response.getResultsList())
+      .extracting(Result::getName, Result::getKey, Result::getContainsAiCode)
+      .containsExactlyInAnyOrder(
+        tuple(project.getName(), project.getKey(), false));
   }
 
   @Test
-  public void definition() {
+  void definition() {
     WebService.Action action = ws.getDef();
 
     assertThat(action).isNotNull();

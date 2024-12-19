@@ -33,13 +33,11 @@ import org.sonar.api.batch.fs.internal.DefaultInputComponent;
 import org.sonar.api.batch.fs.internal.DefaultInputFile;
 import org.sonar.api.batch.rule.ActiveRule;
 import org.sonar.api.batch.rule.ActiveRules;
-import org.sonar.api.batch.rule.internal.DefaultActiveRule;
 import org.sonar.api.batch.sensor.issue.ExternalIssue;
 import org.sonar.api.batch.sensor.issue.Issue;
 import org.sonar.api.batch.sensor.issue.Issue.Flow;
 import org.sonar.api.batch.sensor.issue.MessageFormatting;
 import org.sonar.api.batch.sensor.issue.NewIssue.FlowType;
-import org.sonar.api.batch.sensor.issue.internal.DefaultExternalIssue;
 import org.sonar.api.batch.sensor.issue.internal.DefaultIssueFlow;
 import org.sonar.api.issue.impact.SoftwareQuality;
 import org.sonar.api.rules.CleanCodeAttribute;
@@ -79,9 +77,9 @@ public class IssuePublisher {
       return false;
     }
 
-    ScannerReport.Issue rawIssue = createReportIssue(issue, inputComponent.scannerId(), activeRule.severity(), ((DefaultActiveRule) activeRule).impacts());
+    ScannerReport.Issue rawIssue = createReportIssue(issue, inputComponent.scannerId());
 
-    if (filters.accept(inputComponent, rawIssue)) {
+    if (filters.accept(inputComponent, rawIssue, activeRule.severity())) {
       write(inputComponent.scannerId(), rawIssue);
       return true;
     }
@@ -109,29 +107,28 @@ public class IssuePublisher {
     return str;
   }
 
-  private static ScannerReport.Issue createReportIssue(Issue issue, int componentRef, String activeRuleSeverity,
-    Map<SoftwareQuality, org.sonar.api.issue.impact.Severity> activeRuleImpacts) {
+  private static ScannerReport.Issue createReportIssue(Issue issue, int componentRef) {
     String primaryMessage = nullToEmpty(issue.primaryLocation().message());
-    org.sonar.api.batch.rule.Severity overriddenSeverity = issue.overriddenSeverity();
-    Severity severity = overriddenSeverity != null ? Severity.valueOf(overriddenSeverity.name()) : Severity.valueOf(activeRuleSeverity);
 
     ScannerReport.Issue.Builder builder = ScannerReport.Issue.newBuilder();
     ScannerReport.IssueLocation.Builder locationBuilder = IssueLocation.newBuilder();
     ScannerReport.TextRange.Builder textRangeBuilder = ScannerReport.TextRange.newBuilder();
     // non-null fields
-    builder.setSeverity(severity);
     builder.setRuleRepository(issue.ruleKey().repository());
     builder.setRuleKey(issue.ruleKey().rule());
     builder.setMsg(primaryMessage);
     builder.addAllMsgFormatting(toProtobufMessageFormattings(issue.primaryLocation().messageFormattings()));
     Map<SoftwareQuality, org.sonar.api.issue.impact.Severity> overriddenImpacts = new EnumMap<>(issue.overridenImpacts());
-    activeRuleImpacts.entrySet().forEach(e -> overriddenImpacts.putIfAbsent(e.getKey(), e.getValue()));
-    builder.addAllOverridenImpacts(toProtobufImpacts(overriddenImpacts));
+    builder.addAllOverriddenImpacts(toProtobufImpacts(overriddenImpacts));
 
     locationBuilder.setMsg(primaryMessage);
     locationBuilder.addAllMsgFormatting(toProtobufMessageFormattings(issue.primaryLocation().messageFormattings()));
 
     locationBuilder.setComponentRef(componentRef);
+    org.sonar.api.batch.rule.Severity overriddenSeverity = issue.overriddenSeverity();
+    if (overriddenSeverity != null) {
+      builder.setOverriddenSeverity(Severity.valueOf(overriddenSeverity.name()));
+    }
     TextRange primaryTextRange = issue.primaryLocation().textRange();
     if (primaryTextRange != null) {
       builder.setTextRange(toProtobufTextRange(textRangeBuilder, primaryTextRange));
@@ -152,7 +149,9 @@ public class IssuePublisher {
 
   private static List<ScannerReport.Impact> toProtobufImpacts(Map<SoftwareQuality, org.sonar.api.issue.impact.Severity> softwareQualitySeverityMap) {
     List<ScannerReport.Impact> impacts = new ArrayList<>();
-    softwareQualitySeverityMap.forEach((q, s) -> impacts.add(ScannerReport.Impact.newBuilder().setSoftwareQuality(q.name()).setSeverity(s.name()).build()));
+    softwareQualitySeverityMap.forEach((q, s) -> impacts.add(ScannerReport.Impact.newBuilder()
+      .setSoftwareQuality(ScannerReport.SoftwareQuality.valueOf(q.name()))
+      .setSeverity(ImpactMapper.mapImpactSeverity(s)).build()));
     return impacts;
   }
 
@@ -184,10 +183,6 @@ public class IssuePublisher {
     TextRange primaryTextRange = issue.primaryLocation().textRange();
 
     // nullable fields
-    var cveId = ((DefaultExternalIssue) issue).cveId();
-    if (cveId != null) {
-      builder.setCveId(cveId);
-    }
     CleanCodeAttribute cleanCodeAttribute = issue.cleanCodeAttribute();
     if (cleanCodeAttribute != null) {
       builder.setCleanCodeAttribute(cleanCodeAttribute.name());

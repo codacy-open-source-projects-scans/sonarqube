@@ -34,7 +34,7 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import javax.annotation.Nullable;
-import javax.inject.Inject;
+import jakarta.inject.Inject;
 import org.sonar.api.config.Configuration;
 import org.sonar.api.platform.Server;
 import org.sonar.api.server.ServerSide;
@@ -334,7 +334,7 @@ public class TelemetryDataLoaderImpl implements TelemetryDataLoader {
         .setExternalSecurityReportExportedAt(securityReportExportedAtByProjectUuid.get(projectUuid))
         .setCreationMethod(project.getCreationMethod())
         .setMonorepo(resolveMonorepo(almAndUrlAndMonorepoByProject, projectUuid))
-        .setIsAiCodeAssured(aiCodeAssuranceVerifier.isAiCodeAssured(project.getAiCodeAssurance()))
+        .setIsAiCodeAssured(aiCodeAssuranceVerifier.isAiCodeAssured(project))
         .build();
       projectStatistics.add(stats);
     }

@@ -51,6 +51,7 @@ import static org.sonar.core.util.Uuids.UUID_EXAMPLE_01;
 import static org.sonar.core.util.Uuids.UUID_EXAMPLE_02;
 import static org.sonar.db.permission.GlobalPermission.ADMINISTER_QUALITY_PROFILES;
 import static org.sonar.server.rule.ws.RulesWsParameters.PARAM_ACTIVATION;
+import static org.sonar.server.rule.ws.RulesWsParameters.PARAM_ACTIVE_IMPACT_SEVERITIES;
 import static org.sonar.server.rule.ws.RulesWsParameters.PARAM_ACTIVE_SEVERITIES;
 import static org.sonar.server.rule.ws.RulesWsParameters.PARAM_AVAILABLE_SINCE;
 import static org.sonar.server.rule.ws.RulesWsParameters.PARAM_CLEAN_CODE_ATTRIBUTE_CATEGORIES;
@@ -119,7 +120,6 @@ public class RuleWsSupport {
       .createParam(PARAM_SEVERITIES)
       .setDescription("Comma-separated list of default severities. Not the same than severity of rules in Quality profiles.")
       .setPossibleValues(Severity.ALL)
-      .setDeprecatedSince("10.2")
       .setExampleValue("CRITICAL,BLOCKER");
 
     action
@@ -146,7 +146,7 @@ public class RuleWsSupport {
     action
       .createParam(PARAM_SONARSOURCE_SECURITY)
       .setDescription("Comma-separated list of SonarSource security categories. Use '" + SQCategory.OTHERS.getKey() + "' to select rules not associated" +
-                      " with any category")
+        " with any category")
       .setSince("7.8")
       .setPossibleValues(Arrays.stream(SQCategory.values()).map(SQCategory::getKey).toList())
       .setExampleValue("sql-injection,command-injection,others");
@@ -177,7 +177,6 @@ public class RuleWsSupport {
       .setSince("5.5")
       .setDescription("Comma-separated list of types. Returned rules match any of the tags (OR operator)")
       .setPossibleValues(RuleType.values())
-      .setDeprecatedSince("10.2")
       .setExampleValue(RuleType.BUG);
 
     action.createParam(PARAM_IMPACT_SOFTWARE_QUALITIES)
@@ -192,6 +191,12 @@ public class RuleWsSupport {
       .setExampleValue(org.sonar.api.issue.impact.Severity.HIGH + "," + org.sonar.api.issue.impact.Severity.MEDIUM)
       .setPossibleValues(org.sonar.api.issue.impact.Severity.values());
 
+    action.createParam(PARAM_ACTIVE_IMPACT_SEVERITIES)
+      .setSince("2025.1")
+      .setDescription("Comma-separated list of Activation Software Quality Severities, i.e the impact severity of rules in Quality profiles.")
+      .setExampleValue(org.sonar.api.issue.impact.Severity.HIGH + "," + org.sonar.api.issue.impact.Severity.MEDIUM)
+      .setPossibleValues(org.sonar.api.issue.impact.Severity.values());
+
     action.createParam(PARAM_CLEAN_CODE_ATTRIBUTE_CATEGORIES)
       .setSince("10.2")
       .setDescription("Comma-separated list of Clean Code Attribute Categories")
@@ -201,13 +206,14 @@ public class RuleWsSupport {
     action
       .createParam(PARAM_ACTIVATION)
       .setDescription("Filter rules that are activated or deactivated on the selected Quality profile. Ignored if " +
-                      "the parameter '" + PARAM_QPROFILE + "' is not set.")
+        "the parameter '" + PARAM_QPROFILE + "' is not set.")
       .setBooleanPossibleValues();
 
     action
       .createParam(PARAM_QPROFILE)
-      .setDescription("Quality profile key to filter on. Used only if the parameter '" +
-                      PARAM_ACTIVATION + "' is set.")
+      .setDescription("Quality profile key to filter on. Only rules of the same language as this profile are returned." +
+        " By default only rules activated in this profile are returned. You can change that using the '" +
+        PARAM_ACTIVATION + "' parameter.")
       .setExampleValue(UUID_EXAMPLE_01);
 
     action.createParam(PARAM_COMPARE_TO_PROFILE)
@@ -219,18 +225,17 @@ public class RuleWsSupport {
     action
       .createParam(PARAM_INHERITANCE)
       .setDescription("Comma-separated list of values of inheritance for a rule within a quality profile. Used only if the parameter '" +
-                      PARAM_ACTIVATION + "' is set.")
+        PARAM_ACTIVATION + "' is set.")
       .setPossibleValues(ActiveRuleInheritance.NONE.name(),
         ActiveRuleInheritance.INHERITED.name(),
         ActiveRuleInheritance.OVERRIDES.name())
       .setExampleValue(ActiveRuleInheritance.INHERITED.name() + "," +
-                       ActiveRuleInheritance.OVERRIDES.name());
+        ActiveRuleInheritance.OVERRIDES.name());
 
     action
       .createParam(PARAM_ACTIVE_SEVERITIES)
       .setDescription("Comma-separated list of activation severities, i.e the severity of rules in Quality profiles.")
       .setPossibleValues(Severity.ALL)
-      .setDeprecatedSince("10.2")
       .setExampleValue("CRITICAL,BLOCKER");
 
     action

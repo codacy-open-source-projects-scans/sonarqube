@@ -19,6 +19,9 @@
  */
 package org.sonar.server.common.user.service;
 
+import com.tngtech.java.junit.dataprovider.DataProvider;
+import com.tngtech.java.junit.dataprovider.DataProviderRunner;
+import com.tngtech.java.junit.dataprovider.UseDataProvider;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Collection;
@@ -30,6 +33,7 @@ import java.util.stream.IntStream;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
+import org.junit.runner.RunWith;
 import org.sonar.api.config.internal.MapSettings;
 import org.sonar.api.server.authentication.IdentityProvider;
 import org.sonar.api.utils.DateUtils;
@@ -87,6 +91,7 @@ import static org.mockito.Mockito.when;
 import static org.sonar.db.property.PropertyTesting.newUserPropertyDto;
 import static org.sonar.db.user.UserTesting.newUserDto;
 
+@RunWith(DataProviderRunner.class)
 public class UserServiceIT {
 
   private static final UsersSearchRequest SEARCH_REQUEST = getBuilderWithDefaultsPageSize().build();
@@ -108,7 +113,8 @@ public class UserServiceIT {
     settings.asConfig(), new NoOpAuditPersister(), localAuthentication);
 
   private final IdentityProviderRepository identityProviderRepository = mock();
-  private final UserService userService = new UserService(db.getDbClient(), new AvatarResolverImpl(), managedInstanceService, managedInstanceChecker, userDeactivator, userUpdater, identityProviderRepository);
+  private final UserService userService = new UserService(db.getDbClient(), new AvatarResolverImpl(), managedInstanceService, managedInstanceChecker, userDeactivator, userUpdater,
+    identityProviderRepository);
 
   @Before
   public void setUp() {
@@ -840,6 +846,26 @@ public class UserServiceIT {
     assertThat(updatedUser.getExternalLogin()).isEqualTo("prov_login");
   }
 
+  @DataProvider
+  public static Object[][] updateUserProvider() {
+    return new Object[][] {
+      {new UpdateUser().setName("new name")},
+      {new UpdateUser().setEmail("newEmail@test.com")},
+      {new UpdateUser().setName("new name").setEmail("newEmail@test.com")}};
+  }
+
+  @Test
+  @UseDataProvider("updateUserProvider")
+  public void updateUser_whenIncorrectPayloadForManagedInstance_shouldThrow(UpdateUser updateUser) {
+    doThrow(BadRequestException.create("message")).when(managedInstanceChecker).throwIfInstanceIsManaged(any());
+
+    UserDto userDto = db.users().insertUser();
+
+    assertThatThrownBy(() -> userService.updateUser(userDto.getUuid(), updateUser))
+      .isInstanceOf(BadRequestException.class)
+      .hasMessage("message");
+  }
+
   private void assertUserWithFilter(Function<UsersSearchRequest.Builder, UsersSearchRequest.Builder> query, String userLogin, boolean isExpectedToBeThere) {
 
     UsersSearchRequest.Builder builder = getBuilderWithDefaultsPageSize();
@@ -858,14 +884,12 @@ public class UserServiceIT {
   }
 
   private void mockUsersAsManaged(String... userUuids) {
-    when(managedInstanceService.getUserUuidToManaged(any(), any())).thenAnswer(invocation ->
-      {
-        Set<?> allUsersUuids = invocation.getArgument(1, Set.class);
-        return allUsersUuids.stream()
-          .map(userUuid -> (String) userUuid)
-          .collect(toMap(identity(), userUuid -> Set.of(userUuids).contains(userUuid)));
-      }
-    );
+    when(managedInstanceService.getUserUuidToManaged(any(), any())).thenAnswer(invocation -> {
+      Set<?> allUsersUuids = invocation.getArgument(1, Set.class);
+      return allUsersUuids.stream()
+        .map(String.class::cast)
+        .collect(toMap(identity(), userUuid -> Set.of(userUuids).contains(userUuid)));
+    });
   }
 
   private static UsersSearchRequest.Builder getBuilderWithDefaultsPageSize() {

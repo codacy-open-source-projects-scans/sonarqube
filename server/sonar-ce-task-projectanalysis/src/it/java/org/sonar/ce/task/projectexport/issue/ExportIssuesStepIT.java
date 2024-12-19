@@ -232,10 +232,11 @@ public class ExportIssuesStepIT {
       .setRuleDescriptionContextKey("test_rule_description_context_key")
       .setIssueCreationTime(963L)
       .setIssueUpdateTime(852L)
-      .addImpact(new ImpactDto().setSoftwareQuality(SoftwareQuality.MAINTAINABILITY).setSeverity(Severity.HIGH))
-      .addImpact(new ImpactDto().setSoftwareQuality(SoftwareQuality.SECURITY).setSeverity(Severity.BLOCKER))
+      .addImpact(new ImpactDto().setSoftwareQuality(SoftwareQuality.MAINTAINABILITY).setSeverity(Severity.HIGH).setManualSeverity(true))
+      .addImpact(new ImpactDto().setSoftwareQuality(SoftwareQuality.SECURITY).setSeverity(Severity.BLOCKER).setManualSeverity(false))
       .setIssueCloseTime(741L)
-      .setCodeVariants(List.of("v1", "v2"));
+      .setCodeVariants(List.of("v1", "v2"))
+      .setPrioritizedRule(true);
 
     // fields tested separately and/or required to match SQL request
     issueDto
@@ -270,11 +271,13 @@ public class ExportIssuesStepIT {
     assertThat(issue.getIssueUpdatedAt()).isEqualTo(issueDto.getIssueUpdateTime());
     assertThat(issue.getIssueClosedAt()).isEqualTo(issueDto.getIssueCloseTime());
     assertThat(issue.getLocations()).isNotEmpty();
-    assertThat(issue.getImpactsList()).extracting(ProjectDump.Impact::getSoftwareQuality, ProjectDump.Impact::getSeverity)
-      .containsOnly(tuple(ProjectDump.SoftwareQuality.MAINTAINABILITY, ProjectDump.Severity.HIGH), tuple(ProjectDump.SoftwareQuality.SECURITY, ProjectDump.Severity.BLOCKER));
+    assertThat(issue.getImpactsList()).extracting(ProjectDump.Impact::getSoftwareQuality, ProjectDump.Impact::getSeverity, ProjectDump.Impact::getManualSeverity)
+      .containsOnly(tuple(ProjectDump.SoftwareQuality.MAINTAINABILITY, ProjectDump.Severity.HIGH, true),
+        tuple(ProjectDump.SoftwareQuality.SECURITY, ProjectDump.Severity.BLOCKER, false));
     assertThat(issue.getMessageFormattingsList())
       .isEqualTo(ExportIssuesStep.dbToDumpMessageFormatting(messageFormattings.getMessageFormattingList()));
     assertThat(issue.getCodeVariants()).isEqualTo(issueDto.getCodeVariantsString());
+    assertThat(issue.getPrioritizedRule()).isEqualTo(issueDto.isPrioritizedRule());
   }
 
   @Test

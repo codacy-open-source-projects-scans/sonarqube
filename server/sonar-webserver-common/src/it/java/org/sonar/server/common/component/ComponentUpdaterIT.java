@@ -26,8 +26,9 @@ import org.apache.commons.lang3.StringUtils;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
-import org.sonar.db.component.ComponentQualifiers;
-import org.sonar.db.component.ComponentScopes;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.NullSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.sonar.api.utils.System2;
 import org.sonar.api.web.UserRole;
 import org.sonar.core.util.SequenceUuidFactory;
@@ -37,7 +38,8 @@ import org.sonar.db.audit.AuditPersister;
 import org.sonar.db.component.BranchDto;
 import org.sonar.db.component.BranchType;
 import org.sonar.db.component.ComponentDto;
-import org.sonar.server.component.ComponentTypesRule;
+import org.sonar.db.component.ComponentQualifiers;
+import org.sonar.db.component.ComponentScopes;
 import org.sonar.db.project.CreationMethod;
 import org.sonar.db.project.ProjectDto;
 import org.sonar.db.user.UserDto;
@@ -47,6 +49,7 @@ import org.sonar.server.common.permission.PermissionUpdater;
 import org.sonar.server.common.permission.UserPermissionChange;
 import org.sonar.server.common.permission.UserPermissionChanger;
 import org.sonar.server.component.ComponentCreationData;
+import org.sonar.server.component.ComponentTypesRule;
 import org.sonar.server.es.EsTester;
 import org.sonar.server.es.Indexers;
 import org.sonar.server.es.IndexersImpl;
@@ -72,10 +75,12 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.sonar.db.component.BranchDto.DEFAULT_MAIN_BRANCH_NAME;
 import static org.sonar.db.component.ComponentQualifiers.APP;
 import static org.sonar.db.component.ComponentQualifiers.PROJECT;
 import static org.sonar.db.component.ComponentQualifiers.VIEW;
-import static org.sonar.db.component.BranchDto.DEFAULT_MAIN_BRANCH_NAME;
+import static org.sonar.server.common.component.ComponentUpdater.ENABLED_FOR_ALL_PROJECTS;
+import static org.sonar.server.common.component.ComponentUpdater.SUGGESTION_FEATURE_ENABLED_PROPERTY;
 
 public class ComponentUpdaterIT {
 
@@ -530,7 +535,28 @@ public class ComponentUpdaterIT {
       .creationMethod(CreationMethod.LOCAL_API)
       .build();
     ProjectDto projectDto = underTest.create(db.getSession(), creationParameters).projectDto();
+    assertThat(projectDto.getAiCodeFixEnabled()).isFalse();
     assertThat(projectDto.getCreationMethod()).isEqualTo(CreationMethod.LOCAL_API);
+  }
+
+  @ParameterizedTest
+  @NullSource
+  @ValueSource(strings = {"DISABLED", "ENABLED_FOR_ALL_PROJECTS", "ENABLED_FOR_SOME_PROJECTS"})
+  void create_whenAiCodeFixEnabledForAllProjects_setAiCodeFixEnabled(String enablementOption) {
+    Optional.ofNullable(enablementOption).ifPresent(s -> {
+      db.properties()
+        .insertProperty(SUGGESTION_FEATURE_ENABLED_PROPERTY, enablementOption, null);
+    });
+
+    ComponentCreationParameters creationParameters = ComponentCreationParameters.builder()
+      .newComponent(DEFAULT_COMPONENT)
+      .creationMethod(CreationMethod.LOCAL_API)
+      .mainBranchName("main")
+      .build();
+
+    ProjectDto projectDto = underTest.create(db.getSession(), creationParameters).projectDto();
+    assertThat(projectDto.getAiCodeFixEnabled()).isEqualTo(ENABLED_FOR_ALL_PROJECTS.equals(enablementOption));
+    db.getDbClient().purgeDao().deleteProject(db.getSession(), projectDto.getUuid(), projectDto.getQualifier(), projectDto.getName(), projectDto.getKey());
   }
 
   @Test

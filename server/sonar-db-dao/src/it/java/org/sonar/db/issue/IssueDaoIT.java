@@ -20,7 +20,6 @@
 package org.sonar.db.issue;
 
 import java.security.SecureRandom;
-import java.sql.SQLException;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Date;
@@ -75,7 +74,9 @@ import static org.sonar.api.issue.Issue.STATUS_OPEN;
 import static org.sonar.api.issue.Issue.STATUS_REOPENED;
 import static org.sonar.api.issue.Issue.STATUS_RESOLVED;
 import static org.sonar.api.issue.Issue.STATUS_REVIEWED;
+import static org.sonar.api.issue.impact.Severity.BLOCKER;
 import static org.sonar.api.issue.impact.Severity.HIGH;
+import static org.sonar.api.issue.impact.Severity.INFO;
 import static org.sonar.api.issue.impact.Severity.LOW;
 import static org.sonar.api.issue.impact.Severity.MEDIUM;
 import static org.sonar.api.issue.impact.SoftwareQuality.MAINTAINABILITY;
@@ -182,10 +183,10 @@ class IssueDaoIT {
     assertThat(issue.getEffectiveCleanCodeAttribute()).isEqualTo(RULE.getCleanCodeAttribute());
     assertThat(issue.parseLocations()).isNull();
     assertThat(issue.getImpacts())
-      .extracting(ImpactDto::getSeverity, ImpactDto::getSoftwareQuality)
+      .extracting(ImpactDto::getSeverity, ImpactDto::getSoftwareQuality, ImpactDto::isManualSeverity)
       .containsExactlyInAnyOrder(
-        tuple(MEDIUM, RELIABILITY),
-        tuple(LOW, SECURITY));
+        tuple(MEDIUM, RELIABILITY, false),
+        tuple(LOW, SECURITY, false));
     assertThat(issue.getRuleDefaultImpacts())
       .extracting(ImpactDto::getSeverity, ImpactDto::getSoftwareQuality)
       .containsExactlyInAnyOrder(tuple(HIGH, MAINTAINABILITY));
@@ -236,7 +237,7 @@ class IssueDaoIT {
   }
 
   @Test
-  void scrollIndexationIssues_shouldReturnDto() throws SQLException {
+  void scrollIndexationIssues_shouldReturnDto() {
     ComponentDto project = db.components().insertPrivateProject().getMainBranchComponent();
     RuleDto rule = db.rules().insert(r -> r.setRepositoryKey("java").setLanguage("java")
       .replaceAllDefaultImpacts(List.of(new ImpactDto()
@@ -249,7 +250,7 @@ class IssueDaoIT {
     ComponentDto branchA = db.components().insertProjectBranch(project, b -> b.setKey("branchA"));
     ComponentDto fileA = db.components().insertComponent(newFileDto(branchA));
 
-    IntStream.range(0, 100).forEach(i -> insertBranchIssue(branchA, fileA, rule, "A" + i, STATUS_OPEN, 1_340_000_000_000L));
+    IntStream.range(0, 100).forEach(i -> insertBranchIssueWithManualSeverity(branchA, fileA, rule, "A" + i, STATUS_OPEN, 1_340_000_000_000L));
 
     Cursor<IndexedIssueDto> issues = underTest.scrollIssuesForIndexation(db.getSession(), null, null);
 
@@ -258,14 +259,15 @@ class IssueDaoIT {
     while (iterator.hasNext()) {
       IndexedIssueDto next = iterator.next();
       assertThat(next.getRuleDefaultImpacts()).hasSize(2)
-        .extracting(ImpactDto::getSoftwareQuality, ImpactDto::getSeverity)
+        .extracting(ImpactDto::getSoftwareQuality, ImpactDto::getSeverity, ImpactDto::isManualSeverity)
         .containsExactlyInAnyOrder(
-          tuple(RELIABILITY, LOW),
-          tuple(MAINTAINABILITY, MEDIUM));
+          tuple(RELIABILITY, LOW, false),
+          tuple(MAINTAINABILITY, MEDIUM, false));
       assertThat(next.getImpacts())
-        .extracting(ImpactDto::getSoftwareQuality, ImpactDto::getSeverity)
+        .extracting(ImpactDto::getSoftwareQuality, ImpactDto::getSeverity, ImpactDto::isManualSeverity)
         .containsExactlyInAnyOrder(
-          tuple(MAINTAINABILITY, HIGH));
+          tuple(MAINTAINABILITY, HIGH, true),
+          tuple(RELIABILITY, LOW, false));
       issueCount++;
     }
     assertThat(issueCount).isEqualTo(100);
@@ -631,6 +633,57 @@ class IssueDaoIT {
 
   }
 
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void selectIssueImpactSeverityGroupsByComponent_shouldReturnImpactSeverityGroups(boolean inLeak) {
+
+    ComponentDto project = db.components().insertPublicProject().getMainBranchComponent();
+    ComponentDto file = db.components().insertComponent(ComponentTesting.newFileDto(project));
+    RuleDto rule = db.rules().insert();
+    db.issues().insert(rule, project, file,
+      i -> i.setStatus(STATUS_OPEN).setEffort(60L).replaceAllImpacts(List.of(createImpact(RELIABILITY, BLOCKER), createImpact(SECURITY,
+        BLOCKER))));
+    db.issues().insert(rule, project, file,
+      i -> i.setStatus(STATUS_OPEN).setEffort(60L).replaceAllImpacts(List.of(createImpact(RELIABILITY, BLOCKER))));
+    db.issues().insert(rule, project, file,
+      i -> i.setStatus(STATUS_REOPENED).setEffort(60L).replaceAllImpacts(List.of(createImpact(RELIABILITY, INFO))));
+    db.issues().insert(rule, project, file,
+      i -> i.setStatus(STATUS_REOPENED).setEffort(60L).replaceAllImpacts(List.of(createImpact(RELIABILITY, INFO), createImpact(SECURITY,
+        BLOCKER))));
+    db.issues().insert(rule, project, file,
+      i -> i.setStatus(STATUS_RESOLVED).setEffort(60L).setResolution(RESOLUTION_WONT_FIX)
+        .replaceAllImpacts(List.of(createImpact(MAINTAINABILITY, HIGH), createImpact(RELIABILITY, INFO), createImpact(SECURITY, BLOCKER))));
+    db.issues().insert(rule, project, file,
+      i -> i.setStatus(STATUS_RESOLVED).setEffort(60L).setResolution(RESOLUTION_WONT_FIX).replaceAllImpacts(List.of(createImpact(SECURITY, HIGH))));
+    // issues in ignored status
+    db.issues().insert(rule, project, file,
+      i -> i.setStatus(Issue.STATUS_CLOSED).setEffort(60L).replaceAllImpacts(List.of(createImpact(SECURITY, HIGH))));
+    db.issues().insert(rule, project, file,
+      i -> i.setStatus(STATUS_RESOLVED).setEffort(60L).setResolution(RESOLUTION_FALSE_POSITIVE).replaceAllImpacts(List.of(createImpact(SECURITY, HIGH))));
+
+    Collection<IssueImpactSeverityGroupDto> result = underTest.selectIssueImpactSeverityGroupsByComponent(db.getSession(), file, inLeak ? 1L : Long.MAX_VALUE);
+
+    assertThat(result).hasSize(6);
+    assertThat(result.stream().filter(IssueImpactSeverityGroupDto::isInLeak)).hasSize(inLeak ? 6 : 0);
+    // 6 issues, but 1 has 2 different severity impact, and 1 has 3 different severity impact
+    // The total count should then be 6 + 1 (1 additional severity for 1 issue) + 2 (2 additional severities from 1 issue)
+    assertThat(result.stream().mapToLong(IssueImpactSeverityGroupDto::getCount).sum()).isEqualTo(6 + 1 + 2);
+
+    assertThat(result.stream().filter(g -> g.getSeverity() == BLOCKER).mapToLong(IssueImpactSeverityGroupDto::getCount).sum()).isEqualTo(4);
+    assertThat(result.stream().filter(g -> g.getSeverity() == HIGH).mapToLong(IssueImpactSeverityGroupDto::getCount).sum()).isEqualTo(2);
+    assertThat(result.stream().filter(g -> g.getSeverity() == MEDIUM).mapToLong(IssueImpactSeverityGroupDto::getCount).sum()).isZero();
+    assertThat(result.stream().filter(g -> g.getSeverity() == LOW).mapToLong(IssueImpactSeverityGroupDto::getCount).sum()).isZero();
+    assertThat(result.stream().filter(g -> g.getSeverity() == INFO).mapToLong(IssueImpactSeverityGroupDto::getCount).sum()).isEqualTo(3);
+
+    assertThat(result.stream().filter(g -> RESOLUTION_WONT_FIX.equals(g.getResolution())).mapToLong(IssueImpactSeverityGroupDto::getCount).sum()).isEqualTo(4);
+    assertThat(result.stream().filter(g -> g.getResolution() == null).mapToLong(IssueImpactSeverityGroupDto::getCount).sum()).isEqualTo(5);
+
+    assertThat(result.stream().noneMatch(g -> STATUS_CLOSED.equals(g.getResolution()))).isTrue();
+    assertThat(result.stream().noneMatch(g -> RESOLUTION_FALSE_POSITIVE.equals(g.getResolution()))).isTrue();
+    assertThat(result.stream().noneMatch(g -> MEDIUM == g.getSeverity())).isTrue();
+
+  }
+
   @Test
   void selectIssueImpactGroupsByComponent_whenNewCodeFromReferenceBranch_shouldReturnImpactGroups() {
 
@@ -738,10 +791,12 @@ class IssueDaoIT {
   void insert_shouldInsertBatchIssuesWithImpacts() {
     ImpactDto impact1 = new ImpactDto()
       .setSoftwareQuality(MAINTAINABILITY)
-      .setSeverity(HIGH);
+      .setSeverity(HIGH)
+      .setManualSeverity(false);
     ImpactDto impact2 = new ImpactDto()
       .setSoftwareQuality(SECURITY)
-      .setSeverity(LOW);
+      .setSeverity(LOW)
+      .setManualSeverity(true);
     IssueDto issue1 = createIssueWithKey(ISSUE_KEY1)
       .addImpact(impact1)
       .addImpact(impact2);
@@ -786,7 +841,8 @@ class IssueDaoIT {
       .setSeverity(HIGH);
     ImpactDto impact2 = new ImpactDto()
       .setSoftwareQuality(SECURITY)
-      .setSeverity(LOW);
+      .setSeverity(LOW)
+      .setManualSeverity(true);
     IssueDto issue1 = createIssueWithKey(ISSUE_KEY1)
       .addImpact(impact1)
       .addImpact(impact2);
@@ -1039,9 +1095,22 @@ class IssueDaoIT {
 
     underTest.updateIfBeforeSelectedDate(db.getSession(), issueDto);
 
-    assertThat(underTest.selectOrFailByKey(db.getSession(), ISSUE_KEY1).getImpacts()).extracting(i -> i.getSoftwareQuality(),
-      i -> i.getSeverity())
+    assertThat(underTest.selectOrFailByKey(db.getSession(), ISSUE_KEY1).getImpacts()).extracting(ImpactDto::getSoftwareQuality, ImpactDto::getSeverity)
       .containsExactlyInAnyOrder(tuple(RELIABILITY, MEDIUM), tuple(SECURITY, LOW));
+  }
+
+  @Test
+  void insertIssueImpacts_should_insert_all_values() {
+    IssueDto issueDto = createIssueWithKey(ISSUE_KEY1);
+    ImpactDto impactDto1 = new ImpactDto(MAINTAINABILITY, MEDIUM, true);
+    ImpactDto impactDto2 = new ImpactDto(RELIABILITY, HIGH, false);
+    issueDto.addImpact(impactDto1);
+    issueDto.addImpact(impactDto2);
+    underTest.insert(db.getSession(), issueDto);
+
+    assertThat(underTest.selectOrFailByKey(db.getSession(), ISSUE_KEY1).getImpacts()).extracting(ImpactDto::getSoftwareQuality,
+      ImpactDto::getSeverity, ImpactDto::isManualSeverity)
+      .containsExactlyInAnyOrder(tuple(MAINTAINABILITY, MEDIUM, true), tuple(RELIABILITY, HIGH, false));
   }
 
   private static IssueDto createIssueWithKey(String issueKey) {
@@ -1122,6 +1191,26 @@ class IssueDaoIT {
       .setType(randomRuleTypeExceptHotspot())
       .setMessage("message")
       .setMessageFormattings(MESSAGE_FORMATTING));
+  }
+
+  private void insertBranchIssueWithManualSeverity(ComponentDto branch, ComponentDto file, RuleDto rule, String id, String status,
+    Long updateAt) {
+    db.issues().insert(rule, branch, file, i -> i.setKee("issue" + id)
+      .setStatus(status)
+      .setResolution(null)
+      .setUpdatedAt(updateAt)
+      .setType(randomRuleTypeExceptHotspot())
+      .setMessage("message")
+      .setMessageFormattings(MESSAGE_FORMATTING)
+      .replaceAllImpacts(List.of(
+        new ImpactDto()
+          .setSoftwareQuality(MAINTAINABILITY)
+          .setSeverity(HIGH)
+          .setManualSeverity(true),
+        new ImpactDto()
+          .setSoftwareQuality(RELIABILITY)
+          .setSeverity(LOW)
+          .setManualSeverity(false))));
   }
 
   private void insertBranchIssue(ComponentDto branch, ComponentDto file, RuleDto rule, String id, String status, Long updateAt) {

@@ -126,11 +126,14 @@ message Issue {
   string code_variants = 26;
 
   repeated Impact impacts = 27;
+
+  bool prioritized_rule = 28;
 }
 
 message Impact {
   SoftwareQuality software_quality = 1;
   Severity severity = 2;
+  bool manual_severity = 3;
 }
 
 // Stream of issues changelog stored in file issues_changelog.pb

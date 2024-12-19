@@ -19,29 +19,14 @@
  */
 package org.sonar.server.ai.code.assurance;
 
-import org.sonar.core.platform.EditionProvider;
-import org.sonar.core.platform.PlatformEditionProvider;
+import javax.annotation.Nullable;
 import org.sonar.db.project.ProjectDto;
 
-import static org.sonar.core.platform.EditionProvider.Edition.COMMUNITY;
+public interface AiCodeAssuranceVerifier {
 
-/**
- * Make sure that for {@link EditionProvider.Edition#COMMUNITY} we'll always get false, no matter of the value in database.
- * This is to support correctly downgraded instances.
- */
-public class AiCodeAssuranceVerifier {
-  private final boolean isSupported;
+  AiCodeAssurance getAiCodeAssurance(ProjectDto projectDto, @Nullable String branchKey);
 
-  public AiCodeAssuranceVerifier(PlatformEditionProvider editionProvider) {
-    this.isSupported = editionProvider.get().map(edition -> !edition.equals(COMMUNITY)).orElse(false);
-  }
+  AiCodeAssurance getAiCodeAssurance(ProjectDto projectDto);
 
-
-  public boolean isAiCodeAssured(ProjectDto projectDto) {
-    return isAiCodeAssured(projectDto.getAiCodeAssurance());
-  }
-
-  public boolean isAiCodeAssured(boolean projectAiCodeAssurance) {
-    return isSupported && projectAiCodeAssurance;
-  }
+  boolean isAiCodeAssured(ProjectDto projectDto);
 }

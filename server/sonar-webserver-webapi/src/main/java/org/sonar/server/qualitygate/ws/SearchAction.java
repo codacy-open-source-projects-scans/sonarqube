@@ -33,7 +33,7 @@ import org.sonar.db.DbSession;
 import org.sonar.db.qualitygate.ProjectQgateAssociationDto;
 import org.sonar.db.qualitygate.ProjectQgateAssociationQuery;
 import org.sonar.db.qualitygate.QualityGateDto;
-import org.sonar.server.ai.code.assurance.AiCodeAssuranceVerifier;
+import org.sonar.server.ai.code.assurance.AiCodeAssuranceEntitlement;
 import org.sonar.server.user.UserSession;
 import org.sonarqube.ws.Qualitygates;
 
@@ -52,13 +52,13 @@ public class SearchAction implements QualityGatesWsAction {
   private final DbClient dbClient;
   private final UserSession userSession;
   private final QualityGatesWsSupport wsSupport;
-  private final AiCodeAssuranceVerifier aiCodeAssuranceVerifier;
+  private final AiCodeAssuranceEntitlement aiCodeAssuranceEntitlement;
 
-  public SearchAction(DbClient dbClient, UserSession userSession, QualityGatesWsSupport wsSupport, AiCodeAssuranceVerifier aiCodeAssuranceVerifier) {
+  public SearchAction(DbClient dbClient, UserSession userSession, QualityGatesWsSupport wsSupport, AiCodeAssuranceEntitlement aiCodeAssuranceEntitlement) {
     this.dbClient = dbClient;
     this.userSession = userSession;
     this.wsSupport = wsSupport;
-    this.aiCodeAssuranceVerifier = aiCodeAssuranceVerifier;
+    this.aiCodeAssuranceEntitlement = aiCodeAssuranceEntitlement;
   }
 
   @Override
@@ -69,6 +69,11 @@ public class SearchAction implements QualityGatesWsAction {
       .setSince("4.3")
       .setResponseExample(Resources.getResource(this.getClass(), "search-example.json"))
       .setChangelog(
+        new Change("2025.1", "Field 'containsAiCode' response field has added."),
+        new Change("2025.1", "Field 'isAiCodeAssured' response field has been removed."),
+        new Change("2025.1", "Field 'aiCodeAssurance' response field has been removed."),
+        new Change("10.8", "Field 'isAiCodeAssured' response field has been deprecated. Use 'aiCodeAssurance' instead."),
+        new Change("10.8", "New field 'aiCodeAssurance' in the response."),
         new Change("10.0", "deprecated 'more' response field has been removed"),
         new Change("10.0", "Parameter 'gateId' is removed. Use 'gateName' instead."),
         new Change("8.4", "Parameter 'gateName' added"),
@@ -138,7 +143,7 @@ public class SearchAction implements QualityGatesWsAction {
           .setName(project.getName())
           .setKey(project.getKey())
           .setSelected(project.getGateUuid() != null)
-          .setIsAiCodeAssured(aiCodeAssuranceVerifier.isAiCodeAssured(project.getAiCodeAssurance()));
+          .setContainsAiCode(project.getContainsAiCode() && aiCodeAssuranceEntitlement.isEnabled());
       }
 
       writeProtobuf(createResponse.build(), request, response);

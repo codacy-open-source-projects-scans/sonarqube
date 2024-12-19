@@ -34,22 +34,27 @@ import org.assertj.core.api.Assertions;
 import org.assertj.core.groups.Tuple;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.sonar.api.impl.utils.AlwaysIncreasingSystem2;
-import org.sonar.db.component.ComponentQualifiers;
 import org.sonar.api.utils.System2;
+import org.sonar.db.DbSession;
 import org.sonar.db.DbTester;
 import org.sonar.db.Pagination;
 import org.sonar.db.audit.AuditPersister;
 import org.sonar.db.audit.NoOpAuditPersister;
+import org.sonar.db.audit.model.ProjectNewValue;
 import org.sonar.db.component.BranchDto;
 import org.sonar.db.component.BranchType;
 import org.sonar.db.component.ComponentDto;
+import org.sonar.db.component.ComponentQualifiers;
 import org.sonar.db.entity.EntityDto;
 
 import static java.util.Collections.emptySet;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -133,20 +138,37 @@ class ProjectDaoIT {
   }
 
   @Test
-  void selectProjects_returnsAiCodeAssurance() {
-    ProjectDto dto1 = createProject("o1", "p1").setAiCodeAssurance(true);
+  void selectProjects_returns_containsAiCode() {
+    ProjectDto dto1 = createProject("o1", "p1").setContainsAiCode(true);
     ProjectDto dto2 = createProject("o1", "p2");
 
     projectDao.insert(db.getSession(), dto1);
     projectDao.insert(db.getSession(), dto2);
 
     List<ProjectDto> projects = projectDao.selectProjects(db.getSession());
-    Map<String, Boolean> projectToAiCodeAssurance = projects.stream().collect(Collectors.toMap(EntityDto::getName,
-      ProjectDto::getAiCodeAssurance));
-    assertThat(projectToAiCodeAssurance)
+    Map<String, Boolean> projectToContainsAiCode = projects.stream().collect(Collectors.toMap(EntityDto::getName,
+      ProjectDto::getContainsAiCode));
+    assertThat(projectToContainsAiCode)
       .hasSize(2)
       .containsEntry("projectName_p1", true)
       .containsEntry("projectName_p2", false);
+  }
+
+  @Test
+  void selectProjects_returnsAiCodeFixEnabled() {
+    var dbSession = db.getSession();
+
+    var dto1 = createProject("o1", "p1").setAiCodeFixEnabled(true);
+    var dto2 = createProject("o1", "p2");
+
+    projectDao.insert(dbSession, dto1);
+    projectDao.insert(dbSession, dto2);
+
+    assertThat(projectDao.selectProjects(dbSession))
+      .extracting(EntityDto::getName, ProjectDto::getAiCodeFixEnabled)
+      .containsExactlyInAnyOrder(
+        tuple("projectName_p1", true),
+        tuple("projectName_p2", false));
   }
 
   @Test
@@ -251,8 +273,8 @@ class ProjectDaoIT {
   }
 
   @Test
-  void update_aiCodeAssurance() {
-    ProjectDto dto1 = createProject("o1", "p1").setAiCodeAssurance(true);
+  void update_containsAiCode() {
+    ProjectDto dto1 = createProject("o1", "p1").setContainsAiCode(true);
     ProjectDto dto2 = createProject("o1", "p2");
 
     projectDao.insert(db.getSession(), dto1);
@@ -263,13 +285,57 @@ class ProjectDaoIT {
     assertProject(projectsByUuids.get(0), "projectName_p1", "projectKee_o1_p1", "uuid_o1_p1", "desc_p1", "tag1,tag2", false, true);
     assertProject(projectsByUuids.get(1), "projectName_p2", "projectKee_o1_p2", "uuid_o1_p2", "desc_p2", "tag1,tag2", false, false);
 
-    projectDao.updateAiCodeAssurance(db.getSession(), dto1.getUuid(), false);
-    projectDao.updateAiCodeAssurance(db.getSession(), dto2.getUuid(), true);
+    projectDao.updateContainsAiCode(db.getSession(), dto1.getUuid(), false);
+    projectDao.updateContainsAiCode(db.getSession(), dto2.getUuid(), true);
 
     projectsByUuids = projectDao.selectByUuids(db.getSession(), new HashSet<>(Arrays.asList("uuid_o1_p1", "uuid_o1_p2")));
     assertThat(projectsByUuids).hasSize(2);
     assertProject(projectsByUuids.get(0), "projectName_p1", "projectKee_o1_p1", "uuid_o1_p1", "desc_p1", "tag1,tag2", false, false);
     assertProject(projectsByUuids.get(1), "projectName_p2", "projectKee_o1_p2", "uuid_o1_p2", "desc_p2", "tag1,tag2", false, true);
+  }
+
+  @Test
+  void update_aiCodeFixEnabledPerProject() {
+    ProjectDto dto1 = createProject("o1", "p1").setAiCodeFixEnabled(true);
+    ProjectDto dto2 = createProject("o1", "p2");
+
+    projectDao.insert(db.getSession(), dto1);
+    projectDao.insert(db.getSession(), dto2);
+
+    List<ProjectDto> projectsByUuids = projectDao.selectByUuids(db.getSession(), new HashSet<>(Arrays.asList("uuid_o1_p1", "uuid_o1_p2")));
+    assertThat(projectsByUuids).hasSize(2);
+    assertProjectAiCodeFixEnablement(projectsByUuids.get(0), "uuid_o1_p1", true);
+    assertProjectAiCodeFixEnablement(projectsByUuids.get(1), "uuid_o1_p2", false);
+
+    projectDao.update(db.getSession(), projectsByUuids.get(0).setAiCodeFixEnabled(false));
+    projectDao.update(db.getSession(), projectsByUuids.get(1).setAiCodeFixEnabled(true));
+
+    projectsByUuids = projectDao.selectByUuids(db.getSession(), new HashSet<>(Arrays.asList("uuid_o1_p1", "uuid_o1_p2")));
+    assertThat(projectsByUuids).hasSize(2);
+    assertProjectAiCodeFixEnablement(projectsByUuids.get(0), "uuid_o1_p1", false);
+    assertProjectAiCodeFixEnablement(projectsByUuids.get(1), "uuid_o1_p2", true);
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void update_aiCodeFixEnabledForAllProjects(boolean aiCodeFixEnablement) {
+    ProjectDto dto1 = createProject("o1", "p1").setAiCodeFixEnabled(true);
+    ProjectDto dto2 = createProject("o1", "p2");
+
+    projectDao.insert(db.getSession(), dto1);
+    projectDao.insert(db.getSession(), dto2);
+
+    List<ProjectDto> projectsByUuids = projectDao.selectByUuids(db.getSession(), new HashSet<>(Arrays.asList("uuid_o1_p1", "uuid_o1_p2")));
+    assertThat(projectsByUuids).hasSize(2);
+    assertProjectAiCodeFixEnablement(projectsByUuids.get(0), "uuid_o1_p1", true);
+    assertProjectAiCodeFixEnablement(projectsByUuids.get(1), "uuid_o1_p2", false);
+
+    projectDao.updateAiCodeFixEnablementForAllProjects(db.getSession(), aiCodeFixEnablement);
+
+    projectsByUuids = projectDao.selectByUuids(db.getSession(), new HashSet<>(Arrays.asList("uuid_o1_p1", "uuid_o1_p2")));
+    assertThat(projectsByUuids).hasSize(2);
+    assertProjectAiCodeFixEnablement(projectsByUuids.get(0), "uuid_o1_p1", aiCodeFixEnablement);
+    assertProjectAiCodeFixEnablement(projectsByUuids.get(1), "uuid_o1_p2", aiCodeFixEnablement);
   }
 
   @Test
@@ -323,20 +389,22 @@ class ProjectDaoIT {
 
   @Test
   void insert_withTrack_shouldCallAuditPersister() {
-    ProjectDto dto1 = createProject("o1", "p1");
+    var dto1 = createProject("o1", "p1").setAiCodeFixEnabled(true);
 
     projectDaoWithAuditPersister.insert(db.getSession(), dto1, true);
 
-    verify(auditPersister, times(1)).addComponent(any(), any());
+    verify(auditPersister, times(1)).addComponent(any(),
+      argThat(componentNewValue -> ((ProjectNewValue) componentNewValue).isAiCodeFixEnabled()));
   }
 
   @Test
   void update_shouldCallAuditPersister() {
-    ProjectDto dto1 = createProject("o1", "p1");
+    var dto1 = createProject("o1", "p1").setAiCodeFixEnabled(true);
 
     projectDaoWithAuditPersister.update(db.getSession(), dto1);
 
-    verify(auditPersister, times(1)).updateComponent(any(), any());
+    verify(auditPersister, times(1)).updateComponent(any(),
+      argThat(componentNewValue -> ((ProjectNewValue) componentNewValue).isAiCodeFixEnabled()));
   }
 
   @Test
@@ -421,13 +489,44 @@ class ProjectDaoIT {
     assertThat(projectDao.countProjects(db.getSession())).isEqualTo(10);
   }
 
+  @Test
+  void countApplications_shouldReturn_correctValue() {
+    assertThat(projectDao.countProjects(db.getSession())).isZero();
+
+    IntStream.range(0, 3).forEach(x -> db.components().insertPrivateProject());
+    IntStream.range(0, 5).forEach(x -> db.components().insertPrivateApplication());
+
+    assertThat(projectDao.countApplications(db.getSession())).isEqualTo(5);
+  }
+
+  @Test
+  void countProjects_by_ai_codefix_enablement() {
+    var dto1 = createProject("o1", "p1").setAiCodeFixEnabled(true);
+    var dto2 = createProject("o1", "p2");
+    var dto3 = createProject("o1", "p3");
+
+    DbSession dbSession = db.getSession();
+
+    projectDao.insert(dbSession, dto1);
+    projectDao.insert(dbSession, dto2);
+    projectDao.insert(dbSession, dto3);
+
+    assertThat(projectDao.countProjects(db.getSession())).isEqualTo(3);
+    assertThat(projectDao.countAiCodeFixEnabledProjects(db.getSession())).isEqualTo(1);
+    assertThat(projectDao.countAiCodeFixDisabledProjects(db.getSession())).isEqualTo(2);
+  }
+
   private void assertProject(ProjectDto dto, String name, String kee, String uuid, String desc, @Nullable String tags, boolean isPrivate) {
     assertProject(dto, name, kee, uuid, desc, tags, isPrivate, false);
   }
 
-  private void assertProject(ProjectDto dto, String name, String kee, String uuid, String desc, @Nullable String tags, boolean isPrivate, boolean isAiCodeAssurance) {
-    assertThat(dto).extracting("name", "kee", "key", "uuid", "description", "tagsString", "private", "aiCodeAssurance")
-      .containsExactly(name, kee, kee, uuid, desc, tags, isPrivate, isAiCodeAssurance);
+  private void assertProject(ProjectDto dto, String name, String kee, String uuid, String desc, @Nullable String tags, boolean isPrivate, boolean containsAiCode) {
+    assertThat(dto).extracting("name", "kee", "key", "uuid", "description", "tagsString", "private", "containsAiCode")
+      .containsExactly(name, kee, kee, uuid, desc, tags, isPrivate, containsAiCode);
+  }
+
+  private void assertProjectAiCodeFixEnablement(ProjectDto dto, String uuid, boolean isAiCodeFixEnabled) {
+    assertThat(dto).extracting("uuid", "aiCodeFixEnabled").containsExactly(uuid, isAiCodeFixEnabled);
   }
 
   private ProjectDto createProject(String org, String name) {

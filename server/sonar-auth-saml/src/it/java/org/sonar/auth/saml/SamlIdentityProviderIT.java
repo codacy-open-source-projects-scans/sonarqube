@@ -26,8 +26,8 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import org.apache.commons.io.IOUtils;
 import org.junit.Before;
 import org.junit.Rule;
@@ -43,8 +43,8 @@ import org.sonar.api.testfixtures.log.LogAndArguments;
 import org.sonar.api.testfixtures.log.LogTester;
 import org.sonar.api.utils.System2;
 import org.sonar.db.DbTester;
-import org.sonar.server.http.JavaxHttpRequest;
-import org.sonar.server.http.JavaxHttpResponse;
+import org.sonar.server.http.JakartaHttpRequest;
+import org.sonar.server.http.JakartaHttpResponse;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -372,23 +372,14 @@ public class SamlIdentityProviderIT {
 
     @Override
     public HttpRequest getHttpRequest() {
-      return new JavaxHttpRequest(mock(HttpServletRequest.class));
+      return new JakartaHttpRequest(mock(HttpServletRequest.class));
     }
 
     @Override
     public HttpResponse getHttpResponse() {
-      return new JavaxHttpResponse(response);
+      return new JakartaHttpResponse(response);
     }
 
-    @Override
-    public HttpServletRequest getRequest() {
-      throw new UnsupportedOperationException("deprecated");
-    }
-
-    @Override
-    public HttpServletResponse getResponse() {
-      throw new UnsupportedOperationException("deprecated");
-    }
   }
 
   private static class DumbCallbackContext implements OAuth2IdentityProvider.CallbackContext {
@@ -406,7 +397,7 @@ public class SamlIdentityProviderIT {
       this.expectedCallbackUrl = expectedCallbackUrl;
       Map<String, String[]> parameterMap = new HashMap<>();
       parameterMap.put("SAMLResponse", new String[]{loadResponse(encodedResponseFile)});
-      when(((JavaxHttpRequest) getHttpRequest()).getDelegate().getParameterMap()).thenReturn(parameterMap);
+      when(((JakartaHttpRequest) getHttpRequest()).getDelegate().getParameterMap()).thenReturn(parameterMap);
     }
 
 
@@ -446,22 +437,13 @@ public class SamlIdentityProviderIT {
 
     @Override
     public HttpRequest getHttpRequest() {
-      return new JavaxHttpRequest(request);
+      return new JakartaHttpRequest(request);
     }
 
     @Override
     public HttpResponse getHttpResponse() {
-      return new JavaxHttpResponse(response);
+      return new JakartaHttpResponse(response);
     }
 
-    @Override
-    public HttpServletRequest getRequest() {
-      return null;
-    }
-
-    @Override
-    public HttpServletResponse getResponse() {
-      return null;
-    }
   }
 }

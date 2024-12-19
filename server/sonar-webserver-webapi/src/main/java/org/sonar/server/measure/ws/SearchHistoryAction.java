@@ -23,14 +23,15 @@ import com.google.common.collect.Sets;
 import java.util.Date;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import javax.annotation.CheckForNull;
 import javax.annotation.Nullable;
-import org.sonar.db.component.ComponentQualifiers;
-import org.sonar.db.component.ComponentScopes;
 import org.sonar.api.server.ws.Change;
 import org.sonar.api.server.ws.Request;
 import org.sonar.api.server.ws.Response;
@@ -40,15 +41,19 @@ import org.sonar.api.web.UserRole;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
 import org.sonar.db.component.ComponentDto;
+import org.sonar.db.component.ComponentQualifiers;
+import org.sonar.db.component.ComponentScopes;
 import org.sonar.db.component.SnapshotDto;
 import org.sonar.db.component.SnapshotQuery;
 import org.sonar.db.component.SnapshotQuery.SORT_FIELD;
 import org.sonar.db.component.SnapshotQuery.SORT_ORDER;
-import org.sonar.db.measure.ProjectMeasureDto;
 import org.sonar.db.measure.PastMeasureQuery;
+import org.sonar.db.measure.ProjectMeasureDto;
 import org.sonar.db.metric.MetricDto;
 import org.sonar.db.metric.RemovedMetricConverter;
 import org.sonar.server.component.ComponentFinder;
+import org.sonar.server.telemetry.TelemetryPortfolioActivityGraphTypeProvider;
+import org.sonar.server.telemetry.TelemetryPortfolioActivityRequestedMetricProvider;
 import org.sonar.server.user.UserSession;
 import org.sonar.server.ws.KeyExamples;
 import org.sonarqube.ws.Measures.SearchHistoryResponse;
@@ -57,6 +62,8 @@ import static java.lang.String.format;
 import static java.util.Optional.ofNullable;
 import static org.sonar.api.utils.DateUtils.parseEndingDateOrDateTime;
 import static org.sonar.api.utils.DateUtils.parseStartingDateOrDateTime;
+import static org.sonar.db.component.ComponentQualifiers.SUBVIEW;
+import static org.sonar.db.component.ComponentQualifiers.VIEW;
 import static org.sonar.db.component.SnapshotDto.STATUS_PROCESSED;
 import static org.sonar.server.component.ws.MeasuresWsParameters.ACTION_SEARCH_HISTORY;
 import static org.sonar.server.component.ws.MeasuresWsParameters.PARAM_BRANCH;
@@ -73,15 +80,22 @@ public class SearchHistoryAction implements MeasuresWsAction {
 
   private static final int MAX_PAGE_SIZE = 1_000;
   private static final int DEFAULT_PAGE_SIZE = 100;
+  public static final Pattern GRAPH_REGEX = Pattern.compile("graph=([^&]+)");
 
   private final DbClient dbClient;
   private final ComponentFinder componentFinder;
   private final UserSession userSession;
+  private final TelemetryPortfolioActivityRequestedMetricProvider telemetryRequestedMetricProvider;
+  private final TelemetryPortfolioActivityGraphTypeProvider telemetryGraphTypeProvider;
 
-  public SearchHistoryAction(DbClient dbClient, ComponentFinder componentFinder, UserSession userSession) {
+  public SearchHistoryAction(DbClient dbClient, ComponentFinder componentFinder, UserSession userSession,
+    TelemetryPortfolioActivityRequestedMetricProvider telemetryRequestedMetricProvider,
+    TelemetryPortfolioActivityGraphTypeProvider telemetryGraphTypeProvider) {
     this.dbClient = dbClient;
     this.componentFinder = componentFinder;
     this.userSession = userSession;
+    this.telemetryRequestedMetricProvider = telemetryRequestedMetricProvider;
+    this.telemetryGraphTypeProvider = telemetryGraphTypeProvider;
   }
 
   @Override
@@ -95,13 +109,21 @@ public class SearchHistoryAction implements MeasuresWsAction {
       .setResponseExample(getClass().getResource("search_history-example.json"))
       .setSince("6.3")
       .setChangelog(
+        new Change("10.8", String.format("The following metrics are not deprecated anymore: %s",
+          MeasuresWsModule.getUndeprecatedMetricsinSonarQube108())),
+        new Change("10.8", String.format("Added new accepted values for the 'metricKeys' param: %s",
+          MeasuresWsModule.getNewMetricsInSonarQube108())),
+        new Change("10.8", String.format("The metrics %s are now deprecated. Use 'software_quality_maintainability_issues', " +
+          "'software_quality_reliability_issues', 'software_quality_security_issues', 'new_software_quality_maintainability_issues', " +
+          "'new_software_quality_reliability_issues', 'new_software_quality_security_issues' instead.",
+          MeasuresWsModule.getDeprecatedMetricsInSonarQube108())),
         new Change("10.7", "Added new accepted values for the 'metricKeys' param: %s".formatted(MeasuresWsModule.getNewMetricsInSonarQube107())),
         new Change("10.5", String.format("The metrics %s are now deprecated " +
-                                         "without exact replacement. Use 'maintainability_issues', 'reliability_issues' and 'security_issues' instead.",
+          "without exact replacement. Use 'maintainability_issues', 'reliability_issues' and 'security_issues' instead.",
           MeasuresWsModule.getDeprecatedMetricsInSonarQube105())),
         new Change("10.5", "Added new accepted values for the 'metricKeys' param: 'new_maintainability_issues', 'new_reliability_issues', 'new_security_issues'"),
         new Change("10.4", String.format("The metrics %s are now deprecated " +
-            "without exact replacement. Use 'maintainability_issues', 'reliability_issues' and 'security_issues' instead.",
+          "without exact replacement. Use 'maintainability_issues', 'reliability_issues' and 'security_issues' instead.",
           MeasuresWsModule.getDeprecatedMetricsInSonarQube104())),
         new Change("10.4", "The metrics 'open_issues', 'reopened_issues' and 'confirmed_issues' are now deprecated in the response. Consume 'violations' instead."),
         new Change("10.4", "The use of 'open_issues', 'reopened_issues' and 'confirmed_issues' values in 'metricKeys' param are now deprecated. Use 'violations' instead."),
@@ -150,13 +172,29 @@ public class SearchHistoryAction implements MeasuresWsAction {
 
   @Override
   public void handle(Request request, Response response) throws Exception {
-    SearchHistoryResponse searchHistoryResponse = Optional.of(request)
+    Optional<SearchHistoryResult> searchHistoryResult = Optional.of(request)
       .map(SearchHistoryAction::toWsRequest)
-      .map(search())
+      .map(search());
+    SearchHistoryResponse searchHistoryResponse = searchHistoryResult
       .map(result -> new SearchHistoryResponseFactory(result).apply())
       .orElseThrow();
 
     writeProtobuf(searchHistoryResponse, request, response);
+    searchHistoryResult.ifPresent(r -> writeTelemetry(request, r));
+  }
+
+  private void writeTelemetry(Request request, SearchHistoryResult searchResult) {
+    Map<String, String> headers = request.getHeaders();
+    String referer = headers.getOrDefault("referer", "");
+    if (referer.contains("project/activity") && List.of(VIEW, SUBVIEW).contains(searchResult.getComponent().qualifier())) {
+      toWsRequest(request).metrics.forEach(telemetryRequestedMetricProvider::metricRequested);
+      getGraphType(referer).ifPresent(telemetryGraphTypeProvider::incrementCount);
+    }
+  }
+
+  private static Optional<String> getGraphType(String url) {
+    Matcher matcher = GRAPH_REGEX.matcher(url);
+    return matcher.find() ? Optional.of(matcher.group(1)) : Optional.of("issues");
   }
 
   private static SearchHistoryRequest toWsRequest(Request request) {

@@ -11,7 +11,8 @@
       p.tags as tagsString,
       p.private as isPrivate,
       p.creation_method as creationMethod,
-      p.ai_code_assurance as aiCodeAssurance,
+      p.contains_ai_code as containsAiCode,
+      p.ai_code_fix_enabled as aiCodeFixEnabled,
       p.created_at as createdAt,
       p.updated_at as updatedAt
     </sql>
@@ -137,7 +138,8 @@
       private,
       tags,
       creation_method,
-      ai_code_assurance,
+      contains_ai_code,
+      ai_code_fix_enabled,
       created_at,
       updated_at
     )
@@ -150,7 +152,8 @@
     #{isPrivate,jdbcType=BOOLEAN},
     #{tagsString, jdbcType=VARCHAR},
     #{creationMethod, jdbcType=VARCHAR},
-    #{aiCodeAssurance, jdbcType=BOOLEAN},
+    #{containsAiCode, jdbcType=BOOLEAN},
+    #{aiCodeFixEnabled, jdbcType=BOOLEAN},
     #{createdAt,jdbcType=BIGINT},
     #{updatedAt,jdbcType=BIGINT}
     )
@@ -168,6 +171,7 @@
     update projects set
     name = #{name,jdbcType=VARCHAR},
     description = #{description,jdbcType=VARCHAR},
+    ai_code_fix_enabled = #{aiCodeFixEnabled, jdbcType=BOOLEAN},
     updated_at = #{updatedAt,jdbcType=BIGINT}
     where
     uuid = #{uuid,jdbcType=VARCHAR}
@@ -181,12 +185,18 @@
     uuid = #{uuid,jdbcType=VARCHAR}
   </update>
 
-  <update id="updateAiCodeAssurance">
+  <update id="updateContainsAiCode">
     update projects set
-    ai_code_assurance = #{aiCodeAssurance,jdbcType=BOOLEAN},
+    contains_ai_code = #{containsAiCode,jdbcType=BOOLEAN},
     updated_at = #{updatedAt,jdbcType=BIGINT}
     where
     uuid = #{uuid,jdbcType=VARCHAR}
+  </update>
+
+  <update id="updateAiCodeFixEnablementForAllProjects">
+    update projects set
+    ai_code_fix_enabled = #{aiCodeFixEnabled,jdbcType=BOOLEAN},
+    updated_at = #{updatedAt,jdbcType=BIGINT}
   </update>
 
   <update id="updateNcloc">
@@ -214,6 +224,20 @@
     select count(p.uuid)
     from projects p
     where p.qualifier = 'TRK'
+  </select>
+
+  <select id="countApplications" resultType="int">
+    select count(p.uuid)
+    from projects p
+    where p.qualifier = 'APP'
+  </select>
+
+  <select id="countProjectsByAiCodeFixEnablement" resultType="int">
+    select count(p.uuid)
+    from projects p
+    where
+    p.qualifier = 'TRK'
+    and ai_code_fix_enabled = #{aiCodeFixEnabled,jdbcType=BOOLEAN}
   </select>
 
 </mapper>

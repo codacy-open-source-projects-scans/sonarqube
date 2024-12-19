@@ -56,7 +56,18 @@ public class DbVersion108 implements DbVersion {
       .add(10_8_013, "Drop index on 'project_branches.measures_migrated'", DropIndexOnProjectBranchesMeasuresMigrated.class)
       .add(10_8_014, "Drop 'measures_migrated' column on 'project_branches' table", DropMeasuresMigratedColumnInProjectBranchesTable.class)
       .add(10_8_015, "Add column 'impacts' in 'active_rules' table", AddImpactsColumnInActiveRulesTable.class)
-      .add(10_8_016, "Create 'project_dependencies' table", CreateProjectDependenciesTable.class);
+      .add(10_8_016, "Create 'project_dependencies' table", CreateProjectDependenciesTable.class)
+      .add(10_8_017, "Enable specific MQR mode", EnableSpecificMqrMode.class)
+      .add(10_8_018, "Make columns 'published_at' and 'last_modified_at' nullable on the 'cves' table", AlterCveColumnsToNullable.class)
+      .add(10_8_019, "Delete Software Quality ratings from project_measures", DeleteSoftwareQualityRatingFromProjectMeasures.class)
+      .add(10_8_020, "Create new software quality metrics", CreateNewSoftwareQualityMetrics.class)
+      .add(10_8_021, "Migrate deprecated project_measures to replacement metrics", MigrateProjectMeasuresDeprecatedMetrics.class)
+      .add(10_8_022, "Add 'manual_severity' column in 'issues_impacts' table", AddManualSeverityColumnInIssuesImpactsTable.class)
+      .add(10_8_023, "Add 'ai_code_fix_enabled' column to 'projects' table", AddAICodeFixEnabledColumnToProjectsTable.class)
+      .add(10_8_024, "Migrate boolean values of 'sonar.ai.suggestions.enabled' property to new enum values", MigrateAiSuggestionEnabledValues.class)
+      .add(10_8_025, "Add 'ai_code_supported' column in 'quality_gates' table", AddAICodeSupportedColumnToQualityGatesTable.class)
+      .add(10_8_026, "Rename 'ai_code_assurance' column in 'projects' table to 'contains_ai_code", RenameAiCodeAssuranceColumnInProjects.class)
+    ;
   }
 
 }

@@ -146,11 +146,11 @@ class DefaultSensorStorageTest {
   @Test
   void shouldFailIfUnknownMetric() {
     InputFile file = new TestInputFileBuilder("foo", "src/Foo.php").build();
-
-    assertThatThrownBy(() -> underTest.store(new DefaultMeasure()
+    DefaultMeasure defaultMeasure = new DefaultMeasure()
       .on(file)
       .forMetric(CoreMetrics.LINES)
-      .withValue(10)))
+      .withValue(10);
+    assertThatThrownBy(() -> underTest.store(defaultMeasure))
       .isInstanceOf(UnsupportedOperationException.class)
       .hasMessage("Unknown metric: lines");
   }
@@ -257,9 +257,11 @@ class DefaultSensorStorageTest {
       .forMetric(CoreMetrics.NCLOC)
       .withValue(10));
 
-    ScannerReport.Measure m = reportReader.readComponentMeasures(file.scannerId()).next();
-    assertThat(m.getIntValue().getValue()).isEqualTo(10);
-    assertThat(m.getMetricKey()).isEqualTo(CoreMetrics.NCLOC_KEY);
+    try (CloseableIterator<ScannerReport.Measure> measureCloseableIterator = reportReader.readComponentMeasures(file.scannerId())) {
+      ScannerReport.Measure m = measureCloseableIterator.next();
+      assertThat(m.getIntValue().getValue()).isEqualTo(10);
+      assertThat(m.getMetricKey()).isEqualTo(CoreMetrics.NCLOC_KEY);
+    }
   }
 
   @Test
@@ -272,9 +274,11 @@ class DefaultSensorStorageTest {
       .forMetric(CoreMetrics.NCLOC)
       .withValue(10));
 
-    ScannerReport.Measure m = reportReader.readComponentMeasures(file.scannerId()).next();
-    assertThat(m.getIntValue().getValue()).isEqualTo(10);
-    assertThat(m.getMetricKey()).isEqualTo(CoreMetrics.NCLOC_KEY);
+    try (CloseableIterator<ScannerReport.Measure> measureCloseableIterator = reportReader.readComponentMeasures(file.scannerId())) {
+      ScannerReport.Measure m = measureCloseableIterator.next();
+      assertThat(m.getIntValue().getValue()).isEqualTo(10);
+      assertThat(m.getMetricKey()).isEqualTo(CoreMetrics.NCLOC_KEY);
+    }
   }
 
   @Test
@@ -314,9 +318,11 @@ class DefaultSensorStorageTest {
       .forMetric(CoreMetrics.NCLOC)
       .withValue(10));
 
-    ScannerReport.Measure m = reportReader.readComponentMeasures(module.scannerId()).next();
-    assertThat(m.getIntValue().getValue()).isEqualTo(10);
-    assertThat(m.getMetricKey()).isEqualTo(CoreMetrics.NCLOC_KEY);
+    try (CloseableIterator<ScannerReport.Measure> measureCloseableIterator = reportReader.readComponentMeasures(module.scannerId())) {
+      ScannerReport.Measure m = measureCloseableIterator.next();
+      assertThat(m.getIntValue().getValue()).isEqualTo(10);
+      assertThat(m.getMetricKey()).isEqualTo(CoreMetrics.NCLOC_KEY);
+    }
   }
 
   @Test
@@ -386,8 +392,8 @@ class DefaultSensorStorageTest {
         .containsExactlyInAnyOrder("ruleId", "name", Constants.Severity.MAJOR, ScannerReport.IssueType.CODE_SMELL, "description");
       assertThat(adhocRule.getDefaultImpactsList()).hasSize(2).extracting(ScannerReport.Impact::getSoftwareQuality, ScannerReport.Impact::getSeverity)
         .containsExactlyInAnyOrder(
-          Tuple.tuple(SoftwareQuality.MAINTAINABILITY.name(), Severity.HIGH.name()),
-          Tuple.tuple(SoftwareQuality.RELIABILITY.name(), Severity.MEDIUM.name()));
+          Tuple.tuple(ScannerReport.SoftwareQuality.MAINTAINABILITY, ScannerReport.ImpactSeverity.ImpactSeverity_HIGH),
+          Tuple.tuple(ScannerReport.SoftwareQuality.RELIABILITY, ScannerReport.ImpactSeverity.ImpactSeverity_MEDIUM));
       assertThat(adhocRule.getCleanCodeAttribute())
         .isEqualTo(CleanCodeAttribute.CLEAR.name());
     }
@@ -402,9 +408,8 @@ class DefaultSensorStorageTest {
       ScannerReport.AdHocRule adhocRule = adhocRuleIt.next();
       assertThat(adhocRule).extracting(ScannerReport.AdHocRule::getSeverity, ScannerReport.AdHocRule::getType)
         .containsExactlyInAnyOrder(Constants.Severity.UNSET_SEVERITY, ScannerReport.IssueType.UNSET);
-      assertThat(adhocRule.getDefaultImpactsList()).extracting(ScannerReport.Impact::getSoftwareQuality, ScannerReport.Impact::getSeverity)
-        .containsExactlyInAnyOrder(Tuple.tuple(SoftwareQuality.MAINTAINABILITY.name(), Severity.MEDIUM.name()));
-      assertThat(adhocRule.getCleanCodeAttribute()).isEqualTo(CleanCodeAttribute.CONVENTIONAL.name());
+      assertThat(adhocRule.getDefaultImpactsList()).isEmpty();
+      assertThat(adhocRule.getCleanCodeAttribute()).isNullOrEmpty();
     }
   }
 }

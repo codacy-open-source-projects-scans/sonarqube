@@ -35,6 +35,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.sonar.api.config.Configuration;
 import org.sonar.api.impl.utils.TestSystem2;
 import org.sonar.api.issue.impact.Severity;
 import org.sonar.api.issue.impact.SoftwareQuality;
@@ -74,7 +75,6 @@ import org.sonar.server.es.EsTester;
 import org.sonar.server.es.SearchIdResult;
 import org.sonar.server.es.SearchOptions;
 import org.sonar.server.es.metadata.MetadataIndex;
-import org.sonar.server.plugins.DetectPluginChange;
 import org.sonar.server.plugins.ServerPluginRepository;
 import org.sonar.server.property.InternalProperties;
 import org.sonar.server.property.MapInternalProperties;
@@ -160,6 +160,7 @@ class RulesRegistrantIT {
   private ActiveRulesImpactInitializer activeRulesImpactInitializer;
   private final RuleDescriptionSectionsGenerator ruleDescriptionSectionsGenerator = mock();
   private final RuleDescriptionSectionsGeneratorResolver resolver = mock();
+  private final Configuration config = mock();
 
   private final RulesKeyVerifier rulesKeyVerifier = new RulesKeyVerifier();
   private final StartupRuleUpdater startupRuleUpdater = new StartupRuleUpdater(dbClient, system, uuidFactory, resolver);
@@ -169,7 +170,7 @@ class RulesRegistrantIT {
   @BeforeEach
   void before() {
     ruleIndexer = new RuleIndexer(es.client(), dbClient);
-    ruleIndex = new RuleIndex(es.client(), system);
+    ruleIndex = new RuleIndex(es.client(), system, config);
     activeRuleIndexer = new ActiveRuleIndexer(dbClient, es.client());
     internalProperties = new MapInternalProperties();
     activeRulesImpactInitializer = new ActiveRulesImpactInitializer(internalProperties, dbClient);
@@ -183,8 +184,7 @@ class RulesRegistrantIT {
           .key(s.getKey())
           .content(s.getHtmlContent())
           .context(s.getContext().map(c -> RuleDescriptionSectionContextDto.of(c.getKey(), c.getDisplayName())).orElse(null))
-          .build()
-        )
+          .build())
         .collect(Collectors.toSet());
       return Sets.union(ruleDescriptionSectionDtos, Set.of(builder().uuid(UuidFactoryFast.getInstance().create()).key("default").content(description).build()));
     });
@@ -439,7 +439,7 @@ class RulesRegistrantIT {
     assertThat(rule1.getType()).isEqualTo(RuleType.BUG.getDbConstant());
     assertThat(rule1.getCreatedAt()).isEqualTo(DATE1.getTime());
     assertThat(rule1.getUpdatedAt()).isEqualTo(DATE2.getTime());
-    assertThat(rule1.getEducationPrinciples()).containsOnly("concept1","concept4");
+    assertThat(rule1.getEducationPrinciples()).containsOnly("concept1", "concept4");
   }
 
   @Test
@@ -689,7 +689,7 @@ class RulesRegistrantIT {
   }
 
   private static Object[][] allRenamingCases() {
-    return new Object[][]{
+    return new Object[][] {
       {"repo1", "rule1", "repo1", "rule2"},
       {"repo1", "rule1", "repo2", "rule1"},
       {"repo1", "rule1", "repo2", "rule2"},
@@ -772,7 +772,7 @@ class RulesRegistrantIT {
     RuleDescriptionSection section1context1 = createRuleDescriptionSection(HOW_TO_FIX_SECTION_KEY, "section1 ctx1 content", "ctx_1");
     RuleDescriptionSection section1context2 = createRuleDescriptionSection(HOW_TO_FIX_SECTION_KEY, "section1 ctx2 content", "ctx_2");
     RuleDescriptionSection section2context1 = createRuleDescriptionSection(RESOURCES_SECTION_KEY, "section2 content", "ctx_1");
-    RuleDescriptionSection section2context2 = createRuleDescriptionSection(RESOURCES_SECTION_KEY,"section2 ctx2 content", "ctx_2");
+    RuleDescriptionSection section2context2 = createRuleDescriptionSection(RESOURCES_SECTION_KEY, "section2 ctx2 content", "ctx_2");
     RuleDescriptionSection section3noContext = createRuleDescriptionSection(ASSESS_THE_PROBLEM_SECTION_KEY, "section3 content", null);
     RuleDescriptionSection section4noContext = createRuleDescriptionSection(ROOT_CAUSE_SECTION_KEY, "section4 content", null);
     executeWithPluginRules(context -> {
@@ -1133,15 +1133,15 @@ class RulesRegistrantIT {
 
   @Test
   void removed_rule_should_appear_in_changelog() {
-    //GIVEN
+    // GIVEN
     QProfileDto qProfileDto = db.qualityProfiles().insert();
     RuleDto ruleDto = db.rules().insert(RULE_KEY1);
     db.qualityProfiles().activateRule(qProfileDto, ruleDto);
     ActiveRuleChange arChange = new ActiveRuleChange(DEACTIVATED, ActiveRuleDto.createFor(qProfileDto, ruleDto), ruleDto);
     when(qProfileRules.deleteRule(any(DbSession.class), eq(ruleDto))).thenReturn(List.of(arChange));
-    //WHEN
+    // WHEN
     executeWithPluginRules(context -> context.createRepository("fake", "java").done());
-    //THEN
+    // THEN
     List<QProfileChangeDto> qProfileChangeDtos = dbClient.qProfileChangeDao().selectByQuery(db.getSession(), new QProfileChangeQuery(qProfileDto.getKee()));
     assertThat(qProfileChangeDtos).extracting(QProfileChangeDto::getRulesProfileUuid, QProfileChangeDto::getChangeType, QProfileChangeDto::getSqVersion)
       .contains(tuple(qProfileDto.getRulesProfileUuid(), "DEACTIVATED", sonarQubeVersion.toString()));
@@ -1149,13 +1149,13 @@ class RulesRegistrantIT {
 
   @Test
   void removed_rule_should_be_deleted_when_renamed_repository() {
-    //GIVEN
+    // GIVEN
     RuleDto removedRuleDto = db.rules().insert(RuleKey.of("old_repo", "removed_rule"));
     RuleDto renamedRuleDto = db.rules().insert(RuleKey.of("old_repo", "renamed_rule"));
-    //WHEN
+    // WHEN
     executeWithPluginRules(context -> createRule(context, "java", "new_repo", renamedRuleDto.getRuleKey(),
       rule -> rule.addDeprecatedRuleKey(renamedRuleDto.getRepositoryKey(), renamedRuleDto.getRuleKey())));
-    //THEN
+    // THEN
     verify(qProfileRules).deleteRule(any(DbSession.class), eq(removedRuleDto));
   }
 
@@ -1235,6 +1235,7 @@ class RulesRegistrantIT {
       repo.createRule("rule1")
         .setName("any")
         .setHtmlDescription("html")
+        .setType(RuleType.VULNERABILITY)
         .addDefaultImpact(SoftwareQuality.SECURITY, Severity.HIGH)
         .setSeverity(SeverityUtil.getSeverityFromOrdinal(2));
       repo.done();
@@ -1256,6 +1257,7 @@ class RulesRegistrantIT {
       repo.createRule("rule1")
         .setName("any")
         .setHtmlDescription("html")
+        .setType(RuleType.VULNERABILITY)
         .addDefaultImpact(SoftwareQuality.SECURITY, Severity.LOW)
         .setSeverity(SeverityUtil.getSeverityFromOrdinal(2));
       repo.done();

@@ -206,8 +206,24 @@ public abstract class AbstractMigrateLiveMeasuresToMeasures extends DataChange {
     byte[] data = row.getBytes(6);
 
     Object metricValue = getMetricValue(data, textValue, valueType, numericValue);
-    if (metricValue != null) {
+    if (metricValue != null
+      && !MeasureMigration.isMetricPlannedForDeletion(metricName)) {
       measureValues.put(metricName, metricValue);
+      migrateMeasureIfNeeded(measureValues, metricName, metricValue);
+    }
+  }
+
+  private static void migrateMeasureIfNeeded(Map<String, Object> measureValues, String metricName, Object metricValue) {
+    String migratedMetricKey = MeasureMigration.getMigrationMetricKey(metricName);
+    if (migratedMetricKey != null) {
+      try {
+        Long migratedValue = MeasureMigration.migrate(metricValue);
+        if (migratedValue != null) {
+          measureValues.put(migratedMetricKey, migratedValue);
+        }
+      } catch (Exception e) {
+        LOGGER.debug("Failed to migrate metric {} with value {}", metricName, metricValue);
+      }
     }
   }
 

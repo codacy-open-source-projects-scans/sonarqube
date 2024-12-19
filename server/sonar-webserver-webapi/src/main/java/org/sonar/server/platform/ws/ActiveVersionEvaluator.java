@@ -27,6 +27,7 @@ import java.util.List;
 import java.util.SortedSet;
 import org.sonar.api.utils.System2;
 import org.sonar.core.platform.SonarQubeVersion;
+import org.sonar.updatecenter.common.Product;
 import org.sonar.updatecenter.common.Release;
 import org.sonar.updatecenter.common.UpdateCenter;
 import org.sonar.updatecenter.common.Version;
@@ -45,11 +46,14 @@ public class ActiveVersionEvaluator {
 
   public boolean evaluateIfActiveVersion(UpdateCenter updateCenter) {
     Version installedVersion = Version.create(sonarQubeVersion.get().toString());
+    if (updateCenter.getInstalledSonarProduct() == Product.SONARQUBE_COMMUNITY_BUILD) {
+      return true;
+    }
 
     if (compareWithoutPatchVersion(installedVersion, updateCenter.getSonar().getLtaVersion().getVersion()) == 0) {
       return true;
     }
-    SortedSet<Release> allReleases = updateCenter.getSonar().getAllReleases();
+    SortedSet<Release> allReleases = updateCenter.getSonar().getAllReleases(updateCenter.getInstalledSonarProduct());
     if (compareWithoutPatchVersion(installedVersion, updateCenter.getSonar().getPastLtaVersion().getVersion()) == 0) {
       Release initialLtaRelease = findInitialVersionOfMajorRelease(allReleases, updateCenter.getSonar().getLtaVersion().getVersion());
       Date initialLtaReleaseDate = initialLtaRelease.getDate();
@@ -77,15 +81,26 @@ public class ActiveVersionEvaluator {
       .filter(release -> release.getVersion().getMajor().equals(referenceVersion.getMajor())
         && release.getVersion().getMinor().equals(referenceVersion.getMinor()))
       .min(Comparator.comparing(r -> Integer.parseInt(r.getVersion().getPatch())))
-      .orElseThrow(() -> new IllegalStateException("Unable to find initial major release for version " + referenceVersion + " in releases"));
+      .orElseThrow(() -> new IllegalStateException("Unable to find initial major release for version " + referenceVersion + " in releases"
+      ));
   }
 
   private static Release findPreviousReleaseIgnoringPatch(SortedSet<Release> releases) {
-    Release refRelease = releases.last();
-    List<Release> sublist = Lists.reverse(releases.stream().toList());
-    for (Release release : sublist) {
-      if (compareWithoutPatchVersion(release.getVersion(), refRelease.getVersion()) < 0) {
-        return release;
+    if (!releases.isEmpty()) {
+      Release refRelease = releases.last();
+      int patchesOfRefRelease = 0;
+      List<Release> sublist = Lists.reverse(releases.stream().toList());
+      for (Release release : sublist) {
+        int versionComparison = compareWithoutPatchVersion(release.getVersion(), refRelease.getVersion());
+        if (versionComparison < 0) {
+          return release;
+        } else if (versionComparison == 0) {
+          patchesOfRefRelease++;
+        }
+      }
+      // if all releases have the same version, return the last one
+      if (patchesOfRefRelease == releases.size()) {
+        return refRelease;
       }
     }
     throw new IllegalStateException("Unable to find previous release in releases");

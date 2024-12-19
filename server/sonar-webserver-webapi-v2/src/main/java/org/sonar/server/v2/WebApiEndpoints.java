@@ -38,6 +38,7 @@ public class WebApiEndpoints {
 
   public static final String CLEAN_CODE_POLICY_DOMAIN = "/clean-code-policy";
   public static final String RULES_ENDPOINT = CLEAN_CODE_POLICY_DOMAIN + "/rules";
+  public static final String MODE_ENDPOINT = CLEAN_CODE_POLICY_DOMAIN + "/mode";
 
   public static final String DOP_TRANSLATION_DOMAIN = "/dop-translation";
   public static final String GITLAB_CONFIGURATION_ENDPOINT = DOP_TRANSLATION_DOMAIN + "/gitlab-configurations";
@@ -50,6 +51,7 @@ public class WebApiEndpoints {
   public static final String ANALYSIS_DOMAIN = "/analysis";
   public static final String VERSION_ENDPOINT = ANALYSIS_DOMAIN + "/version";
   public static final String JRE_ENDPOINT = ANALYSIS_DOMAIN + "/jres";
+  public static final String ACTIVE_RULES_ENDPOINT = ANALYSIS_DOMAIN + "/active_rules";
   public static final String SCANNER_ENGINE_ENDPOINT = ANALYSIS_DOMAIN + "/engine";
 
   private WebApiEndpoints() {

@@ -26,10 +26,8 @@ import javax.annotation.CheckForNull;
 import org.slf4j.LoggerFactory;
 import org.sonar.api.SonarEdition;
 import org.sonar.api.SonarQubeSide;
-import org.sonar.api.config.EmailSettings;
 import org.sonar.api.internal.MetadataLoader;
 import org.sonar.api.internal.SonarRuntimeImpl;
-import org.sonar.server.component.ComponentTypes;
 import org.sonar.api.server.profile.BuiltInQualityProfileAnnotationLoader;
 import org.sonar.api.server.rule.RulesDefinitionXmlLoader;
 import org.sonar.api.utils.Durations;
@@ -60,7 +58,6 @@ import org.sonar.ce.task.projectanalysis.taskprocessor.AuditPurgeTaskModule;
 import org.sonar.ce.task.projectanalysis.taskprocessor.IssueSyncTaskModule;
 import org.sonar.ce.taskprocessor.CeProcessingScheduler;
 import org.sonar.ce.taskprocessor.CeTaskProcessorModule;
-import org.sonar.server.component.DefaultComponentTypes;
 import org.sonar.core.config.CorePropertyDefinitions;
 import org.sonar.core.documentation.DefaultDocumentationLinkGenerator;
 import org.sonar.core.extension.CoreExtensionRepositoryImpl;
@@ -86,6 +83,8 @@ import org.sonar.db.purge.PurgeProfiler;
 import org.sonar.process.NetworkUtilsImpl;
 import org.sonar.process.Props;
 import org.sonar.process.logging.LogbackHelper;
+import org.sonar.server.component.ComponentTypes;
+import org.sonar.server.component.DefaultComponentTypes;
 import org.sonar.server.component.index.EntityDefinitionIndexer;
 import org.sonar.server.config.ConfigurationProvider;
 import org.sonar.server.email.EmailSmtpConfiguration;
@@ -96,6 +95,7 @@ import org.sonar.server.extension.CoreExtensionStopper;
 import org.sonar.server.favorite.FavoriteUpdater;
 import org.sonar.server.issue.IssueFieldsSetter;
 import org.sonar.server.issue.IssueStorage;
+import org.sonar.server.issue.TaintChecker;
 import org.sonar.server.issue.index.IssueIndexer;
 import org.sonar.server.issue.index.IssueIteratorFactory;
 import org.sonar.server.issue.notification.IssuesChangesNotificationModule;
@@ -113,6 +113,7 @@ import org.sonar.server.metric.UnanalyzedLanguageMetrics;
 import org.sonar.server.notification.DefaultNotificationManager;
 import org.sonar.server.notification.NotificationService;
 import org.sonar.server.notification.email.EmailNotificationChannel;
+import org.sonar.server.oauth.OAuthMicrosoftRestClient;
 import org.sonar.server.permission.index.PermissionIndexer;
 import org.sonar.server.platform.DefaultNodeInformation;
 import org.sonar.server.platform.OfficialDistribution;
@@ -307,6 +308,8 @@ public class ComputeEngineContainerImpl implements ComputeEngineContainer {
       computeEngineStatus,
       NoOpAuditPersister.class,
 
+      DefaultDocumentationLinkGenerator.class,
+
       CoreExtensionRepositoryImpl.class,
       CoreExtensionsLoader.class,
       CECoreExtensionsInstaller.class);
@@ -393,6 +396,7 @@ public class ComputeEngineContainerImpl implements ComputeEngineContainer {
       IssueIteratorFactory.class,
       IssueFieldsSetter.class, // used in Web Services and CE's DebtCalculator
       FunctionExecutor.class, // used by IssueWorkflow
+      TaintChecker.class,
       IssueWorkflow.class, // used in Web Services and CE's DebtCalculator
       NewIssuesEmailTemplate.class,
       MyNewIssuesEmailTemplate.class,
@@ -404,8 +408,8 @@ public class ComputeEngineContainerImpl implements ComputeEngineContainer {
 
       // Notifications
       QGChangeEmailTemplate.class,
-      EmailSettings.class,
       EmailSmtpConfiguration.class,
+      OAuthMicrosoftRestClient.class,
       NotificationService.class,
       DefaultNotificationManager.class,
       EmailNotificationChannel.class,
@@ -444,9 +448,7 @@ public class ComputeEngineContainerImpl implements ComputeEngineContainer {
       QualityGateFinder.class,
       QualityGateEvaluatorImpl.class,
 
-      new AnalysisCacheCleaningModule(),
-
-      DefaultDocumentationLinkGenerator.class
+      new AnalysisCacheCleaningModule()
 
     );
 

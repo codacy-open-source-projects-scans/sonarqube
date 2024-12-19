@@ -53,6 +53,7 @@ import org.elasticsearch.search.builder.SearchSourceBuilder;
 import org.elasticsearch.search.sort.FieldSortBuilder;
 import org.elasticsearch.search.sort.SortBuilders;
 import org.elasticsearch.search.sort.SortOrder;
+import org.sonar.api.config.Configuration;
 import org.sonar.api.issue.impact.SoftwareQuality;
 import org.sonar.api.rule.RuleStatus;
 import org.sonar.api.rule.Severity;
@@ -83,6 +84,8 @@ import static org.elasticsearch.search.aggregations.AggregationBuilders.filters;
 import static org.elasticsearch.search.aggregations.AggregationBuilders.reverseNested;
 import static org.sonar.api.rules.RuleType.SECURITY_HOTSPOT;
 import static org.sonar.api.rules.RuleType.VULNERABILITY;
+import static org.sonar.core.config.MQRModeConstants.MULTI_QUALITY_MODE_DEFAULT_VALUE;
+import static org.sonar.core.config.MQRModeConstants.MULTI_QUALITY_MODE_ENABLED;
 import static org.sonar.server.es.EsUtils.SCROLL_TIME_IN_MINUTES;
 import static org.sonar.server.es.EsUtils.optimizeScrollRequest;
 import static org.sonar.server.es.EsUtils.scrollIds;
@@ -93,6 +96,8 @@ import static org.sonar.server.es.newindex.DefaultIndexSettingsElement.SEARCH_GR
 import static org.sonar.server.es.newindex.DefaultIndexSettingsElement.SEARCH_WORDS_ANALYZER;
 import static org.sonar.server.es.newindex.DefaultIndexSettingsElement.SORTABLE_ANALYZER;
 import static org.sonar.server.issue.index.IssueIndexDefinition.FIELD_ISSUE_IMPACTS;
+import static org.sonar.server.rule.index.RuleIndexDefinition.FIELD_ACTIVE_RULE_IMPACTS;
+import static org.sonar.server.rule.index.RuleIndexDefinition.FIELD_ACTIVE_RULE_IMPACT_SEVERITY;
 import static org.sonar.server.rule.index.RuleIndexDefinition.FIELD_ACTIVE_RULE_INHERITANCE;
 import static org.sonar.server.rule.index.RuleIndexDefinition.FIELD_ACTIVE_RULE_PROFILE_UUID;
 import static org.sonar.server.rule.index.RuleIndexDefinition.FIELD_ACTIVE_RULE_SEVERITY;
@@ -154,6 +159,15 @@ public class RuleIndex {
   public static final String FACET_CLEAN_CODE_ATTRIBUTE_CATEGORY = "cleanCodeAttributeCategories";
   public static final String FACET_IMPACT_SOFTWARE_QUALITY = "impactSoftwareQualities";
   public static final String FACET_IMPACT_SEVERITY = "impactSeverities";
+  public static final String FACET_ACTIVE_IMPACT_SEVERITY = "active_impactSeverities";
+
+  private static final BoolQueryBuilder SECURITY_IMPACT_AND_HOTSPOT_FILTER =
+    boolQuery()
+      .should(
+        nestedQuery(FIELD_RULE_IMPACTS, termsQuery(FIELD_RULE_IMPACT_SOFTWARE_QUALITY, SoftwareQuality.SECURITY.name()), ScoreMode.Avg))
+      .should(termsQuery(FIELD_RULE_TYPE, SECURITY_HOTSPOT.name()))
+      .minimumShouldMatch(1);
+
 
   private static final int MAX_FACET_SIZE = 100;
 
@@ -166,10 +180,13 @@ public class RuleIndex {
 
   private final EsClient client;
   private final System2 system2;
+  private final Configuration config;
 
-  public RuleIndex(EsClient client, System2 system2) {
+
+  public RuleIndex(EsClient client, System2 system2, Configuration config) {
     this.client = client;
     this.system2 = system2;
+    this.config = config;
   }
 
   public SearchIdResult<String> search(RuleQuery query, SearchOptions options) {
@@ -266,7 +283,7 @@ public class RuleIndex {
   }
 
   /* Build main filter (match based) */
-  private static Map<String, QueryBuilder> buildFilters(RuleQuery query) {
+  private Map<String, QueryBuilder> buildFilters(RuleQuery query) {
     Map<String, QueryBuilder> filters = new HashMap<>();
 
     /* Add enforced filter on main type Rule */
@@ -407,12 +424,14 @@ public class RuleIndex {
     allFilters.put(FIELD_RULE_IMPACTS, nestedQuery(FIELD_ISSUE_IMPACTS, impactsFilter, ScoreMode.Avg));
   }
 
-  private static void addSecurityStandardFilter(Map<String, QueryBuilder> filters, String key, Collection<String> values) {
+  private void addSecurityStandardFilter(Map<String, QueryBuilder> filters, String key, Collection<String> values) {
     if (isNotEmpty(values)) {
       filters.put(key,
         boolQuery()
           .must(QueryBuilders.termsQuery(key, values))
-          .must(QueryBuilders.termsQuery(FIELD_RULE_TYPE, VULNERABILITY.name(), SECURITY_HOTSPOT.name())));
+          .must(isMQRMode() ?
+            SECURITY_IMPACT_AND_HOTSPOT_FILTER :
+            QueryBuilders.termsQuery(FIELD_RULE_TYPE, VULNERABILITY.name(), SECURITY_HOTSPOT.name())));
     }
   }
 
@@ -445,6 +464,7 @@ public class RuleIndex {
     addTermFilter(activeRuleFilter, FIELD_ACTIVE_RULE_INHERITANCE, query.getInheritance());
     addTermFilter(activeRuleFilter, FIELD_ACTIVE_RULE_SEVERITY, query.getActiveSeverities());
     addTermFilter(activeRuleFilter, FIELD_PRIORITIZED_RULE, query.getPrioritizedRule());
+    addActiveImpactSeverityFilter(activeRuleFilter, query.getActiveImpactSeverities());
 
     // ChildQuery
     QueryBuilder childQuery;
@@ -454,6 +474,18 @@ public class RuleIndex {
       childQuery = matchAllQuery();
     }
     return childQuery;
+  }
+
+  private static BoolQueryBuilder addActiveImpactSeverityFilter(BoolQueryBuilder filter, @Nullable Collection<String> values) {
+    if (isNotEmpty(values)) {
+      BoolQueryBuilder valuesFilter = boolQuery();
+      valuesFilter.must(nestedQuery(FIELD_ACTIVE_RULE_IMPACTS,
+        termsQuery(FIELD_ACTIVE_RULE_IMPACT_SEVERITY, values),
+        ScoreMode.Avg));
+
+      filter.must(valuesFilter);
+    }
+    return filter;
   }
 
   private static BoolQueryBuilder addTermFilter(BoolQueryBuilder filter, String field, @Nullable Collection<String> values) {
@@ -482,7 +514,7 @@ public class RuleIndex {
     return filter;
   }
 
-  private static Map<String, AggregationBuilder> getFacets(RuleQuery query, SearchOptions options, QueryBuilder queryBuilder,
+  private Map<String, AggregationBuilder> getFacets(RuleQuery query, SearchOptions options, QueryBuilder queryBuilder,
     Map<String, QueryBuilder> filters) {
     Map<String, AggregationBuilder> aggregations = new HashMap<>();
     StickyFacetBuilder stickyFacetBuilder = stickyFacetBuilder(queryBuilder, filters);
@@ -500,7 +532,7 @@ public class RuleIndex {
     return aggregations;
   }
 
-  private static void addDefaultFacets(RuleQuery query, SearchOptions options, Map<String, AggregationBuilder> aggregations,
+  private void addDefaultFacets(RuleQuery query, SearchOptions options, Map<String, AggregationBuilder> aggregations,
     StickyFacetBuilder stickyFacetBuilder) {
     if (options.getFacets().contains(FACET_LANGUAGES) || options.getFacets().contains(FACET_OLD_DEFAULT)) {
       Collection<String> languages = query.getLanguages();
@@ -535,6 +567,7 @@ public class RuleIndex {
 
     addImpactSoftwareQualityFacetIfNeeded(options, query, aggregations, stickyFacetBuilder);
     addImpactSeverityFacetIfNeeded(options, query, aggregations, stickyFacetBuilder);
+    addActiveRuleImpactSeverityFacetIfNeeded(options, query, aggregations, stickyFacetBuilder);
 
     addDefaultSecurityFacets(query, options, aggregations, stickyFacetBuilder);
   }
@@ -578,10 +611,7 @@ public class RuleIndex {
     Function<String, BoolQueryBuilder> mainQuery = severity -> boolQuery()
       .filter(QueryBuilders.termQuery(FIELD_RULE_IMPACT_SEVERITY, severity));
 
-    FiltersAggregator.KeyedFilter[] keyedFilters = Arrays.stream(org.sonar.api.issue.impact.Severity.values())
-      .map(severity -> new FiltersAggregator.KeyedFilter(severity.name(),
-        buildSeverityFacetFilter(query, mainQuery, severity.name())))
-      .toArray(FiltersAggregator.KeyedFilter[]::new);
+    FiltersAggregator.KeyedFilter[] keyedFilters = getKeyedFilters(query, mainQuery);
 
     NestedAggregationBuilder nestedAggregationBuilder = AggregationBuilders.nested("nested_" + FACET_IMPACT_SEVERITY, FIELD_RULE_IMPACTS)
       .subAggregation(filters(FACET_IMPACT_SEVERITY, keyedFilters).subAggregation(reverseNested("reverse_nested_" + FIELD_RULE_IMPACT_SEVERITY)));
@@ -592,6 +622,57 @@ public class RuleIndex {
     aggregations.put(FACET_IMPACT_SEVERITY, aggregationBuilder);
   }
 
+  private static void addActiveRuleImpactSeverityFacetIfNeeded(SearchOptions options, RuleQuery query,
+    Map<String, AggregationBuilder> aggregations, StickyFacetBuilder stickyFacetBuilder) {
+    QProfileDto profile = query.getQProfile();
+    if (!options.getFacets().contains(FACET_ACTIVE_IMPACT_SEVERITY) || profile == null) {
+      return;
+    }
+
+    // We are building a children aggregation on active rules
+    // so the rule filter has to be used as parent filter for active rules
+    // from which we remove filters that concern active rules ("activation")
+    HasParentQueryBuilder ruleFilter = JoinQueryBuilders.hasParentQuery(
+      TYPE_RULE.getType(),
+      stickyFacetBuilder.getStickyFacetFilter("activation"),
+      false);
+
+    // Rebuilding the active rule filter without impact severities
+    BoolQueryBuilder childrenFilter = boolQuery();
+    addTermFilter(childrenFilter, FIELD_ACTIVE_RULE_PROFILE_UUID, profile.getRulesProfileUuid());
+    addTermFilter(childrenFilter, FIELD_ACTIVE_RULE_SEVERITY, query.getActiveSeverities());
+    RuleIndex.addTermFilter(childrenFilter, FIELD_ACTIVE_RULE_INHERITANCE, query.getInheritance());
+    QueryBuilder activeRuleFilter = childrenFilter.must(ruleFilter);
+
+    Function<String, BoolQueryBuilder> mainQuery = severity -> boolQuery()
+      .filter(QueryBuilders.termQuery(FIELD_ACTIVE_RULE_IMPACT_SEVERITY, severity));
+
+    FiltersAggregator.KeyedFilter[] keyedFilters = getKeyedFilters(query, mainQuery);
+
+    NestedAggregationBuilder nestedAggregationBuilder = AggregationBuilders.nested("nested_" + FACET_ACTIVE_IMPACT_SEVERITY,
+        FIELD_ACTIVE_RULE_IMPACTS)
+      .subAggregation(filters(FACET_ACTIVE_IMPACT_SEVERITY, keyedFilters)
+        .subAggregation(reverseNested("reverse_nested_" + FIELD_ACTIVE_RULE_IMPACT_SEVERITY))
+      );
+
+    AggregationBuilder activeSeverities = JoinAggregationBuilders.children(FACET_ACTIVE_IMPACT_SEVERITY + "_children",
+        TYPE_ACTIVE_RULE.getName())
+      .subAggregation(
+        AggregationBuilders.filter(FACET_ACTIVE_IMPACT_SEVERITY + "_filter", activeRuleFilter)
+          .subAggregation(nestedAggregationBuilder)
+      );
+
+    aggregations.put(FACET_ACTIVE_IMPACT_SEVERITY,
+      AggregationBuilders.global(FACET_ACTIVE_IMPACT_SEVERITY).subAggregation(activeSeverities));
+  }
+
+  private static FiltersAggregator.KeyedFilter[] getKeyedFilters(RuleQuery query, Function<String, BoolQueryBuilder> mainQuery) {
+    return Arrays.stream(org.sonar.api.issue.impact.Severity.values())
+      .map(severity -> new FiltersAggregator.KeyedFilter(severity.name(),
+        buildSeverityFacetFilter(query, mainQuery, severity.name())))
+      .toArray(FiltersAggregator.KeyedFilter[]::new);
+  }
+
   private static BoolQueryBuilder buildSeverityFacetFilter(RuleQuery query, Function<String, BoolQueryBuilder> mainQuery, String value) {
     BoolQueryBuilder boolQueryBuilder = mainQuery.apply(value);
     if (isNotEmpty(query.getImpactSoftwareQualities())) {
@@ -600,16 +681,20 @@ public class RuleIndex {
     return boolQueryBuilder;
   }
 
-  private static Function<TermsAggregationBuilder, AggregationBuilder> filterSecurityCategories() {
-    return termsAggregation -> AggregationBuilders.filter(
-      "filter_by_rule_types_" + termsAggregation.getName(),
-      termsQuery(FIELD_RULE_TYPE,
-        VULNERABILITY.name(),
-        SECURITY_HOTSPOT.name()))
-      .subAggregation(termsAggregation);
+  private Function<TermsAggregationBuilder, AggregationBuilder> filterSecurityCategories() {
+    if (isMQRMode()) {
+      return termsAggregation -> AggregationBuilders.filter("filter_by_security_impact_" + termsAggregation.getName(),
+        SECURITY_IMPACT_AND_HOTSPOT_FILTER).subAggregation(termsAggregation);
+
+    } else {
+      return termsAggregation -> AggregationBuilders.filter(
+          "filter_by_rule_types_" + termsAggregation.getName(),
+          termsQuery(FIELD_RULE_TYPE, VULNERABILITY.name(), SECURITY_HOTSPOT.name()))
+        .subAggregation(termsAggregation);
+    }
   }
 
-  private static void addDefaultSecurityFacets(RuleQuery query, SearchOptions options, Map<String, AggregationBuilder> aggregations,
+  private void addDefaultSecurityFacets(RuleQuery query, SearchOptions options, Map<String, AggregationBuilder> aggregations,
     StickyFacetBuilder stickyFacetBuilder) {
     if (options.getFacets().contains(FACET_CWE)) {
       Collection<String> categories = query.getCwe();
@@ -678,6 +763,7 @@ public class RuleIndex {
       // Rebuilding the active rule filter without severities
       BoolQueryBuilder childrenFilter = boolQuery();
       addTermFilter(childrenFilter, FIELD_ACTIVE_RULE_PROFILE_UUID, profile.getRulesProfileUuid());
+      addActiveImpactSeverityFilter(childrenFilter, query.getActiveImpactSeverities());
       RuleIndex.addTermFilter(childrenFilter, FIELD_ACTIVE_RULE_INHERITANCE, query.getInheritance());
       QueryBuilder activeRuleFilter = childrenFilter.must(ruleFilter);
 
@@ -770,5 +856,9 @@ public class RuleIndex {
 
   private static boolean isEmpty(@Nullable Collection<?> list) {
     return list == null || list.isEmpty();
+  }
+
+  private boolean isMQRMode() {
+    return config.getBoolean(MULTI_QUALITY_MODE_ENABLED).orElse(MULTI_QUALITY_MODE_DEFAULT_VALUE);
   }
 }
