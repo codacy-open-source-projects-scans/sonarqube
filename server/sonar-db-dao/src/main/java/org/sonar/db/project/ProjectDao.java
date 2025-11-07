@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -74,7 +74,7 @@ public class ProjectDao implements Dao {
     if (keys.isEmpty()) {
       return emptyList();
     }
-    return mapper(session).selectProjectsByKeys(keys);
+    return executeLargeInputs(keys, partition -> mapper(session).selectProjectsByKeys(partition));
   }
 
   public List<ProjectDto> selectApplicationsByKeys(DbSession session, Set<String> keys) {
@@ -121,6 +121,10 @@ public class ProjectDao implements Dao {
 
   public void updateContainsAiCode(DbSession session, String uuid, boolean containsAiCode) {
     mapper(session).updateContainsAiCode(uuid, containsAiCode, system2.now());
+  }
+
+  public void updateDetectedAiCode(DbSession session, String uuid, boolean detectedAiCode) {
+    mapper(session).updateDetectedAiCode(uuid, detectedAiCode, system2.now());
   }
 
   public void updateAiCodeFixEnablementForAllProjects(DbSession dbSession, boolean featureEnablement) {
@@ -170,5 +174,9 @@ public class ProjectDao implements Dao {
 
   public int countAiCodeFixDisabledProjects(DbSession session) {
     return mapper(session).countProjectsByAiCodeFixEnablement(false);
+  }
+
+  public Set<String> selectAiCodeFixEnabledProjectKeys(DbSession session) {
+    return mapper(session).selectProjectKeysByAiCodeFixEnablement(true);
   }
 }

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -39,6 +39,7 @@ import org.sonar.scanner.bootstrap.ScannerPluginRepository;
 import org.sonar.scanner.cache.AnalysisCacheEnabled;
 import org.sonar.scanner.cache.ReadCacheImpl;
 import org.sonar.scanner.cache.WriteCacheImpl;
+import org.sonar.scanner.repository.featureflags.FeatureFlagsRepository;
 import org.sonar.scanner.scan.branch.BranchConfiguration;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -64,12 +65,13 @@ class ModuleSensorContextTest {
   private ModuleSensorContext underTest;
   private ExecutingSensorContext executingSensorContext = mock(ExecutingSensorContext.class);
   private ScannerPluginRepository pluginRepository = mock(ScannerPluginRepository.class);
+  private FeatureFlagsRepository featureFlagsRepository = mock();
 
   @BeforeEach
   void prepare() {
     fs = new DefaultFileSystem(temp);
-    underTest = new ModuleSensorContext(mock(DefaultInputProject.class), mock(InputModule.class), settings.asConfig(), settings, fs, activeRules, sensorStorage, runtime,
-      branchConfiguration, writeCache, readCache, analysisCacheEnabled, unchangedFilesHandler, executingSensorContext, pluginRepository);
+    underTest = new ModuleSensorContext(mock(DefaultInputProject.class), mock(InputModule.class), settings.asConfig(), fs, activeRules, sensorStorage, runtime,
+      branchConfiguration, writeCache, readCache, analysisCacheEnabled, unchangedFilesHandler, executingSensorContext, pluginRepository, featureFlagsRepository);
   }
 
   @Test
@@ -104,8 +106,8 @@ class ModuleSensorContextTest {
   @Test
   void pull_request_can_skip_unchanged_files() {
     when(branchConfiguration.isPullRequest()).thenReturn(true);
-    underTest = new ModuleSensorContext(mock(DefaultInputProject.class), mock(InputModule.class), settings.asConfig(), settings, fs, activeRules, sensorStorage, runtime,
-      branchConfiguration, writeCache, readCache, analysisCacheEnabled, unchangedFilesHandler, executingSensorContext, pluginRepository);
+    underTest = new ModuleSensorContext(mock(DefaultInputProject.class), mock(InputModule.class), settings.asConfig(), fs, activeRules, sensorStorage, runtime,
+      branchConfiguration, writeCache, readCache, analysisCacheEnabled, unchangedFilesHandler, executingSensorContext, pluginRepository, featureFlagsRepository);
     assertThat(underTest.canSkipUnchangedFiles()).isTrue();
   }
 

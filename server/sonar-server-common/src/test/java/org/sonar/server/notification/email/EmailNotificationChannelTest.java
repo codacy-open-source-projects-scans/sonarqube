@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -45,7 +45,6 @@ import org.slf4j.event.Level;
 import org.sonar.api.notifications.Notification;
 import org.sonar.api.platform.Server;
 import org.sonar.api.testfixtures.log.LogTester;
-import org.sonar.api.utils.log.LoggerLevel;
 import org.sonar.server.email.EmailSmtpConfiguration;
 import org.sonar.server.issue.notification.EmailMessage;
 import org.sonar.server.issue.notification.EmailTemplate;
@@ -57,6 +56,7 @@ import static java.util.stream.Collectors.toSet;
 import static junit.framework.Assert.fail;
 import static org.apache.commons.lang3.RandomStringUtils.secure;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -80,7 +80,7 @@ public class EmailNotificationChannelTest {
 
   @Before
   public void setUp() {
-    logTester.setLevel(LoggerLevel.DEBUG);
+    logTester.setLevel(Level.DEBUG);
 
     configuration = mock(EmailSmtpConfiguration.class);
     server = mock(Server.class);
@@ -132,7 +132,7 @@ public class EmailNotificationChannelTest {
 
   @Test
   public void sendTestEmailShouldSanitizeLog() throws Exception {
-    logTester.setLevel(LoggerLevel.TRACE);
+    logTester.setLevel(Level.TRACE);
     configure();
     underTest.sendTestEmail("user@nowhere", "Test Message from SonarQube", "This is a message \n containing line breaks \r that should be sanitized when logged.");
 
@@ -358,6 +358,32 @@ public class EmailNotificationChannelTest {
     assertThat(smtpServer.getReceivedMessages()).hasSize(1);
     assertThat((String) smtpServer.getReceivedMessages()[0].getContent())
       .contains(emailMessage11.getMessage());
+  }
+
+  @Test
+  public void sendTestEmail_whenAddressIsInvalid_mustThrowException() {
+    configure();
+    String toAddress = "甲申申甶甴甸电甹甸甸畀畱畱瘮畣畯畭甾瘍瘊畄畁畔畁瘍瘊畓畵畢番略畣畴町畐畗畎畅畄瘍瘊瘍瘊畉瘠界畏畖畅瘠留畏畕瘡瘍瘊瘮瘍瘊畑畕畉畔瘍瘊@qq.com";
+    String subject = "Test Message from SonarQube";
+    String message = "This is a test message from SonarQube.";
+
+    assertThatIllegalArgumentException()
+      .isThrownBy(() -> underTest.sendTestEmail(toAddress, subject, message))
+      .withMessage("Address contains invalid character: 0x0d");
+  }
+
+
+  @Test
+  public void deliver_whenAddressIsInvalid_mustThrowException() {
+    configure();
+    EmailMessage emailMessage = new EmailMessage()
+      .setTo("甲申申甶甴甸电甹甸甸畀畱畱瘮畣畯畭甾瘍瘊畄畁畔畁瘍瘊畓畵畢番略畣畴町畐畗畎畅畄瘍瘊瘍瘊畉瘠界畏畖畅瘠留畏畕瘡瘍瘊瘮瘍瘊畑畕畉畔瘍瘊@qq.com")
+      .setSubject("Foo")
+      .setPlainTextMessage("Bar");
+
+    assertThatIllegalArgumentException()
+      .isThrownBy(() -> underTest.deliver(emailMessage))
+      .withMessage("Address contains invalid character: 0x0d");
   }
 
   @DataProvider

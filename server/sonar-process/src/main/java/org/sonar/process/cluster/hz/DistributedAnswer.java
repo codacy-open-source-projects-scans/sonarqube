@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -89,5 +89,13 @@ public class DistributedAnswer<T> {
         .collect(Collectors.joining(", "));
       throw new IllegalStateException("Distributed cluster action timed out in cluster nodes " + timedOutMemberNames);
     }
+  }
+
+  /**
+   * Returns any answer. No guarantees are made on the order. Use this method if you only expect exactly one answer.
+   * @return the first answer, if any
+   */
+  public Optional<T> getSingleAnswer() {
+    return answers.values().stream().findFirst();
   }
 }

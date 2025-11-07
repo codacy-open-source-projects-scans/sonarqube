@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -27,6 +27,7 @@ public class QualityGateFindingDto {
   private String operator = null;
   private String valueType = null;
   private String errorThreshold = null;
+  private String qualityGateName = null;
 
   public String getDescription() {
     return description;
@@ -50,6 +51,10 @@ public class QualityGateFindingDto {
     }
 
     return errorThreshold;
+  }
+
+  public String getQualityGateName() {
+    return qualityGateName;
   }
 
   private String getOperator() {

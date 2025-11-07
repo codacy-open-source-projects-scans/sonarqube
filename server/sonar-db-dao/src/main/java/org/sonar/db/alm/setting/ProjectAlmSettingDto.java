@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,6 +19,7 @@
  */
 package org.sonar.db.alm.setting;
 
+import java.util.Objects;
 import javax.annotation.CheckForNull;
 import javax.annotation.Nullable;
 
@@ -60,6 +61,12 @@ public class ProjectAlmSettingDto {
    * It will be null when the ALM is other than GitHub
    */
   private Boolean summaryCommentEnabled;
+
+  /**
+   * Boolean flag which enable/disable adding inline comments to files
+   * It will be null when the ALM is other than Azure DevOps
+   */
+  private Boolean inlineAnnotationsEnabled;
 
   /**
    * Boolean to know if this SonarQube project is part of a monorepo
@@ -125,6 +132,15 @@ public class ProjectAlmSettingDto {
     return this;
   }
 
+  public Boolean getInlineAnnotationsEnabled() {
+    return inlineAnnotationsEnabled;
+  }
+
+  public ProjectAlmSettingDto setInlineAnnotationsEnabled(@Nullable Boolean inlineAnnotationsEnabled) {
+    this.inlineAnnotationsEnabled = inlineAnnotationsEnabled;
+    return this;
+  }
+
   public Boolean getMonorepo() {
     return monorepo;
   }
@@ -149,4 +165,22 @@ public class ProjectAlmSettingDto {
   void setCreatedAt(long createdAt) {
     this.createdAt = createdAt;
   }
+
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) {
+      return true;
+    }
+    if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
+    ProjectAlmSettingDto that = (ProjectAlmSettingDto) o;
+    return Objects.equals(uuid, that.uuid);
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(uuid);
+  }
+
 }

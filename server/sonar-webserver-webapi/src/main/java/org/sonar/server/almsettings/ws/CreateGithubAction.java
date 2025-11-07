@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -28,7 +28,7 @@ import org.sonar.db.DbSession;
 import org.sonar.db.alm.setting.AlmSettingDto;
 import org.sonar.server.user.UserSession;
 
-import static org.apache.commons.lang3.StringUtils.removeEnd;
+import static org.apache.commons.lang3.Strings.CS;
 import static org.sonar.db.alm.setting.ALM.GITHUB;
 
 public class CreateGithubAction implements AlmSettingsWsAction {
@@ -113,7 +113,7 @@ public class CreateGithubAction implements AlmSettingsWsAction {
     dbClient.almSettingDao().insert(dbSession, new AlmSettingDto()
       .setAlm(GITHUB)
       .setKey(key)
-      .setUrl(removeEnd(request.mandatoryParam(PARAM_URL), "/"))
+      .setUrl(CS.removeEnd(request.mandatoryParam(PARAM_URL), "/"))
       .setAppId(request.mandatoryParam(PARAM_APP_ID))
       .setPrivateKey(request.mandatoryParam(PARAM_PRIVATE_KEY))
       .setClientId(request.mandatoryParam(PARAM_CLIENT_ID))

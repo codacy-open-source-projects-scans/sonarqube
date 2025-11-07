@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -63,14 +63,6 @@ import org.sonar.db.component.SnapshotDto;
 import org.sonar.db.component.SnapshotMapper;
 import org.sonar.db.component.UuidWithBranchUuidDto;
 import org.sonar.db.component.ViewsSnapshotDto;
-import org.sonar.db.dependency.CveCweDto;
-import org.sonar.db.dependency.CveCweMapper;
-import org.sonar.db.dependency.CveDto;
-import org.sonar.db.dependency.CveMapper;
-import org.sonar.db.dependency.IssuesDependencyDto;
-import org.sonar.db.dependency.IssuesDependencyMapper;
-import org.sonar.db.dependency.ProjectDependenciesMapper;
-import org.sonar.db.dependency.ProjectDependencyDto;
 import org.sonar.db.duplication.DuplicationMapper;
 import org.sonar.db.duplication.DuplicationUnitDto;
 import org.sonar.db.entity.EntityDto;
@@ -89,12 +81,19 @@ import org.sonar.db.issue.IssueFixedMapper;
 import org.sonar.db.issue.IssueMapper;
 import org.sonar.db.issue.NewCodeReferenceIssueDto;
 import org.sonar.db.issue.PrIssueDto;
+import org.sonar.db.jira.AtlassianAuthenticationDetailsMapper;
+import org.sonar.db.jira.JiraOrganizationBindingMapper;
+import org.sonar.db.jira.JiraOrganizationBindingPendingMapper;
+import org.sonar.db.jira.JiraProjectBindingMapper;
+import org.sonar.db.jira.JiraSelectedWorkTypeMapper;
+import org.sonar.db.jira.JiraWorkItemMapper;
+import org.sonar.db.jira.XsrfTokenMapper;
 import org.sonar.db.measure.LargestBranchNclocDto;
 import org.sonar.db.measure.MeasureMapper;
-import org.sonar.db.measure.ProjectLocDistributionDto;
 import org.sonar.db.measure.ProjectMeasureDto;
 import org.sonar.db.measure.ProjectMeasureMapper;
 import org.sonar.db.metric.MetricMapper;
+import org.sonar.db.migrationlog.MigrationLogMapper;
 import org.sonar.db.newcodeperiod.NewCodePeriodMapper;
 import org.sonar.db.notification.NotificationQueueDto;
 import org.sonar.db.notification.NotificationQueueMapper;
@@ -184,6 +183,7 @@ import org.sonar.db.user.UserTelemetryDto;
 import org.sonar.db.user.UserTokenCount;
 import org.sonar.db.user.UserTokenDto;
 import org.sonar.db.user.UserTokenMapper;
+import org.sonar.db.user.ai.UserAiToolUsageMapper;
 import org.sonar.db.webhook.WebhookDeliveryMapper;
 import org.sonar.db.webhook.WebhookMapper;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -216,8 +216,6 @@ public class MyBatis {
     confBuilder.loadAlias("AnticipatedTransition", AnticipatedTransitionDto.class);
     confBuilder.loadAlias("CeTaskCharacteristic", CeTaskCharacteristicDto.class);
     confBuilder.loadAlias("Component", ComponentDto.class);
-    confBuilder.loadAlias("Cve", CveDto.class);
-    confBuilder.loadAlias("CveCwe", CveCweDto.class);
     confBuilder.loadAlias("DevOpsPermissionsMapping", DevOpsPermissionsMappingDto.class);
     confBuilder.loadAlias("DuplicationUnit", DuplicationUnitDto.class);
     confBuilder.loadAlias("Entity", EntityDto.class);
@@ -235,7 +233,6 @@ public class MyBatis {
     confBuilder.loadAlias("KeyLongValue", KeyLongValue.class);
     confBuilder.loadAlias("Impact", ImpactDto.class);
     confBuilder.loadAlias("Issue", IssueDto.class);
-    confBuilder.loadAlias("IssueDependency", IssuesDependencyDto.class);
     confBuilder.loadAlias("NewCodeReferenceIssue", NewCodeReferenceIssueDto.class);
     confBuilder.loadAlias("ProjectMeasure", ProjectMeasureDto.class);
     confBuilder.loadAlias("LargestBranchNclocDto", LargestBranchNclocDto.class);
@@ -252,11 +249,9 @@ public class MyBatis {
     confBuilder.loadAlias("ProjectQgateAssociation", ProjectQgateAssociationDto.class);
     confBuilder.loadAlias("Project", ProjectDto.class);
     confBuilder.loadAlias("ProjectBadgeToken", ProjectBadgeTokenDto.class);
-    confBuilder.loadAlias("ProjectDependency", ProjectDependencyDto.class);
     confBuilder.loadAlias("AnalysisPropertyValuePerProject", AnalysisPropertyValuePerProject.class);
     confBuilder.loadAlias("ProjectAlmKeyAndProject", ProjectAlmKeyAndProject.class);
     confBuilder.loadAlias("PrAndBranchCountByProjectDto", PrBranchAnalyzedLanguageCountByProjectDto.class);
-    confBuilder.loadAlias("ProjectLocDistribution", ProjectLocDistributionDto.class);
     confBuilder.loadAlias("PurgeableAnalysis", PurgeableAnalysisDto.class);
     confBuilder.loadAlias("PushEvent", PushEventDto.class);
     confBuilder.loadAlias("QualityGateCondition", QualityGateConditionDto.class);
@@ -296,8 +291,6 @@ public class MyBatis {
       CeTaskMessageMapper.class,
       ComponentKeyUpdaterMapper.class,
       ComponentMapper.class,
-      CveMapper.class,
-      CveCweMapper.class,
       DefaultQProfileMapper.class,
       DuplicationMapper.class,
       EntityMapper.class,
@@ -317,10 +310,17 @@ public class MyBatis {
       IssueChangeMapper.class,
       IssueMapper.class,
       IssueFixedMapper.class,
-      IssuesDependencyMapper.class,
+      JiraProjectBindingMapper.class,
+      JiraOrganizationBindingMapper.class,
+      JiraOrganizationBindingPendingMapper.class,
+      JiraWorkItemMapper.class,
+      JiraSelectedWorkTypeMapper.class,
+      AtlassianAuthenticationDetailsMapper.class,
+      XsrfTokenMapper.class,
       MeasureMapper.class,
       ProjectMeasureMapper.class,
       MetricMapper.class,
+      MigrationLogMapper.class,
       NewCodePeriodMapper.class,
       NotificationQueueMapper.class,
       PermissionTemplateCharacteristicMapper.class,
@@ -328,7 +328,6 @@ public class MyBatis {
       PluginMapper.class,
       PortfolioMapper.class,
       ProjectAlmSettingMapper.class,
-      ProjectDependenciesMapper.class,
       ProjectLinkMapper.class,
       ProjectMapper.class,
       ProjectBadgeTokenMapper.class,
@@ -361,6 +360,7 @@ public class MyBatis {
       SessionTokenMapper.class,
       SnapshotMapper.class,
       TelemetryMetricsSentMapper.class,
+      UserAiToolUsageMapper.class,
       UserDismissedMessagesMapper.class,
       UserGroupMapper.class,
       UserMapper.class,

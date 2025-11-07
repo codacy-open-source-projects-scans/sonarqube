@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -43,11 +43,14 @@ public class PullHotspotsActionProtobufObjectGenerator implements ProtobufObject
   public Hotspots.HotspotLite generateIssueMessage(IssueDto hotspotDto, RuleDto ruleDto) {
     Hotspots.HotspotLite.Builder builder = Hotspots.HotspotLite.newBuilder()
       .setKey(hotspotDto.getKey())
-      .setFilePath(hotspotDto.getFilePath())
       .setStatus(hotspotDto.getStatus())
       .setRuleKey(hotspotDto.getRuleKey().toString())
       .setStatus(hotspotDto.getStatus())
       .setVulnerabilityProbability(getVulnerabilityProbability(ruleDto));
+
+    if (hotspotDto.getFilePath() != null) {
+      builder.setFilePath(hotspotDto.getFilePath());
+    }
 
     if (hotspotDto.getIssueCreationTime() != null) {
       builder.setCreationDate(hotspotDto.getIssueCreationTime());

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -60,6 +60,14 @@ class SecurityStandardsTest {
 
     assertThat(securityStandards.getStandards()).isEmpty();
     assertThat(securityStandards.getCwe()).containsOnly("unknown");
+  }
+
+  @Test
+  void fromSecurityStandards_from_empty_set_has_no_OwaspMobileTop10_standard() {
+    SecurityStandards securityStandards = fromSecurityStandards(emptySet());
+
+    assertThat(securityStandards.getStandards()).isEmpty();
+    assertThat(securityStandards.getOwaspMobileTop10For2024()).isEmpty();
   }
 
   @Test

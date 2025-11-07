@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -28,7 +28,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.junit.MockitoJUnitRunner;
 import org.sonar.ce.task.log.CeTaskMessages;
-import org.sonar.ce.task.projectanalysis.batch.BatchReportReaderRule;
+import org.sonar.ce.common.scanner.ScannerReportReaderRule;
 import org.sonar.ce.task.step.TestComputationStepContext;
 import org.sonar.db.dismissmessage.MessageType;
 import org.sonar.scanner.protocol.output.ScannerReport;
@@ -46,7 +46,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 public class PersistAnalysisWarningsStepTest {
 
   @Rule
-  public BatchReportReaderRule reportReader = new BatchReportReaderRule();
+  public ScannerReportReaderRule reportReader = new ScannerReportReaderRule();
 
   @Captor
   private ArgumentCaptor<List<CeTaskMessages.Message>> argumentCaptor;

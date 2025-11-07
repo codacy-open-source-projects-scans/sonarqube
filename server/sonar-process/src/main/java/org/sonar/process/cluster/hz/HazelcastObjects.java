@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -52,6 +52,16 @@ public final class HazelcastObjects {
    * THe key of the replicated map holding the health state information of all SQ nodes.
    */
   public static final String SQ_HEALTH_STATE = "sq_health_state";
+
+  /**
+   * Used in the header of HTTP call between the nodes to authenticate requests
+   */
+  public static final String AUTH_SECRET = "AUTH_SECRET";
+
+  /**
+   * The key of replicated map holding the secrets. Used instead of CP Subsystem.
+   */
+  public static final String SECRETS = "SECRETS";
 
   private HazelcastObjects() {
     // Holder for clustered objects

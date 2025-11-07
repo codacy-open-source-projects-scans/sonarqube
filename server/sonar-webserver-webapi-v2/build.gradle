@@ -9,8 +9,6 @@ dependencies {
     api 'org.springdoc:springdoc-openapi-starter-webmvc-api'
     api 'org.springframework:spring-webmvc'
     api 'org.hibernate.validator:hibernate-validator'
-    api 'jakarta.el:jakarta.el-api'
-    api 'org.glassfish.expressly:expressly'
 
     api project(':server:sonar-db-dao')
     api project(':server:sonar-webserver-common')
@@ -32,6 +30,7 @@ dependencies {
 
     testRuntimeOnly 'org.apache.logging.log4j:log4j-core'
     testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
     testRuntimeOnly 'org.junit.vintage:junit-vintage-engine'
 }
 

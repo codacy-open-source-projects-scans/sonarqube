@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -73,7 +73,7 @@ import static org.sonar.api.measures.Metric.ValueType.INT;
 import static org.sonar.api.measures.Metric.ValueType.RATING;
 import static org.sonar.api.server.ws.WebService.Param.SORT;
 import static org.sonar.api.utils.DateUtils.parseDateTime;
-import static org.sonar.api.web.UserRole.USER;
+import static org.sonar.db.permission.ProjectPermission.USER;
 import static org.sonar.db.component.BranchType.PULL_REQUEST;
 import static org.sonar.db.component.ComponentDbTester.toProjectDto;
 import static org.sonar.db.component.ComponentQualifiers.APP;
@@ -971,7 +971,7 @@ class ComponentTreeActionIT {
   void fail_when_setting_more_than_25_metric_keys() {
     ComponentDto mainBranch = db.components().insertPrivateProject().getMainBranchComponent();
     db.components().insertSnapshot(mainBranch);
-    List<String> metrics = IntStream.range(0, 26)
+    List<String> metrics = IntStream.range(0, 76)
       .mapToObj(i -> "metric" + i)
       .toList();
     db.commit();
@@ -983,7 +983,7 @@ class ComponentTreeActionIT {
         .execute();
     })
       .isInstanceOf(IllegalArgumentException.class)
-      .hasMessage("'metricKeys' can contain only 25 values, got 26");
+      .hasMessage("'metricKeys' can contain only 75 values, got 76");
   }
 
   @Test

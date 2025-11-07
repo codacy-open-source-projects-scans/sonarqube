@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -34,9 +34,9 @@ public class CountPerEntityPermission {
   }
 
   @VisibleForTesting
-  CountPerEntityPermission(String entityUuid, String permission, int count) {
+  CountPerEntityPermission(String entityUuid, ProjectPermission permission, int count) {
     this.entityUuid = entityUuid;
-    this.permission = permission;
+    this.permission = permission.getKey();
     this.count = count;
   }
 

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -85,7 +85,7 @@ class ImportProjectServiceTest {
 
     assertThatThrownBy(() -> importProjectService.importProject(request))
       .isInstanceOf(IllegalArgumentException.class)
-      .hasMessage("ALM setting not found");
+      .hasMessage("devOpsPlatformSettingId value not found, must be the ID of the DevOps Platform configuration");
 
   }
 

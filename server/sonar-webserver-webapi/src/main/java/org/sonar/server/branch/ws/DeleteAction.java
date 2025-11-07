@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,11 +19,12 @@
  */
 package org.sonar.server.branch.ws;
 
+import java.util.Set;
 import org.sonar.api.server.ws.Request;
 import org.sonar.api.server.ws.Response;
 import org.sonar.api.server.ws.WebService;
 import org.sonar.api.server.ws.WebService.NewController;
-import org.sonar.api.web.UserRole;
+import org.sonar.db.permission.ProjectPermission;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
 import org.sonar.db.component.BranchDto;
@@ -34,7 +35,6 @@ import org.sonar.server.project.Project;
 import org.sonar.server.project.ProjectLifeCycleListeners;
 import org.sonar.server.user.UserSession;
 
-import static java.util.Collections.emptySet;
 import static java.util.Collections.singleton;
 import static org.sonar.server.branch.ws.BranchesWs.addBranchParam;
 import static org.sonar.server.branch.ws.BranchesWs.addProjectParam;
@@ -87,13 +87,13 @@ public class DeleteAction implements BranchWsAction {
         "Branch '%s' not found for project '%s'", branchKey, projectKey);
 
       componentCleanerService.deleteBranch(dbSession, branch);
-      projectLifeCycleListeners.onProjectBranchesChanged(singleton(Project.fromProjectDtoWithTags(project)), emptySet());
+      projectLifeCycleListeners.onProjectBranchesChanged(singleton(Project.fromProjectDtoWithTags(project)), Set.of(branch.getUuid()));
       response.noContent();
     }
   }
 
   private void checkPermission(ProjectDto project) {
-    userSession.checkEntityPermission(UserRole.ADMIN, project);
+    userSession.checkEntityPermission(ProjectPermission.ADMIN, project);
   }
 
 }

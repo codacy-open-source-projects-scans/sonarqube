@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -26,7 +26,7 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.sonar.api.server.ws.WebService;
 import org.sonar.api.utils.System2;
-import org.sonar.api.web.UserRole;
+import org.sonar.db.permission.ProjectPermission;
 import org.sonar.core.documentation.DocumentationLinkGenerator;
 import org.sonar.core.platform.EditionProvider;
 import org.sonar.core.platform.PlatformEditionProvider;
@@ -53,6 +53,7 @@ import static org.assertj.core.api.Assertions.entry;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import static org.sonar.server.newcodeperiod.ws.NewCodePeriodsWsUtils.DOCUMENTATION_LINK;
 
 public class UnsetActionIT {
   @Rule
@@ -69,7 +70,7 @@ public class UnsetActionIT {
 
   @Before
   public void setup() {
-    when(documentationLinkGenerator.getDocumentationLink(any())).thenReturn("https://docs.sonarsource.com/someddoc");
+    when(documentationLinkGenerator.getDocumentationLink(any())).thenReturn("https://docs.sonarsource.com/someddoc" + DOCUMENTATION_LINK);
     ws = new WsActionTester(new UnsetAction(dbClient, userSession, componentFinder, editionProvider, dao, documentationLinkGenerator));
   }
 
@@ -392,7 +393,7 @@ public class UnsetActionIT {
   }
 
   private void logInAsProjectAdministrator(ProjectDto project) {
-    userSession.logIn().addProjectPermission(UserRole.ADMIN, project);
+    userSession.logIn().addProjectPermission(ProjectPermission.ADMIN, project);
   }
 
   private void logInAsSystemAdministrator() {

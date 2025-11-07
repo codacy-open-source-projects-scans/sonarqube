@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -22,18 +22,18 @@ package org.sonar.server.permission.ws;
 import java.util.Set;
 import org.junit.Before;
 import org.junit.Test;
-import org.sonar.db.component.ComponentQualifiers;
-import org.sonar.server.component.ComponentTypes;
 import org.sonar.api.security.DefaultGroups;
 import org.sonar.api.server.ws.Change;
 import org.sonar.api.server.ws.WebService.Action;
-import org.sonar.api.web.UserRole;
+import org.sonar.db.permission.ProjectPermission;
 import org.sonar.db.component.ComponentDto;
-import org.sonar.server.component.ComponentTypesRule;
+import org.sonar.db.component.ComponentQualifiers;
 import org.sonar.db.permission.GlobalPermission;
 import org.sonar.db.portfolio.PortfolioDto;
 import org.sonar.db.project.ProjectDto;
 import org.sonar.db.user.GroupDto;
+import org.sonar.server.component.ComponentTypes;
+import org.sonar.server.component.ComponentTypesRule;
 import org.sonar.server.exceptions.BadRequestException;
 import org.sonar.server.exceptions.ForbiddenException;
 import org.sonar.server.exceptions.NotFoundException;
@@ -53,7 +53,7 @@ import static org.mockito.Mockito.when;
 import static org.sonar.api.server.ws.WebService.Param.PAGE;
 import static org.sonar.api.server.ws.WebService.Param.PAGE_SIZE;
 import static org.sonar.api.server.ws.WebService.Param.TEXT_QUERY;
-import static org.sonar.api.web.UserRole.ISSUE_ADMIN;
+import static org.sonar.db.permission.ProjectPermission.ISSUE_ADMIN;
 import static org.sonar.test.JsonAssert.assertJson;
 import static org.sonarqube.ws.client.permission.PermissionsWsParameters.PARAM_PERMISSION;
 import static org.sonarqube.ws.client.permission.PermissionsWsParameters.PARAM_PROJECT_ID;
@@ -194,9 +194,9 @@ public class GroupsActionIT extends BasePermissionWsIT<GroupsAction> {
 
     GroupDto groupWithoutPermission = db.users().insertGroup("group-without-permission");
 
-    userSession.logIn().addProjectPermission(UserRole.ADMIN, project);
+    userSession.logIn().addProjectPermission(ProjectPermission.ADMIN, project);
     String result = newRequest()
-      .setParam(PARAM_PERMISSION, ISSUE_ADMIN)
+      .setParam(PARAM_PERMISSION, ISSUE_ADMIN.getKey())
       .setParam(PARAM_PROJECT_ID, project.getUuid())
       .execute()
       .getInput();
@@ -217,7 +217,7 @@ public class GroupsActionIT extends BasePermissionWsIT<GroupsAction> {
 
     loginAsAdmin();
     String result = newRequest()
-      .setParam(PARAM_PERMISSION, ISSUE_ADMIN)
+      .setParam(PARAM_PERMISSION, ISSUE_ADMIN.getKey())
       .setParam(PARAM_PROJECT_ID, project.getUuid())
       .setParam(TEXT_QUERY, "group-with")
       .execute()
@@ -238,7 +238,7 @@ public class GroupsActionIT extends BasePermissionWsIT<GroupsAction> {
 
     loginAsAdmin();
     String result = newRequest()
-      .setParam(PARAM_PERMISSION, ISSUE_ADMIN)
+      .setParam(PARAM_PERMISSION, ISSUE_ADMIN.getKey())
       .setParam(PARAM_PROJECT_ID, project.getUuid())
       .execute()
       .getInput();
@@ -270,7 +270,7 @@ public class GroupsActionIT extends BasePermissionWsIT<GroupsAction> {
 
     loginAsAdmin();
     String result = newRequest()
-      .setParam(PARAM_PERMISSION, ISSUE_ADMIN)
+      .setParam(PARAM_PERMISSION, ISSUE_ADMIN.getKey())
       .setParam(PARAM_PROJECT_ID, "view-uuid")
       .execute()
       .getInput();
@@ -292,30 +292,29 @@ public class GroupsActionIT extends BasePermissionWsIT<GroupsAction> {
 
     loginAsAdmin();
     String result = newRequest()
-      .setParam(PARAM_PERMISSION, ISSUE_ADMIN)
+      .setParam(PARAM_PERMISSION, ISSUE_ADMIN.getKey())
       .setParam(PARAM_PROJECT_ID, "view-uuid")
       .execute()
       .getInput();
 
-    assertJson(result).isSimilarTo(
-      "{\n"
-        + "  \"paging\": {\n"
-        + "    \"pageIndex\": 1,\n"
-        + "    \"pageSize\": 20,\n"
-        + "    \"total\": 2\n"
-        + "  },\n"
-        + "  \"groups\": [\n"
-        + "    {\n"
-        + "      \"name\": \"local-group\",\n"
-        + "      \"managed\": false\n"
-        + "    },\n"
-        + "    {\n"
-        + "      \"name\": \"managed-group\",\n"
-        + "      \"managed\": true\n"
-        + "    }\n"
-        + "  ]\n"
-        + "}"
-    );
+    assertJson(result).isSimilarTo("""
+      {
+        "paging": {
+          "pageIndex": 1,
+          "pageSize": 20,
+          "total": 2
+        },
+        "groups": [
+          {
+            "name": "local-group",
+            "managed": false
+          },
+          {
+            "name": "managed-group",
+            "managed": true
+          }
+        ]
+      }""");
   }
 
   @Test
@@ -366,7 +365,7 @@ public class GroupsActionIT extends BasePermissionWsIT<GroupsAction> {
 
     assertThatThrownBy(() -> {
       newRequest()
-        .setParam(PARAM_PERMISSION, ISSUE_ADMIN)
+        .setParam(PARAM_PERMISSION, ISSUE_ADMIN.getKey())
         .setParam(PARAM_PROJECT_ID, branch.uuid())
         .execute();
     })
@@ -375,13 +374,11 @@ public class GroupsActionIT extends BasePermissionWsIT<GroupsAction> {
   }
 
   private void mockGroupsAsManaged(String... groupUuids) {
-    when(managedInstanceService.getGroupUuidToManaged(any(), any())).thenAnswer(invocation ->
-      {
-        Set<?> allGroupUuids = invocation.getArgument(1, Set.class);
-        return allGroupUuids.stream()
-          .map(groupUuid -> (String) groupUuid)
-          .collect(toMap(identity(), userUuid -> Set.of(groupUuids).contains(userUuid)));
-      }
-    );
+    when(managedInstanceService.getGroupUuidToManaged(any(), any())).thenAnswer(invocation -> {
+      Set<?> allGroupUuids = invocation.getArgument(1, Set.class);
+      return allGroupUuids.stream()
+        .map(groupUuid -> (String) groupUuid)
+        .collect(toMap(identity(), userUuid -> Set.of(groupUuids).contains(userUuid)));
+    });
   }
 }

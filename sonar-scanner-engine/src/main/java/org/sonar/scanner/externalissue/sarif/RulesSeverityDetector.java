@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -97,8 +97,11 @@ public class RulesSeverityDetector {
   }
 
   private static Map<String, Result.Level> getDriverDefinedRuleSeverities(Run run) {
-    return run.getTool().getDriver().getRules()
-      .stream()
+    Set<ReportingDescriptor> rules = run.getTool().getDriver().getRules();
+    if (rules == null) {
+      return emptyMap();
+    }
+    return rules.stream()
       .filter(RulesSeverityDetector::hasRuleDefinedLevel)
       .collect(toMap(ReportingDescriptor::getId, x -> Result.Level.valueOf(x.getDefaultConfiguration().getLevel().name())));
   }

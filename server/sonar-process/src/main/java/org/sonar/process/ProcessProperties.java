@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -55,6 +55,7 @@ public class ProcessProperties {
     JDBC_USERNAME("sonar.jdbc.username", ""),
     JDBC_PASSWORD("sonar.jdbc.password", ""),
     JDBC_DRIVER_PATH("sonar.jdbc.driverPath"),
+    JDBC_ADDITIONAL_LIB_PATHS("sonar.jdbc.additionalLibPaths"),
     JDBC_MAX_ACTIVE("sonar.jdbc.maxActive", "60"),
     JDBC_MIN_IDLE("sonar.jdbc.minIdle", "10"),
     JDBC_MAX_WAIT("sonar.jdbc.maxWait", "8000"),
@@ -100,7 +101,10 @@ public class ProcessProperties {
     WEB_HTTP_MAX_THREADS("sonar.web.http.maxThreads"),
     WEB_HTTP_ACCEPT_COUNT("sonar.web.http.acceptCount"),
     WEB_HTTP_KEEP_ALIVE_TIMEOUT("sonar.web.http.keepAliveTimeout"),
-    WEB_SESSION_TIMEOUT_IN_MIN("sonar.web.sessionTimeoutInMinutes"),
+    // The  time a user can remain idle (no activity) before the session ends.
+    WEB_INACTIVE_SESSION_TIMEOUT_IN_MIN("sonar.web.sessionTimeoutInMinutes"),
+    // The time a user can remain logged in, regardless of activity
+    WEB_ACTIVE_SESSION_TIMEOUT_IN_MIN("sonar.web.activeSessionTimeoutInMinutes"),
     WEB_SYSTEM_PASS_CODE("sonar.web.systemPasscode"),
     WEB_ACCESSLOGS_ENABLE("sonar.web.accessLogs.enable"),
     WEB_ACCESSLOGS_PATTERN("sonar.web.accessLogs.pattern"),

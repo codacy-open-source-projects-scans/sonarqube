@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -36,9 +36,11 @@ import org.sonar.scanner.bootstrap.ScannerPluginRepository;
 import org.sonar.scanner.cache.AnalysisCacheEnabled;
 import org.sonar.scanner.cache.ReadCacheImpl;
 import org.sonar.scanner.cache.WriteCacheImpl;
+import org.sonar.scanner.repository.featureflags.FeatureFlagsRepository;
 import org.sonar.scanner.scan.branch.BranchConfiguration;
 
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -55,12 +57,13 @@ class ProjectSensorContextTest {
   private final AnalysisCacheEnabled analysisCacheEnabled = mock(AnalysisCacheEnabled.class);
   private final UnchangedFilesHandler unchangedFilesHandler = mock(UnchangedFilesHandler.class);
   private final SonarRuntime runtime = SonarRuntimeImpl.forSonarQube(Version.parse("5.5"), SonarQubeSide.SCANNER, SonarEdition.COMMUNITY);
-  private DefaultFileSystem fs = mock(DefaultFileSystem.class);
-  private ExecutingSensorContext executingSensorContext = mock(ExecutingSensorContext.class);
-  private ScannerPluginRepository pluginRepository = mock(ScannerPluginRepository.class);
+  private final DefaultFileSystem fs = mock(DefaultFileSystem.class);
+  private final ExecutingSensorContext executingSensorContext = mock(ExecutingSensorContext.class);
+  private final ScannerPluginRepository pluginRepository = mock(ScannerPluginRepository.class);
+  private final FeatureFlagsRepository featureFlagsRepository = mock();
 
-  private ProjectSensorContext underTest = new ProjectSensorContext(mock(DefaultInputProject.class), settings.asConfig(), settings, fs, activeRules, sensorStorage, runtime,
-  branchConfiguration, writeCache, readCache, analysisCacheEnabled, unchangedFilesHandler, executingSensorContext, pluginRepository);
+  private ProjectSensorContext underTest = new ProjectSensorContext(mock(DefaultInputProject.class), settings.asConfig(), fs, activeRules, sensorStorage, runtime,
+    branchConfiguration, writeCache, readCache, analysisCacheEnabled, unchangedFilesHandler, executingSensorContext, pluginRepository, featureFlagsRepository);
 
   private static final String PLUGIN_KEY = "org.sonarsource.pluginKey";
 
@@ -69,6 +72,18 @@ class ProjectSensorContextTest {
     when(executingSensorContext.getSensorExecuting()).thenReturn(new SensorId(PLUGIN_KEY, "sensorName"));
   }
 
+  @Test
+  void isFeatureAvailable_returnsCorrectlyAccordingToFeatureFlags() {
+
+    String availableFeature = "availableFeature";
+    String unavailableFeature = "unavailableFeature";
+
+    when(featureFlagsRepository.isEnabled(availableFeature)).thenReturn(true);
+    when(featureFlagsRepository.isEnabled(unavailableFeature)).thenReturn(false);
+
+    assertThat(underTest.isFeatureAvailable(availableFeature)).isTrue();
+    assertThat(underTest.isFeatureAvailable(unavailableFeature)).isFalse();
+  }
 
   @Test
   void addTelemetryProperty_whenTheOrganizationIsSonarSource_mustStoreTheTelemetry() {
@@ -77,16 +92,22 @@ class ProjectSensorContextTest {
 
     underTest.addTelemetryProperty("key", "value");
 
-    //then verify that the defaultStorage is called with the telemetry property once
+    // then verify that the defaultStorage is called with the telemetry property once
     verify(sensorStorage).storeTelemetry("key", "value");
   }
 
   @Test
-  void addTelemetryProperty_whenTheOrganizationIsNotSonarSource_mustThrowExcaption() {
+  void addTelemetryProperty_whenTheOrganizationIsNotSonarSource_mustThrowException() {
     when(pluginRepository.getPluginInfo(PLUGIN_KEY)).thenReturn(new PluginInfo(PLUGIN_KEY).setOrganizationName("notSonarsource"));
 
-    assertThrows(IllegalStateException.class, () -> underTest.addTelemetryProperty("key", "value"));
+    assertThatThrownBy(() -> underTest.addTelemetryProperty("key", "value"))
+      .isInstanceOf(IllegalStateException.class);
 
     verifyNoInteractions(sensorStorage);
+  }
+
+  @Test
+  void settings_throwsUnsupportedOperationException() {
+    assertThatThrownBy(() -> underTest.settings()).isInstanceOf(UnsupportedOperationException.class);
   }
 }

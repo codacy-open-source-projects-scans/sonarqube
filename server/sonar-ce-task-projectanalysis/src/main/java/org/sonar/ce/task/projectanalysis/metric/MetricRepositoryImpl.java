@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -67,6 +67,16 @@ public class MetricRepositoryImpl implements MetricRepository, Startable {
       throw new IllegalStateException(String.format("Metric with key '%s' does not exist", key));
     }
     return res;
+  }
+
+  @Override
+  public Optional<Metric> getOptionalByKey(String key) {
+    requireNonNull(key);
+    verifyMetricsInitialized();
+
+    Metric res = this.metricsByKey.get(key);
+
+    return Optional.ofNullable(res);
   }
 
   @Override

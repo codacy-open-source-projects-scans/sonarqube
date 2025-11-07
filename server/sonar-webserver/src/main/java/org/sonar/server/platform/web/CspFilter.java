@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -35,7 +35,6 @@ import jakarta.servlet.ServletResponse;
 import jakarta.servlet.http.HttpServletResponse;
 
 public class CspFilter implements Filter {
-
   private final List<String> cspHeaders = new ArrayList<>();
   private String policies = null;
 
@@ -48,12 +47,13 @@ public class CspFilter implements Filter {
     cspPolicies.add("base-uri 'none'");
     cspPolicies.add("connect-src 'self' http: https:");
     cspPolicies.add("font-src 'self' data:");
+    cspPolicies.add("frame-src");
     cspPolicies.add("img-src * data: blob:");
     cspPolicies.add("object-src 'none'");
     // the hash below corresponds to the window.__assetsPath script in index.html
     cspPolicies.add("script-src 'self' " + getAssetsPathScriptCSPHash(filterConfig.getServletContext().getContextPath()));
     cspPolicies.add("style-src 'self' 'unsafe-inline'");
-    cspPolicies.add("worker-src 'none'");
+    cspPolicies.add("worker-src 'self'");
     this.policies = String.join("; ", cspPolicies).trim();
   }
 
@@ -74,11 +74,13 @@ public class CspFilter implements Filter {
 
   private static String getAssetsPathScriptCSPHash(String contextPath) {
     final String WEB_CONTEXT_PLACEHOLDER = "WEB_CONTEXT";
-    final String ASSETS_PATH_SCRIPT = "\n" +
-      "      window.__assetsPath = function (filename) {\n" +
-      "        return 'WEB_CONTEXT/' + filename;\n" +
-      "      };\n" +
-      "    ";
+    final String ASSETS_PATH_SCRIPT = """
+
+            window.__assetsPath = function (filename) {
+              return 'WEB_CONTEXT/' + filename;
+            };
+          \
+      """;
 
     String assetsPathScriptWithContextPath = ASSETS_PATH_SCRIPT.replace(WEB_CONTEXT_PLACEHOLDER, contextPath);
     return generateCSPHash(assetsPathScriptWithContextPath);

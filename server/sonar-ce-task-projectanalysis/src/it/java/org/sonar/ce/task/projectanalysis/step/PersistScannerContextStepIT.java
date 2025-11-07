@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -26,7 +26,7 @@ import org.junit.Test;
 import org.sonar.api.utils.System2;
 import org.sonar.ce.task.CeTask;
 import org.sonar.ce.task.projectanalysis.analysis.AnalysisMetadataHolderRule;
-import org.sonar.ce.task.projectanalysis.batch.BatchReportReaderRule;
+import org.sonar.ce.common.scanner.ScannerReportReaderRule;
 import org.sonar.ce.task.step.TestComputationStepContext;
 import org.sonar.core.util.CloseableIterator;
 import org.sonar.db.DbClient;
@@ -45,7 +45,7 @@ public class PersistScannerContextStepIT {
   public static final DbTester dbTester = DbTester.create(System2.INSTANCE);
 
   @Rule
-  public BatchReportReaderRule reportReader = new BatchReportReaderRule();
+  public ScannerReportReaderRule reportReader = new ScannerReportReaderRule();
   @Rule
   public AnalysisMetadataHolderRule analysisMetadataHolder = new AnalysisMetadataHolderRule()
     .setUuid(ANALYSIS_UUID);
@@ -94,6 +94,9 @@ public class PersistScannerContextStepIT {
     underTest.execute(new TestComputationStepContext());
 
     assertThat(dbClient.ceScannerContextDao().selectScannerContext(dbTester.getSession(), ANALYSIS_UUID))
-      .contains("1" + '\n' + "2" + '\n' + "3");
+      .contains("""
+        1
+        2
+        3""");
   }
 }

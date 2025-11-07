@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -35,7 +35,7 @@ import org.sonar.api.server.ws.WebService.Param;
 import org.sonar.api.testfixtures.log.LogAndArguments;
 import org.sonar.api.testfixtures.log.LogTester;
 import org.sonar.api.utils.log.LoggerLevel;
-import org.sonar.api.web.UserRole;
+import org.sonar.db.permission.ProjectPermission;
 import org.sonar.core.config.CorePropertyDefinitions;
 import org.sonar.core.util.UuidFactoryFast;
 import org.sonar.db.DbClient;
@@ -186,7 +186,7 @@ public class SearchActionIT {
   }
 
   private void addProjectPermission(ProjectData projectData) {
-    userSession.addProjectPermission(UserRole.USER, projectData.getProjectDto())
+    userSession.addProjectPermission(ProjectPermission.USER, projectData.getProjectDto())
       .addProjectBranchMapping(projectData.getProjectDto().getUuid(), projectData.getMainBranchComponent());
   }
 
@@ -684,7 +684,7 @@ public class SearchActionIT {
     userSession.logIn()
       .registerApplication(application)
       .registerProjects(project1, project2)
-      .addProjectPermission(UserRole.USER, application, project1);
+      .addProjectPermission(ProjectPermission.USER, application, project1);
 
     var projectDbKey = application.getKey();
     assertThatThrownBy(() -> call(projectDbKey))

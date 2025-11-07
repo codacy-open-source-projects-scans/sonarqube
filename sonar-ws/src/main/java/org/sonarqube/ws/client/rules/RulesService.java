@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -73,6 +73,7 @@ public class RulesService extends BaseService {
         .setParam("severity", request.getSeverity())
         .setParam("status", request.getStatus())
         .setParam("templateKey", request.getTemplateKey())
+        .setParam("cleanCodeAttribute", request.getCleanCodeAttribute())
         .setParam("type", request.getType()),
       CreateResponse.parser());
   }

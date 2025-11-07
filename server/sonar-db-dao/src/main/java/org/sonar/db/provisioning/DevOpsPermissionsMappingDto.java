@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,5 +19,20 @@
  */
 package org.sonar.db.provisioning;
 
+import org.apache.ibatis.annotations.AutomapConstructor;
+import org.sonar.db.permission.ProjectPermission;
+
 public record DevOpsPermissionsMappingDto(String uuid, String devOpsPlatform, String role, String sonarqubePermission) {
+
+  @AutomapConstructor
+  public DevOpsPermissionsMappingDto {
+  }
+
+  public DevOpsPermissionsMappingDto(String uuid, String devOpsPlatform, String role, ProjectPermission sonarqubePermission) {
+    this(uuid, devOpsPlatform, role, sonarqubePermission.getKey());
+  }
+
+  public ProjectPermission projectPermission() {
+    return ProjectPermission.fromKey(sonarqubePermission);
+  }
 }

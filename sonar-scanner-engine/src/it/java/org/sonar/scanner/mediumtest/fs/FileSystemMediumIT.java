@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -28,19 +28,27 @@ import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.List;
+import java.util.Map;
 import java.util.Random;
+import java.util.Set;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.SystemUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.slf4j.event.Level;
 import org.sonar.api.CoreProperties;
 import org.sonar.api.SonarEdition;
 import org.sonar.api.batch.fs.InputFile;
 import org.sonar.api.batch.fs.internal.DefaultInputFile;
+import org.sonar.api.internal.apachecommons.io.FilenameUtils;
 import org.sonar.api.testfixtures.log.LogTesterJUnit5;
 import org.sonar.api.utils.MessageException;
 import org.sonar.api.utils.PathUtils;
@@ -48,17 +56,17 @@ import org.sonar.api.utils.System2;
 import org.sonar.scanner.mediumtest.AnalysisResult;
 import org.sonar.scanner.mediumtest.ScannerMediumTester;
 import org.sonar.scanner.mediumtest.ScannerMediumTester.AnalysisBuilder;
+import org.sonar.scanner.protocol.output.ScannerReport;
 import org.sonar.xoo.XooPlugin;
 import org.sonar.xoo.global.DeprecatedGlobalSensor;
 import org.sonar.xoo.global.GlobalProjectSensor;
 import org.sonar.xoo.rule.XooRulesDefinition;
 
-import static java.lang.String.format;
 import static java.nio.file.Files.createDirectory;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
-import static org.junit.jupiter.api.Assumptions.assumeFalse;
+import static org.assertj.core.api.AssertionsForClassTypes.catchThrowableOfType;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.slf4j.event.Level.DEBUG;
 
@@ -149,7 +157,7 @@ class FileSystemMediumIT {
         .build())
       .execute();
 
-    assertThat(logTester.logs()).contains("2 files indexed");
+    assertThat(logTester.logs()).anyMatch(log -> log.startsWith("2 files indexed (done) | time="));
     assertThat(logTester.logs()).contains("'src/sample.xoo' generated metadata with charset 'UTF-8'");
     assertThat(String.join("\n", logTester.logs())).doesNotContain("'src/sample.java' generated metadata");
   }
@@ -172,7 +180,7 @@ class FileSystemMediumIT {
         .build())
       .execute();
 
-    assertThat(logTester.logs()).contains("2 files indexed");
+    assertThat(logTester.logs()).anyMatch(log -> log.startsWith("2 files indexed (done) | time="));
     assertThat(logTester.logs()).contains("'src/sample.xoo' generated metadata with charset 'UTF-8'");
     assertThat(logTester.logs()).contains("'src/sample.java' generated metadata with charset 'UTF-8'");
   }
@@ -199,7 +207,7 @@ class FileSystemMediumIT {
       .execute();
 
     assertThat(logTester.logs()).containsAnyOf("'src/main/sample.java' indexed with no language", "'src\\main\\sample.java' indexed with no language");
-    assertThat(logTester.logs()).contains("3 files indexed");
+    assertThat(logTester.logs()).anyMatch(log -> log.startsWith("3 files indexed (done) | time="));
     assertThat(logTester.logs()).contains("'src/main/sample.xoo' generated metadata with charset 'UTF-8'");
     assertThat(logTester.logs()).doesNotContain("'src/main/sample.java' generated metadata", "'src\\main\\sample.java' generated metadata");
     assertThat(logTester.logs()).doesNotContain("'src/test/sample.java' generated metadata", "'src\\test\\sample.java' generated metadata");
@@ -230,7 +238,7 @@ class FileSystemMediumIT {
         .build())
       .execute();
 
-    assertThat(logTester.logs()).contains("1 file indexed");
+    assertThat(logTester.logs()).anyMatch(log -> log.startsWith("1 file indexed (done) | time="));
     assertThat(logTester.logs()).contains("'src/sample.unknown' indexed with no language");
     assertThat(logTester.logs()).contains("'src/sample.unknown' generated metadata with charset 'UTF-8'");
     DefaultInputFile inputFile = (DefaultInputFile) result.inputFile("src/sample.unknown");
@@ -449,37 +457,136 @@ class FileSystemMediumIT {
       .execute();
 
     assertThat(result.inputFiles()).hasSize(1);
-    String expectedLog = String.format("File '%s' is bigger than 1MB and as consequence is removed from the analysis scope.", fileGreaterThanLimit.toPath().toRealPath());
+    String expectedLog = String.format("File '%s' is bigger than 1MB and as consequence is removed from the analysis scope.",
+      fileGreaterThanLimit.toPath().toRealPath(LinkOption.NOFOLLOW_LINKS));
     assertThat(logTester.logs()).contains(expectedLog);
   }
 
   @Test
-  void analysisFailsSymbolicLinkWithoutTargetIsInTheFolder() throws IOException {
-    assumeFalse(SystemUtils.IS_OS_WINDOWS);
+  @DisabledOnOs(OS.WINDOWS)
+  void analysisDoesNotFailOnBrokenSymlink() throws IOException {
+    prepareBrokenSymlinkTestScenario();
+
+    AnalysisBuilder analysisBuilder = tester.newAnalysis().properties(builder.build());
+
+    assertThat(catchThrowableOfType(Exception.class, analysisBuilder::execute)).isNull();
+  }
+
+  @Test
+  @DisabledOnOs(OS.WINDOWS)
+  void analysisWarnsAndIgnoresBrokenSymlink() throws IOException {
+    Path link = prepareBrokenSymlinkTestScenario();
+
+    AnalysisResult result = tester.newAnalysis().properties(builder.build()).execute();
+
+    String logMessage = String.format("File '%s' is ignored. It is a symbolic link targeting a file that does not exist.", link.toRealPath(LinkOption.NOFOLLOW_LINKS));
+    assertThat(logTester.logs(Level.WARN)).contains(logMessage);
+    InputFile fileA = result.inputFile("src/target_link.xoo");
+    assertThat(fileA).isNull();
+  }
+
+  @Test
+  @DisabledOnOs(OS.WINDOWS)
+  void analysisIgnoresSymbolicLinkWithTargetOutsideBaseDir() throws IOException {
     File srcDir = new File(baseDir, "src");
     assertThat(srcDir.mkdir()).isTrue();
 
-    File target = writeFile(srcDir, "target.xoo");
+    File otherDir = createDirectory(temp.toPath().resolve("other_dir")).toFile();
+    File targetOutside = writeFile(otherDir, "target_outside.xoo");
+
     Path link = Paths.get(srcDir.getPath(), "target_link.xoo");
+    Files.createSymbolicLink(link, targetOutside.toPath());
+
+    AnalysisResult result = tester.newAnalysis().properties(builder.build()).execute();
+
+    String logMessage = String.format("File '%s' is ignored. It is a symbolic link targeting a file not located in project basedir.", link.toRealPath(LinkOption.NOFOLLOW_LINKS));
+    assertThat(logTester.logs(Level.WARN)).contains(logMessage);
+    InputFile fileA = result.inputFile("src/target_link.xoo");
+    assertThat(fileA).isNull();
+  }
+
+  @Test
+  @DisabledOnOs(OS.WINDOWS)
+  void analysisIgnoresSymbolicLinkWithRelativeTargetOutsideBaseDir() throws IOException {
+    File srcDir = new File(baseDir, "src");
+    assertThat(srcDir.mkdir()).isTrue();
+
+    File otherDir = createDirectory(temp.toPath().resolve("other_dir")).toFile();
+    writeFile(otherDir, "target_outside.xoo");
+
+    Path linkPath = srcDir.toPath().resolve("target_link");
+    Path link = Files.createSymbolicLink(linkPath, Paths.get("../../other_dir/target_outside.xoo"));
+
+    tester.newAnalysis().properties(builder.build()).execute();
+
+    String logMessage = String.format("File '%s' is ignored. It is a symbolic link targeting a file not located in project basedir.", link.toRealPath(LinkOption.NOFOLLOW_LINKS));
+    assertThat(logTester.logs(Level.WARN)).contains(logMessage);
+  }
+
+  @Test
+  @DisabledOnOs(OS.WINDOWS)
+  void analysisIgnoresSymbolicLinkWithTargetOutsideModule() throws IOException {
+    File srcDirA = createModuleWithSubdirectory("module_a", "src");
+    File srcDirB = createModuleWithSubdirectory("module_b", "src");
+
+    File target = writeFile(srcDirA, "target.xoo", "Sample xoo\ncontent");
+    Path link = Paths.get(srcDirB.getPath(), "target_link.xoo");
     Files.createSymbolicLink(link, target.toPath());
-    Files.delete(target.toPath());
 
-    AnalysisBuilder analysis = tester.newAnalysis()
-      .properties(builder.build());
+    builder.put("sonar.modules", "module_a,module_b");
 
-    assertThatThrownBy(analysis::execute)
-      .isExactlyInstanceOf(IllegalStateException.class)
-      .hasMessageEndingWith(format("Unable to read file %s", link));
+    AnalysisResult result = tester.newAnalysis().properties(builder.build()).execute();
+
+    String logMessage = String.format("File '%s' is ignored. It is a symbolic link targeting a file not located in module basedir.", link.toRealPath(LinkOption.NOFOLLOW_LINKS));
+    assertThat(logTester.logs(Level.INFO)).contains(logMessage);
+    InputFile fileA = result.inputFile("module_b/src/target_link.xoo");
+    assertThat(fileA).isNull();
+  }
+
+  @Test
+  @DisabledOnOs(OS.WINDOWS)
+  void analysisIgnoresSymbolicLinkWithRelativeTargetOutsideModule() throws IOException {
+    File srcA = createModuleWithSubdirectory("module_a", "src");
+    File srcB = createModuleWithSubdirectory("module_b", "src");
+
+    Path target = srcB.toPath().resolve("target.xoo");
+    FileUtils.write(target.toFile(), "Sample xoo\ncontent", StandardCharsets.UTF_8);
+    Path link = srcA.toPath().resolve("target_link");
+    Files.createSymbolicLink(link, Paths.get("../../module_b/src/target.xoo"));
+
+    builder.put("sonar.modules", "module_a,module_b");
+
+    AnalysisResult result = tester.newAnalysis().properties(builder.build()).execute();
+
+    String logMessage = String.format("File '%s' is ignored. It is a symbolic link targeting a file not located in module basedir.", link.toRealPath(LinkOption.NOFOLLOW_LINKS));
+    assertThat(logTester.logs(Level.INFO)).contains(logMessage);
+    InputFile fileA = result.inputFile("module_b/src/target.xoo");
+    assertThat(fileA).isNotNull();
+  }
+
+  @Test
+  @DisabledOnOs(OS.WINDOWS)
+  void analysisDoesNotIgnoreSymbolicLinkWithRelativePath() throws IOException {
+    File src = createModuleWithSubdirectory("module_a", "src");
+    Path target = src.toPath().resolve("target.xoo");
+    FileUtils.write(target.toFile(), "Sample xoo\ncontent", StandardCharsets.UTF_8);
+    Path link = src.toPath().resolve("target_link");
+    Files.createSymbolicLink(link, Paths.get("target.xoo"));
+
+    builder.put("sonar.modules", "module_a");
+
+    AnalysisResult result = tester.newAnalysis().properties(builder.build()).execute();
+
+    InputFile targetFile = result.inputFile("module_a/src/target.xoo");
+    assertThat(targetFile).isNotNull();
+    String logMessage = String.format("File '%s' is ignored. It is a symbolic link targeting a file that does not exist.", link.toRealPath(LinkOption.NOFOLLOW_LINKS));
+    assertThat(logTester.logs(Level.WARN)).doesNotContain(logMessage);
   }
 
   @Test
   void test_inclusions_on_multi_modules() throws IOException {
-    File baseDirModuleA = new File(baseDir, "moduleA");
-    File baseDirModuleB = new File(baseDir, "moduleB");
-    File srcDirA = new File(baseDirModuleA, "tests");
-    assertThat(srcDirA.mkdirs()).isTrue();
-    File srcDirB = new File(baseDirModuleB, "tests");
-    assertThat(srcDirB.mkdirs()).isTrue();
+    File srcDirA = createModuleWithSubdirectory("moduleA", "tests");
+    File srcDirB = createModuleWithSubdirectory("moduleB", "tests");
 
     writeFile(srcDirA, "sampleTestA.xoo", "Sample xoo\ncontent");
     writeFile(srcDirB, "sampleTestB.xoo", "Sample xoo\ncontent");
@@ -520,12 +627,8 @@ class FileSystemMediumIT {
 
   @Test
   void test_module_level_inclusions_override_parent_on_multi_modules() throws IOException {
-    File baseDirModuleA = new File(baseDir, "moduleA");
-    File baseDirModuleB = new File(baseDir, "moduleB");
-    File srcDirA = new File(baseDirModuleA, "src");
-    assertThat(srcDirA.mkdirs()).isTrue();
-    File srcDirB = new File(baseDirModuleB, "src");
-    assertThat(srcDirB.mkdirs()).isTrue();
+    File srcDirA = createModuleWithSubdirectory("moduleA", "src");
+    File srcDirB = createModuleWithSubdirectory("moduleB", "src");
 
     writeFile(srcDirA, "sampleA.xoo", "Sample xoo\ncontent");
     writeFile(srcDirB, "sampleB.xoo", "Sample xoo\ncontent");
@@ -557,12 +660,8 @@ class FileSystemMediumIT {
 
   @Test
   void warn_user_for_outdated_scanner_side_inherited_exclusions_for_multi_module_project() throws IOException {
-    File baseDirModuleA = new File(baseDir, "moduleA");
-    File baseDirModuleB = new File(baseDir, "moduleB");
-    File srcDirA = new File(baseDirModuleA, "src");
-    assertThat(srcDirA.mkdirs()).isTrue();
-    File srcDirB = new File(baseDirModuleB, "src");
-    assertThat(srcDirB.mkdirs()).isTrue();
+    File srcDirA = createModuleWithSubdirectory("moduleA", "src");
+    File srcDirB = createModuleWithSubdirectory("moduleB", "src");
 
     writeFile(srcDirA, "sample.xoo", "Sample xoo\ncontent");
     writeFile(srcDirB, "sample.xoo", "Sample xoo\ncontent");
@@ -590,12 +689,8 @@ class FileSystemMediumIT {
 
   @Test
   void support_global_server_side_exclusions_for_multi_module_project() throws IOException {
-    File baseDirModuleA = new File(baseDir, "moduleA");
-    File baseDirModuleB = new File(baseDir, "moduleB");
-    File srcDirA = new File(baseDirModuleA, "src");
-    assertThat(srcDirA.mkdirs()).isTrue();
-    File srcDirB = new File(baseDirModuleB, "src");
-    assertThat(srcDirB.mkdirs()).isTrue();
+    File srcDirA = createModuleWithSubdirectory("moduleA", "src");
+    File srcDirB = createModuleWithSubdirectory("moduleB", "src");
 
     writeFile(srcDirA, "sample.xoo", "Sample xoo\ncontent");
     writeFile(srcDirB, "sample.xoo", "Sample xoo\ncontent");
@@ -620,12 +715,8 @@ class FileSystemMediumIT {
 
   @Test
   void support_global_server_side_global_exclusions_for_multi_module_project() throws IOException {
-    File baseDirModuleA = new File(baseDir, "moduleA");
-    File baseDirModuleB = new File(baseDir, "moduleB");
-    File srcDirA = new File(baseDirModuleA, "src");
-    assertThat(srcDirA.mkdirs()).isTrue();
-    File srcDirB = new File(baseDirModuleB, "src");
-    assertThat(srcDirB.mkdirs()).isTrue();
+    File srcDirA = createModuleWithSubdirectory("moduleA", "src");
+    File srcDirB = createModuleWithSubdirectory("moduleB", "src");
 
     writeFile(srcDirA, "sample.xoo", "Sample xoo\ncontent");
     writeFile(srcDirB, "sample.xoo", "Sample xoo\ncontent");
@@ -650,12 +741,8 @@ class FileSystemMediumIT {
 
   @Test
   void warn_user_for_outdated_server_side_inherited_exclusions_for_multi_module_project() throws IOException {
-    File baseDirModuleA = new File(baseDir, "moduleA");
-    File baseDirModuleB = new File(baseDir, "moduleB");
-    File srcDirA = new File(baseDirModuleA, "src");
-    assertThat(srcDirA.mkdirs()).isTrue();
-    File srcDirB = new File(baseDirModuleB, "src");
-    assertThat(srcDirB.mkdirs()).isTrue();
+    File srcDirA = createModuleWithSubdirectory("moduleA", "src");
+    File srcDirB = createModuleWithSubdirectory("moduleB", "src");
 
     writeFile(srcDirA, "sample.xoo", "Sample xoo\ncontent");
     writeFile(srcDirB, "sample.xoo", "Sample xoo\ncontent");
@@ -928,12 +1015,8 @@ class FileSystemMediumIT {
 
   @Test
   void log_all_exclusions_properties_per_modules() throws IOException {
-    File baseDirModuleA = new File(baseDir, "moduleA");
-    File baseDirModuleB = new File(baseDir, "moduleB");
-    File srcDirA = new File(baseDirModuleA, "src");
-    assertThat(srcDirA.mkdirs()).isTrue();
-    File srcDirB = new File(baseDirModuleB, "src");
-    assertThat(srcDirB.mkdirs()).isTrue();
+    File srcDirA = createModuleWithSubdirectory("moduleA", "src");
+    File srcDirB = createModuleWithSubdirectory("moduleB", "src");
 
     writeFile(srcDirA, "sample.xoo", "Sample xoo\ncontent");
     writeFile(srcDirB, "sample.xoo", "Sample xoo\ncontent");
@@ -962,7 +1045,7 @@ class FileSystemMediumIT {
         "  Excluded sources for coverage: **/coverage.exclusions",
         "  Excluded sources for duplication: **/cpd.exclusions",
         "Indexing files of module 'moduleA'",
-        "  Base dir: " + baseDirModuleA.toPath().toRealPath(LinkOption.NOFOLLOW_LINKS),
+        "  Base dir: " + srcDirA.toPath().getParent().toRealPath(LinkOption.NOFOLLOW_LINKS),
         "  Included sources: **/global.inclusions",
         "  Excluded sources: **/global.exclusions, **/global.test.inclusions",
         "  Included tests: **/global.test.inclusions",
@@ -970,7 +1053,7 @@ class FileSystemMediumIT {
         "  Excluded sources for coverage: **/coverage.exclusions",
         "  Excluded sources for duplication: **/cpd.exclusions",
         "Indexing files of module 'moduleB'",
-        "  Base dir: " + baseDirModuleB.toPath().toRealPath(LinkOption.NOFOLLOW_LINKS),
+        "  Base dir: " + srcDirB.toPath().getParent().toRealPath(LinkOption.NOFOLLOW_LINKS),
         "  Included sources: **/global.inclusions",
         "  Excluded sources: **/global.exclusions, **/global.test.inclusions",
         "  Included tests: **/global.test.inclusions",
@@ -999,12 +1082,13 @@ class FileSystemMediumIT {
 
     AnalysisResult result = tester.newAnalysis()
       .properties(builder
-        .put("sonar.sources", "src," + PathUtils.canonicalPath(xooFile2))
+        .put("sonar.sources", "src," + FilenameUtils.separatorsToUnix(xooFile2.getPath()))
         .build())
       .execute();
 
     assertThat(result.inputFiles()).hasSize(1);
-    String expectedLog = String.format("File '%s' is ignored. It is not located in project basedir '%s'.", xooFile2.toPath().toRealPath(), baseDir.toPath().toRealPath());
+    String expectedLog = String.format("File '%s' is ignored. It is not located in project basedir '%s'.", xooFile2.toPath().toRealPath(LinkOption.NOFOLLOW_LINKS),
+      baseDir.toPath().toRealPath(LinkOption.NOFOLLOW_LINKS));
     assertThat(logTester.logs(Level.WARN)).contains(expectedLog);
   }
 
@@ -1037,17 +1121,18 @@ class FileSystemMediumIT {
 
     writeFile(moduleA, "src/sampleA.xoo", "Sample xoo\ncontent");
     File xooFile2 = writeFile(baseDir, "another.xoo", "Sample xoo 2\ncontent");
+    Path xooFile2Path = xooFile2.toPath().toRealPath(LinkOption.NOFOLLOW_LINKS);
 
     AnalysisResult result = tester.newAnalysis()
       .properties(builder
         .put("sonar.modules", "moduleA")
-        .put("moduleA.sonar.sources", "src," + PathUtils.canonicalPath(xooFile2))
+        .put("moduleA.sonar.sources", "src," + FilenameUtils.separatorsToUnix(xooFile2.getPath()))
         .build())
       .execute();
 
     assertThat(result.inputFiles()).hasSize(1);
-    Path xooFile2Path = xooFile2.toPath().toRealPath();
-    Path moduleAPath = new File(baseDir, "moduleA").toPath().toRealPath();
+
+    Path moduleAPath = new File(baseDir, "moduleA").toPath().toRealPath(LinkOption.NOFOLLOW_LINKS);
     assertThat(logTester.logs(Level.WARN))
       .contains(String.format("File '%s' is ignored. It is not located in module basedir '%s'.", xooFile2Path, moduleAPath));
   }
@@ -1094,7 +1179,7 @@ class FileSystemMediumIT {
         .build())
       .execute();
 
-    assertThat(logTester.logs()).contains("1 file indexed");
+    assertThat(logTester.logs()).anyMatch(log -> log.startsWith("1 file indexed (done) | time="));
     assertThat(result.inputFile("sample.xoo")).isNotNull();
   }
 
@@ -1261,6 +1346,225 @@ class FileSystemMediumIT {
       .hasMessageEndingWith("Failed to preprocess files");
   }
 
+  @ParameterizedTest
+  @ValueSource(booleans = {
+    true,
+    false
+  })
+  void shouldScanAndAnalyzeAllHiddenFiles(boolean setHiddenFileScanningExplicitly) throws IOException {
+    prepareHiddenFileProject();
+    File projectDir = new File("test-resources/mediumtest/xoo/sample-with-hidden-files");
+    AnalysisBuilder analysisBuilder = tester
+      .addRules(new XooRulesDefinition())
+      .addActiveRule("xoo", "OneIssuePerFile", null, "Issue Per File", "MAJOR", null, "xoo")
+      .newAnalysis(new File(projectDir, "sonar-project.properties"))
+      .property("sonar.exclusions", "**/*.ignore")
+      .property("sonar.oneIssuePerFile.enableHiddenFileProcessing", "true");
+
+    if (setHiddenFileScanningExplicitly) {
+      // default is assumed to be false, here we set it explicitly
+      analysisBuilder.property("sonar.scanner.excludeHiddenFiles", "false");
+    }
+
+    AnalysisResult result = analysisBuilder.execute();
+
+    for (Map.Entry<String, Boolean> pathToHiddenStatus : hiddenFileProjectExpectedHiddenStatus().entrySet()) {
+      String filePath = pathToHiddenStatus.getKey();
+      boolean expectedIsHidden = pathToHiddenStatus.getValue();
+      assertHiddenFileScan(result, filePath, expectedIsHidden, true);
+      // we expect the sensor to process all files, regardless of visibility
+      assertFileIssue(result, filePath, true);
+    }
+    assertThat(result.inputFiles()).hasSize(10);
+  }
+
+  @Test
+  void shouldScanAllFilesAndOnlyAnalyzeNonHiddenFiles() throws IOException {
+    prepareHiddenFileProject();
+    File projectDir = new File("test-resources/mediumtest/xoo/sample-with-hidden-files");
+    AnalysisResult result = tester
+      .addRules(new XooRulesDefinition())
+      .addActiveRule("xoo", "OneIssuePerFile", null, "Issue Per File", "MAJOR", null, "xoo")
+      .newAnalysis(new File(projectDir, "sonar-project.properties"))
+      .property("sonar.exclusions", "**/*.ignore")
+      .property("sonar.oneIssuePerFile.enableHiddenFileProcessing", "false")
+      .execute();
+
+    for (Map.Entry<String, Boolean> pathToHiddenStatus : hiddenFileProjectExpectedHiddenStatus().entrySet()) {
+      String filePath = pathToHiddenStatus.getKey();
+      boolean expectedHiddenStatus = pathToHiddenStatus.getValue();
+      assertHiddenFileScan(result, filePath, expectedHiddenStatus, true);
+      // sensor should not process hidden files, we only expect issues on non-hidden files
+      assertFileIssue(result, filePath, !expectedHiddenStatus);
+    }
+    assertThat(result.inputFiles()).hasSize(10);
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {
+    true,
+    false
+  })
+  void shouldNotScanAndAnalyzeHiddenFilesWhenHiddenFileScanningIsDisabled(boolean sensorHiddenFileProcessingEnabled) throws IOException {
+    prepareHiddenFileProject();
+    File projectDir = new File("test-resources/mediumtest/xoo/sample-with-hidden-files");
+    AnalysisResult result = tester
+      .addRules(new XooRulesDefinition())
+      .addActiveRule("xoo", "OneIssuePerFile", null, "Issue Per File", "MAJOR", null, "xoo")
+      .newAnalysis(new File(projectDir, "sonar-project.properties"))
+      .property("sonar.exclusions", "**/*.ignore")
+      .property("sonar.scanner.excludeHiddenFiles", "true")
+      // hidden files are not scanned, so issues can't be raised on them regardless if the sensor wants to process them
+      .property("sonar.oneIssuePerFile.enableHiddenFileProcessing", String.valueOf(sensorHiddenFileProcessingEnabled))
+      .execute();
+
+    for (Map.Entry<String, Boolean> pathToHiddenStatus : hiddenFileProjectExpectedHiddenStatus().entrySet()) {
+      String filePath = pathToHiddenStatus.getKey();
+      boolean expectedHiddenStatus = pathToHiddenStatus.getValue();
+      assertHiddenFileScan(result, filePath, expectedHiddenStatus, false);
+      if (!expectedHiddenStatus) {
+        assertFileIssue(result, filePath, true);
+      }
+    }
+    assertThat(result.inputFiles()).hasSize(1);
+  }
+
+  @Test
+  void hiddenFilesAssignedToALanguageShouldNotBePublishedByDefault() throws IOException {
+    tester
+      .addRules(new XooRulesDefinition());
+
+    File srcDir = new File(baseDir, "src");
+    assertThat(srcDir.mkdir()).isTrue();
+
+    File hiddenFile = writeFile(srcDir, ".xoo", "Sample xoo\ncontent");
+    setFileAsHiddenOnWindows(hiddenFile.toPath());
+    File hiddenFileWithoutLanguage = writeFile(srcDir, ".bar", "Sample bar\ncontent");
+    setFileAsHiddenOnWindows(hiddenFileWithoutLanguage.toPath());
+    writeFile(srcDir, "file.xoo", "Sample xoo\ncontent");
+
+    AnalysisResult result = tester.newAnalysis()
+      .properties(builder
+        .put("sonar.sources", "src")
+        .build())
+      .execute();
+
+    DefaultInputFile hiddenInputFile = (DefaultInputFile) result.inputFile("src/.xoo");
+
+    assertThat(hiddenInputFile).isNotNull();
+    assertThat(hiddenInputFile.isPublished()).isFalse();
+    assertThatThrownBy(() -> result.getReportComponent(hiddenInputFile))
+      .isInstanceOf(IllegalStateException.class)
+      .hasMessageContaining("Unable to find report for component");
+
+    DefaultInputFile hiddenInputFileWithoutLanguage = (DefaultInputFile) result.inputFile("src/.bar");
+    assertThat(hiddenInputFileWithoutLanguage).isNotNull();
+    assertThat(hiddenInputFileWithoutLanguage.isPublished()).isFalse();
+    assertThatThrownBy(() -> result.getReportComponent(hiddenInputFileWithoutLanguage))
+      .isInstanceOf(IllegalStateException.class)
+      .hasMessageContaining("Unable to find report for component");
+
+    DefaultInputFile visibleInputFile = (DefaultInputFile) result.inputFile("src/file.xoo");
+    assertThat(visibleInputFile).isNotNull();
+    assertThat(visibleInputFile.isPublished()).isTrue();
+    assertThat(result.getReportComponent(visibleInputFile)).isNotNull();
+  }
+
+  @Test
+  void shouldDetectHiddenFilesFromMultipleModules() throws IOException {
+    File srcDirA = createModuleWithSubdirectory("moduleA", "src");
+    File srcDirB = createModuleWithSubdirectory("moduleB", "src");
+
+    File fileModuleA = writeFile(srcDirA, ".xoo", "Sample xoo\ncontent");
+    setFileAsHiddenOnWindows(fileModuleA.toPath());
+    File fileModuleB = writeFile(srcDirB, ".xoo", "Sample xoo\ncontent");
+    setFileAsHiddenOnWindows(fileModuleB.toPath());
+
+    AnalysisResult result = tester.newAnalysis()
+      .properties(ImmutableMap.<String, String>builder()
+        .put("sonar.projectBaseDir", baseDir.getAbsolutePath())
+        .put("sonar.projectKey", "com.foo.project")
+        .put("sonar.sources", "src")
+        .put("sonar.modules", "moduleA,moduleB")
+        .build())
+      .execute();
+
+    assertHiddenFileScan(result, "moduleA/src/.xoo", true, true);
+    assertHiddenFileScan(result, "moduleB/src/.xoo", true, true);
+  }
+
+  @Test
+  void shouldScanAndAnalyzeAllHiddenFilesWithRespectToExclusions() throws IOException {
+    prepareHiddenFileProject();
+    File projectDir = new File("test-resources/mediumtest/xoo/sample-with-hidden-files");
+
+    AnalysisResult result = tester
+      .addRules(new XooRulesDefinition())
+      .addActiveRule("xoo", "OneIssuePerFile", null, "Issue Per File", "MAJOR", null, "xoo")
+      .newAnalysis(new File(projectDir, "sonar-project.properties"))
+      .property("sonar.scm.provider", "xoo")
+      .property("sonar.oneIssuePerFile.enableHiddenFileProcessing", "true")
+      .property("sonar.exclusions", "**/.nestedHidden/**,**/*.ignore")
+      .execute();
+
+    Set<String> excludedFiles = Set.of(
+      // sonar.exclusions
+      "xources/.hidden/.nestedHidden/.xoo",
+      "xources/.hidden/.nestedHidden/Class.xoo",
+      "xources/.hidden/.nestedHidden/visibleInHiddenFolder/.xoo",
+      "xources/.hidden/.nestedHidden/visibleInHiddenFolder/.xoo.ignore",
+      "xources/.hidden/.nestedHidden/visibleInHiddenFolder/Class.xoo",
+      // scm ignore
+      "xources/nonHidden/.hiddenInVisibleFolder/.xoo");
+
+    for (Map.Entry<String, Boolean> pathToHiddenStatus : hiddenFileProjectExpectedHiddenStatus().entrySet()) {
+      String filePath = pathToHiddenStatus.getKey();
+      boolean expectedIsHidden = pathToHiddenStatus.getValue();
+
+      if (excludedFiles.contains(filePath)) {
+        assertThat(result.inputFile(filePath)).isNull();
+      } else {
+        assertHiddenFileScan(result, filePath, expectedIsHidden, true);
+        // we expect the sensor to process all non-excluded files, regardless of visibility
+        assertFileIssue(result, filePath, true);
+      }
+    }
+    assertThat(result.inputFiles()).hasSize(5);
+  }
+
+  @Test
+  void shouldAnalyzeVisibilityCorrectlyWhenOverlappingSourceAndTestDirectories() throws IOException {
+    prepareHiddenFileProject();
+    File projectDir = new File("test-resources/mediumtest/xoo/sample-with-hidden-files");
+    AnalysisBuilder analysisBuilder = tester
+      .addRules(new XooRulesDefinition())
+      .addActiveRule("xoo", "OneIssuePerFile", null, "Issue Per File", "MAJOR", null, "xoo")
+      .newAnalysis(new File(projectDir, "sonar-project.properties"))
+      .property("sonar.exclusions", "**/*.ignore")
+      .property("sonar.tests", "xources")
+      .property("sonar.test.exclusions", "**/*.xoo,**/*.ignore")
+      .property("sonar.oneIssuePerFile.enableHiddenFileProcessing", "true");
+
+
+    AnalysisResult result = analysisBuilder.execute();
+
+    for (Map.Entry<String, Boolean> pathToHiddenStatus : hiddenFileProjectExpectedHiddenStatus().entrySet()) {
+      String filePath = pathToHiddenStatus.getKey();
+      boolean expectedIsHidden = pathToHiddenStatus.getValue();
+      assertHiddenFileScan(result, filePath, expectedIsHidden, true);
+      // we expect the sensor to process all files, regardless of visibility
+      assertFileIssue(result, filePath, true);
+    }
+    assertThat(result.inputFiles()).hasSize(10);
+  }
+
+  private File createModuleWithSubdirectory(String moduleName, String subDirName) {
+    File moduleBaseDir = new File(baseDir, moduleName);
+    File srcDir = moduleBaseDir.toPath().resolve(subDirName).toFile();
+    assertThat(srcDir.mkdirs()).isTrue();
+    return srcDir;
+  }
+
   private static void assertAnalysedFiles(AnalysisResult result, String... files) {
     assertThat(result.inputFiles().stream().map(InputFile::toString).toList()).contains(files);
   }
@@ -1287,4 +1591,81 @@ class FileSystemMediumIT {
     return file;
   }
 
+  private Path prepareBrokenSymlinkTestScenario() throws IOException {
+    File srcDir = new File(baseDir, "src");
+    assertThat(srcDir.mkdir()).isTrue();
+
+    File target = writeFile(srcDir, "target.xoo");
+    Path link = Paths.get(srcDir.getPath(), "target_link.xoo");
+    Files.createSymbolicLink(link, target.toPath());
+    Files.delete(target.toPath());
+
+    return link;
+  }
+
+  private Map<String, Boolean> hiddenFileProjectExpectedHiddenStatus() {
+    return Map.of(
+      "xources/.hidden/.xoo", true,
+      "xources/.hidden/Class.xoo", true,
+      "xources/.hidden/.nestedHidden/.xoo", true,
+      "xources/.hidden/.nestedHidden/Class.xoo", true,
+      "xources/.hidden/.nestedHidden/visibleInHiddenFolder/.xoo", true,
+      "xources/.hidden/.nestedHidden/visibleInHiddenFolder/Class.xoo", true,
+      "xources/nonHidden/.xoo", true,
+      "xources/nonHidden/Class.xoo", false,
+      "xources/nonHidden/.hiddenInVisibleFolder/.xoo", true,
+      "xources/nonHidden/.hiddenInVisibleFolder/Class.xoo", true);
+  }
+
+  private static void prepareHiddenFileProject() throws IOException {
+    if (!SystemUtils.IS_OS_WINDOWS) {
+      return;
+    }
+
+    // On Windows, we need to set the hidden attribute on the file system
+    Set<String> dirAndFilesToHideOnWindows = Set.of(
+      "xources/.hidden",
+      "xources/.hidden/.xoo",
+      "xources/.hidden/.nestedHidden",
+      "xources/.hidden/.nestedHidden/.xoo",
+      "xources/.hidden/.nestedHidden/visibleInHiddenFolder/.xoo",
+      "xources/nonHidden/.xoo",
+      "xources/nonHidden/.hiddenInVisibleFolder",
+      "xources/nonHidden/.hiddenInVisibleFolder/.xoo");
+
+    for (String path : dirAndFilesToHideOnWindows) {
+      Path pathFromResources = Path.of("test-resources/mediumtest/xoo/sample-with-hidden-files", path);
+      setFileAsHiddenOnWindows(pathFromResources);
+    }
+  }
+
+  private static void setFileAsHiddenOnWindows(Path path) throws IOException {
+    if (SystemUtils.IS_OS_WINDOWS) {
+      Files.setAttribute(path, "dos:hidden", true, LinkOption.NOFOLLOW_LINKS);
+    }
+  }
+
+  private static void assertHiddenFileScan(AnalysisResult result, String filePath, boolean expectedHiddenStatus, boolean hiddenFilesShouldBeScanned) {
+    InputFile file = result.inputFile(filePath);
+
+    if (!hiddenFilesShouldBeScanned && expectedHiddenStatus) {
+      assertThat(file).isNull();
+    } else {
+      assertThat(file).withFailMessage(String.format("File \"%s\" was not analyzed", filePath)).isNotNull();
+      assertThat(file.isHidden())
+        .withFailMessage(String.format("Expected file \"%s\" hidden status to be \"%s\", however was \"%s\"", filePath, expectedHiddenStatus, file.isHidden()))
+        .isEqualTo(expectedHiddenStatus);
+    }
+  }
+
+  private static void assertFileIssue(AnalysisResult result, String filePath, boolean expectToHaveIssue) {
+    InputFile file = result.inputFile(filePath);
+    assertThat(file).isNotNull();
+    List<ScannerReport.Issue> issues = result.issuesFor(file);
+    if (expectToHaveIssue) {
+      assertThat(issues).hasSize(1);
+    } else {
+      assertThat(issues).isEmpty();
+    }
+  }
 }

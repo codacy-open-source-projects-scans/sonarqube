@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -57,6 +57,21 @@ public class QGChangeEventListenersImpl implements QGChangeEventListeners {
 
     try {
       broadcastChangeEventsToBranches(issues, changeEvents, fromAlm);
+    } catch (Error e) {
+      LOG.warn(format("Broadcasting to listeners failed for %s events", changeEvents.size()), e);
+    }
+  }
+
+  @Override
+  public void broadcastOnAnyChange(Collection<QGChangeEvent> changeEvents, boolean fromAlm) {
+    if (listeners.isEmpty() || changeEvents.isEmpty()) {
+      return;
+    }
+
+    try {
+      for (var changeEvent : changeEvents) {
+        listeners.forEach(listener -> broadcastChangeEventToListener(Set.of(), changeEvent, listener));
+      }
     } catch (Error e) {
       LOG.warn(format("Broadcasting to listeners failed for %s events", changeEvents.size()), e);
     }

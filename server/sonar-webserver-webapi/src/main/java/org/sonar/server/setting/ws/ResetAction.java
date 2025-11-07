@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -31,7 +31,7 @@ import org.sonar.api.server.ws.Change;
 import org.sonar.api.server.ws.Request;
 import org.sonar.api.server.ws.Response;
 import org.sonar.api.server.ws.WebService;
-import org.sonar.api.web.UserRole;
+import org.sonar.db.permission.ProjectPermission;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
 import org.sonar.db.entity.EntityDto;
@@ -142,7 +142,7 @@ public class ResetAction implements SettingsWsAction {
 
   private void checkPermissions(Optional<EntityDto> component) {
     if (component.isPresent()) {
-      userSession.checkEntityPermission(UserRole.ADMIN, component.get());
+      userSession.checkEntityPermission(ProjectPermission.ADMIN, component.get());
     } else {
       userSession.checkIsSystemAdministrator();
     }

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -26,7 +26,6 @@ import org.sonar.scanner.bootstrap.GlobalConfiguration;
 import org.sonar.scanner.bootstrap.GlobalServerSettings;
 import org.springframework.context.annotation.Bean;
 
-
 public class ProjectConfigurationProvider {
 
   private final SonarGlobalPropertiesFilter sonarGlobalPropertiesFilter;
@@ -37,7 +36,7 @@ public class ProjectConfigurationProvider {
 
   @Bean("ProjectConfiguration")
   public ProjectConfiguration provide(DefaultInputProject project, GlobalConfiguration globalConfig, GlobalServerSettings globalServerSettings,
-    ProjectServerSettings projectServerSettings, MutableProjectSettings projectSettings) {
+    ProjectServerSettings projectServerSettings) {
     Map<String, String> settings = new LinkedHashMap<>();
     settings.putAll(globalServerSettings.properties());
     settings.putAll(projectServerSettings.properties());
@@ -45,10 +44,7 @@ public class ProjectConfigurationProvider {
 
     settings = sonarGlobalPropertiesFilter.enforceOnlyServerSideSonarGlobalPropertiesAreUsed(settings, globalServerSettings.properties());
 
-    ProjectConfiguration projectConfig = new ProjectConfiguration(globalConfig.getDefinitions(), globalConfig.getEncryption(), settings);
-    projectSettings.complete(projectConfig);
-    return projectConfig;
+    return new ProjectConfiguration(globalConfig.getDefinitions(), globalConfig.getEncryption(), settings);
   }
-
 
 }

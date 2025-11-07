@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -117,6 +117,10 @@ public class GroupPermissionDao implements Dao {
    * permission, <strong>excluding group "AnyOne"</strong> (which implies the returned {@code Sett} can't contain
    * {@code null}).
    */
+  public Set<String> selectGroupUuidsWithPermissionOnEntityBut(DbSession session, String entityUuid, ProjectPermission permission) {
+    return selectGroupUuidsWithPermissionOnEntityBut(session, entityUuid, permission.getKey());
+  }
+
   public Set<String> selectGroupUuidsWithPermissionOnEntityBut(DbSession session, String entityUuid, String permission) {
     return mapper(session).selectGroupUuidsWithPermissionOnEntityBut(entityUuid, permission);
   }
@@ -205,6 +209,11 @@ public class GroupPermissionDao implements Dao {
    * @param groupUuid         if null, then anyone, else uuid of group
    * @param entityDto         if null, then global permission, otherwise the uuid of entity
    */
+  public void delete(DbSession dbSession, ProjectPermission permission, @Nullable String groupUuid,
+    @Nullable String groupName, @Nullable EntityDto entityDto) {
+    delete(dbSession, permission.getKey(), groupUuid, groupName, entityDto);
+  }
+
   public void delete(DbSession dbSession, String permission, @Nullable String groupUuid,
     @Nullable String groupName, @Nullable EntityDto entityDto) {
 

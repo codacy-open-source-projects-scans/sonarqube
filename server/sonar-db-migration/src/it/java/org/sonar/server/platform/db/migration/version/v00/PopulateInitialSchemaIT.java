@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -36,6 +36,7 @@ import org.sonar.core.platform.SonarQubeVersion;
 import org.sonar.core.util.UuidFactory;
 import org.sonar.core.util.UuidFactoryFast;
 import org.sonar.db.MigrationDbTester;
+import org.sonar.server.platform.db.migration.history.MigrationHistory;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
@@ -50,15 +51,18 @@ class PopulateInitialSchemaIT {
   private final UuidFactory uuidFactory = UuidFactoryFast.getInstance();
   private final System2 system2 = mock(System2.class);
   private final SonarQubeVersion sonarQubeVersion = mock(SonarQubeVersion.class);
+  private final MigrationHistory migrationHistory = mock(MigrationHistory.class);
 
   @RegisterExtension
   public final MigrationDbTester db = MigrationDbTester.createForMigrationStep(PopulateInitialSchema.class);
 
-  private final PopulateInitialSchema underTest = new PopulateInitialSchema(db.database(), system2, uuidFactory, sonarQubeVersion);
+  private final PopulateInitialSchema underTest = new PopulateInitialSchema(db.database(), system2, uuidFactory, sonarQubeVersion,
+    migrationHistory);
 
   @BeforeEach
   public void setUp() {
     when(sonarQubeVersion.get()).thenReturn(version);
+    when(migrationHistory.getInitialDbVersion()).thenReturn(-1L);
   }
 
   @Test
@@ -103,14 +107,14 @@ class PopulateInitialSchemaIT {
       .containsEntry("EXTERNAL_LOGIN", "admin")
       .containsEntry("EXT_IDENT_PROVIDER", "sonarqube")
       .containsEntry("USER_LOCAL", true)
-      .containsEntry("CRYPTED_PASSWORD", "$2a$12$uCkkXmhW5ThVK8mpBvnXOOJRLd64LJeHTeCkSuB3lfaR2N0AYBaSi")
-      .containsEntry("HASH_METHOD", "BCRYPT")
+      .containsEntry("CRYPTED_PASSWORD", "100000$R9xDN18ebKxA3ZTaputi6wDt+fcKhP2h3GgAjGbcBlCSlkMLENxw9wziHS46QIW3fWOjEMpeyEts+pNuPXSbYA==")
+      .containsEntry("SALT", "pSDhsn3IM3KCa74CRRf7T7Vx+OE=")
+      .containsEntry("HASH_METHOD", "PBKDF2")
       .containsEntry("CREATED_AT", NOW)
       .containsEntry("RESET_PASSWORD", true)
       .containsEntry("UPDATED_AT", NOW);
 
     assertThat(cols.get("EMAIL")).isNull();
-    assertThat(cols.get("SALT")).isNull();
   }
 
   private void verifyGroup(String expectedName, String expectedDescription) {
@@ -179,7 +183,7 @@ class PopulateInitialSchemaIT {
       "text_value as \"VAL\"," +
       "created_at as \"CREATED_AT\" " +
       " from properties");
-    assertThat(rows).hasSize(4);
+    assertThat(rows).hasSize(5);
 
     Map<String, Map<String, Object>> rowsByKey = rows.stream().collect(Collectors.toMap(t -> (String) t.get("PROP_KEY"), Function.identity()));
     verifyProperty(rowsByKey, "sonar.forceAuthentication", "true");

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -22,17 +22,10 @@ package org.sonar.server.v2.api.user.response;
 import javax.annotation.Nullable;
 
 public record UserRestResponseForLoggedInUsers(
-  String id,
   String login,
   String name,
   @Nullable
-  String email,
-  @Nullable
   Boolean active,
-  @Nullable
-  Boolean local,
-  @Nullable
-  String externalProvider,
   @Nullable
   String avatar
 

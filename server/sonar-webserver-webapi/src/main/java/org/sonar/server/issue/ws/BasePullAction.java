@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -50,7 +50,7 @@ import org.sonar.server.ws.WsAction;
 
 import static java.lang.String.format;
 import static java.util.Collections.emptyList;
-import static org.sonar.api.web.UserRole.USER;
+import static org.sonar.db.permission.ProjectPermission.USER;
 
 public abstract class BasePullAction implements WsAction {
   protected static final String PROJECT_KEY_PARAM = "projectKey";

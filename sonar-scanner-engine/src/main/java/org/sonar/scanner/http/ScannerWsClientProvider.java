@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -87,7 +87,7 @@ public class ScannerWsClientProvider {
     String responseTimeout = defaultIfBlank(scannerProps.property(SONAR_SCANNER_RESPONSE_TIMEOUT), valueOf(DEFAULT_RESPONSE_TIMEOUT));
     String envVarToken = defaultIfBlank(system.envVariable(TOKEN_ENV_VARIABLE), null);
     String token = defaultIfBlank(scannerProps.property(TOKEN_PROPERTY), envVarToken);
-    String login = defaultIfBlank(scannerProps.property(CoreProperties.LOGIN), token);
+    String login = defaultIfBlank(token, scannerProps.property(CoreProperties.LOGIN));
     boolean skipSystemTrustMaterial = Boolean.parseBoolean(defaultIfBlank(scannerProps.property(SKIP_SYSTEM_TRUST_MATERIAL), "false"));
     var sslContext = configureSsl(parseSslConfig(scannerProps, sonarUserHome), system, skipSystemTrustMaterial);
     connectorBuilder
@@ -96,7 +96,7 @@ public class ScannerWsClientProvider {
       .responseTimeoutMilliseconds(parseDurationProperty(responseTimeout, SONAR_SCANNER_RESPONSE_TIMEOUT))
       .userAgent(env.toString())
       .url(url)
-      .credentials(login, scannerProps.property(CoreProperties.PASSWORD))
+      .token(login)
       .setSSLSocketFactory(sslContext.getSslSocketFactory())
       .setTrustManager(sslContext.getTrustManager().orElseThrow());
 

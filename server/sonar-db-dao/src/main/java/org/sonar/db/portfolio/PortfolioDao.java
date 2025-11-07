@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -195,12 +195,8 @@ public class PortfolioDao implements Dao {
     return mapper(dbSession).selectRootOfReferencers(referenceUuid);
   }
 
-  public List<PortfolioDto> selectRootOfReferencersToMainBranch(DbSession dbSession, String referenceUuid) {
-    return mapper(dbSession).selectRootOfReferencersToMainBranch(referenceUuid);
-  }
-
-  public List<PortfolioDto> selectRootOfReferencersToAppBranch(DbSession dbSession, String appUuid, String appBranchKey) {
-    return mapper(dbSession).selectRootOfReferencersToAppBranch(appUuid, appBranchKey);
+  public List<PortfolioDto> selectRootOfReferencersToAppBranch(DbSession dbSession, String appBranchUuid) {
+    return mapper(dbSession).selectRootOfReferencersToAppBranch(appBranchUuid);
   }
 
   public void deleteReferencesTo(DbSession dbSession, String referenceUuid) {

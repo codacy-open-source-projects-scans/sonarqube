@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -66,11 +66,10 @@ public class UserTester {
       });
   }
 
-  public final String generateToken(String login) {
+  public final UserTokens.GenerateWsResponse generateToken(String login) {
     int id = ID_GENERATOR.getAndIncrement();
     String name = "token" + id;
-    session.wsClient().userTokens().generate(new GenerateRequest().setLogin(login).setName(name));
-    return name;
+    return session.wsClient().userTokens().generate(new GenerateRequest().setLogin(login).setName(name));
   }
 
   public final String generateToken(String login, String type, @Nullable String projectKey) {
@@ -81,6 +80,7 @@ public class UserTester {
     return response.getToken();
   }
 
+  @SafeVarargs
   public final String generateToken(String login, Consumer<GenerateRequest>... populators) {
     int id = ID_GENERATOR.getAndIncrement();
     String name = "token" + id;
@@ -129,6 +129,7 @@ public class UserTester {
         .setLogin(u.getLogin())
         .setPermission("admin"));
     dismissModesTour(u);
+    dimissDnaTour(u);
     return u;
   }
 
@@ -141,6 +142,7 @@ public class UserTester {
     session.wsClient().permissions().addUser(new org.sonarqube.ws.client.permissions.AddUserRequest().setLogin(user.getLogin()).setPermission("admin"));
     session.wsClient().userGroups().addUser(new AddUserRequest().setLogin(user.getLogin()).setName("sonar-administrators"));
     dismissModesTour(user);
+    dimissDnaTour(user);
     return user;
   }
 
@@ -149,6 +151,12 @@ public class UserTester {
       .url(session.wsClient().wsConnector().baseUrl())
       .credentials(user.getLogin(), user.getLogin())
       .build()).users().dismissNotice("showNewModesTour");
+  }
+   private void dimissDnaTour(User user) {
+    WsClientFactories.getDefault().newClient(HttpConnector.newBuilder()
+      .url(session.wsClient().wsConnector().baseUrl())
+      .credentials(user.getLogin(), user.getLogin())
+      .build()).users().dismissNotice("showDesignAndArchitectureTour");
   }
 
   public UsersService service() {

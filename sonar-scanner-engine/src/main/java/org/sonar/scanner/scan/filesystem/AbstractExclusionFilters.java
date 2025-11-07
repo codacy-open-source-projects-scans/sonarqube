@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -34,7 +34,7 @@ import org.sonar.api.batch.fs.internal.PathPattern;
 import org.sonar.api.notifications.AnalysisWarnings;
 
 import static java.lang.String.format;
-import static org.apache.commons.lang3.StringUtils.removeEnd;
+import static org.apache.commons.lang3.Strings.CS;
 import static org.sonar.api.CoreProperties.PROJECT_TESTS_EXCLUSIONS_PROPERTY;
 import static org.sonar.api.CoreProperties.PROJECT_TESTS_INCLUSIONS_PROPERTY;
 import static org.sonar.api.CoreProperties.PROJECT_TEST_EXCLUSIONS_PROPERTY;
@@ -162,7 +162,7 @@ public abstract class AbstractExclusionFilters {
   }
 
   private static void log(String title, PathPattern[] patterns, String indent) {
-    if (patterns.length > 0) {
+    if (patterns.length > 0 && LOG.isInfoEnabled()) {
       LOG.info("{}{} {}", indent, title, Arrays.stream(patterns).map(PathPattern::toString).collect(Collectors.joining(", ")));
     }
   }
@@ -254,8 +254,8 @@ public abstract class AbstractExclusionFilters {
     return Stream.of(exclusionPatterns)
       .map(PathPattern::toString)
       .filter(ps -> ps.endsWith("/**/*") || ps.endsWith("/**"))
-      .map(ps -> removeEnd(ps, "/**/*"))
-      .map(ps -> removeEnd(ps, "/**"))
+      .map(ps -> CS.removeEnd(ps, "/**/*"))
+      .map(ps -> CS.removeEnd(ps, "/**"))
       .map(baseDir::resolve)
       .anyMatch(exclusionRootPath -> absolutePath.startsWith(exclusionRootPath)
         || PathPattern.create(exclusionRootPath.toString()).match(absolutePath, relativePath));

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -92,6 +92,7 @@ class ActivateRulesActionIT {
       "cwe",
       "owaspTop10",
       "owaspTop10-2021",
+      "owaspMobileTop10-2024",
       "sansTop25",
       "sonarsourceSecurity",
       "cleanCodeAttributeCategories",

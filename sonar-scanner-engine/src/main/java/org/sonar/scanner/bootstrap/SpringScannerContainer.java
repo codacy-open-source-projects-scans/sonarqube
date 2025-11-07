@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,16 +19,14 @@
  */
 package org.sonar.scanner.bootstrap;
 
-import javax.annotation.Nullable;
 import jakarta.annotation.Priority;
+import javax.annotation.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.sonar.api.batch.fs.internal.FileMetadata;
 import org.sonar.api.batch.rule.CheckFactory;
 import org.sonar.api.batch.sensor.issue.internal.DefaultNoSonarFilter;
-import org.sonar.api.config.PropertyDefinition;
 import org.sonar.api.scan.filesystem.PathResolver;
-import org.sonar.api.utils.MessageException;
 import org.sonar.core.extension.CoreExtensionsInstaller;
 import org.sonar.core.metric.ScannerMetrics;
 import org.sonar.core.platform.SpringComponentContainer;
@@ -88,6 +86,8 @@ import org.sonar.scanner.repository.ProjectRepositoriesProvider;
 import org.sonar.scanner.repository.QualityProfilesProvider;
 import org.sonar.scanner.repository.ReferenceBranchSupplier;
 import org.sonar.scanner.repository.TelemetryCache;
+import org.sonar.scanner.repository.featureflags.DefaultFeatureFlagsLoader;
+import org.sonar.scanner.repository.featureflags.DefaultFeatureFlagsRepository;
 import org.sonar.scanner.repository.language.DefaultLanguagesLoader;
 import org.sonar.scanner.repository.language.DefaultLanguagesRepository;
 import org.sonar.scanner.repository.settings.DefaultProjectSettingsLoader;
@@ -99,7 +99,6 @@ import org.sonar.scanner.scan.InputModuleHierarchyProvider;
 import org.sonar.scanner.scan.InputProjectProvider;
 import org.sonar.scanner.scan.ModuleIndexer;
 import org.sonar.scanner.scan.MutableProjectReactorProvider;
-import org.sonar.scanner.scan.MutableProjectSettings;
 import org.sonar.scanner.scan.ProjectBuildersExecutor;
 import org.sonar.scanner.scan.ProjectConfigurationProvider;
 import org.sonar.scanner.scan.ProjectLock;
@@ -116,6 +115,7 @@ import org.sonar.scanner.scan.branch.BranchType;
 import org.sonar.scanner.scan.branch.ProjectBranchesProvider;
 import org.sonar.scanner.scan.filesystem.DefaultProjectFileSystem;
 import org.sonar.scanner.scan.filesystem.FilePreprocessor;
+import org.sonar.scanner.scan.filesystem.HiddenFilesProjectData;
 import org.sonar.scanner.scan.filesystem.InputComponentStore;
 import org.sonar.scanner.scan.filesystem.LanguageDetection;
 import org.sonar.scanner.scan.filesystem.MetadataGenerator;
@@ -153,21 +153,8 @@ public class SpringScannerContainer extends SpringComponentContainer {
 
   @Override
   protected void doBeforeStart() {
-    addSuffixesDeprecatedProperties();
     addScannerExtensions();
     addComponents();
-  }
-
-  private void addSuffixesDeprecatedProperties() {
-    add(
-    /* This is needed to support properly the deprecated sonar.rpg.suffixes property when the download optimization feature is enabled.
-       The value of the property is needed at the preprocessing stage, but being defined by an optional analyzer means that at preprocessing
-       it won't be properly available. This will be removed in SQ 11.0 together with the drop of the property from the rpg analyzer.
-       See SONAR-21514 */
-      PropertyDefinition.builder("sonar.rpg.file.suffixes")
-        .deprecatedKey("sonar.rpg.suffixes")
-        .multiValues(true)
-        .build());
   }
 
   private void addScannerExtensions() {
@@ -213,6 +200,7 @@ public class SpringScannerContainer extends SpringComponentContainer {
       FilePreprocessor.class,
       ProjectFilePreprocessor.class,
       ProjectExclusionFilters.class,
+      HiddenFilesProjectData.class,
 
       // rules
       new ActiveRulesProvider(),
@@ -239,7 +227,6 @@ public class SpringScannerContainer extends SpringComponentContainer {
       ContextPropertiesCache.class,
       TelemetryCache.class,
 
-      MutableProjectSettings.class,
       SonarGlobalPropertiesFilter.class,
       ProjectConfigurationProvider.class,
 
@@ -308,18 +295,20 @@ public class SpringScannerContainer extends SpringComponentContainer {
       GitlabCi.class,
       Jenkins.class,
       SemaphoreCi.class,
-      TravisCi.class
-    );
+      TravisCi.class,
 
-    add(GitScmSupport.getObjects());
-    add(SvnScmSupport.getObjects());
-
-    add(DefaultProjectSettingsLoader.class,
+      DefaultProjectSettingsLoader.class,
       DefaultActiveRulesLoader.class,
       DefaultQualityProfileLoader.class,
       DefaultProjectRepositoriesLoader.class,
       DefaultLanguagesLoader.class,
-      DefaultLanguagesRepository.class);
+      DefaultLanguagesRepository.class,
+
+      DefaultFeatureFlagsLoader.class,
+      DefaultFeatureFlagsRepository.class);
+
+    add(GitScmSupport.getObjects());
+    add(SvnScmSupport.getObjects());
   }
 
   static ExtensionMatcher getScannerProjectExtensionsFilter() {
@@ -335,11 +324,6 @@ public class SpringScannerContainer extends SpringComponentContainer {
   protected void doAfterStart() {
     ScanProperties properties = getComponentByType(ScanProperties.class);
     properties.validate();
-
-    properties.get("sonar.branch").ifPresent(deprecatedBranch -> {
-      throw MessageException.of("The 'sonar.branch' parameter is no longer supported. You should stop using it. " +
-        "Branch analysis is available in Developer Edition and above. See https://www.sonarsource.com/plans-and-pricing/developer/ for more information.");
-    });
 
     BranchConfiguration branchConfig = getComponentByType(BranchConfiguration.class);
     if (branchConfig.branchType() == BranchType.PULL_REQUEST && LOG.isInfoEnabled()) {

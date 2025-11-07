@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -252,5 +252,20 @@ public class DefaultIssueTest {
     assertThat(issue.isQuickFixAvailable()).isFalse();
     issue.addQuickFix(newQuickFix);
     assertThat(issue.isQuickFixAvailable()).isTrue();
+  }
+
+  @Test
+  public void issue_internal_tags_operations() {
+    DefaultIssue issue = new DefaultIssue(project, storage);
+    assertThat(issue.internalTags()).isNull();
+
+    issue.addInternalTag("security");
+    assertThat(issue.internalTags()).containsExactly("security");
+
+    issue.addInternalTags(List.of("performance", "maintainability"));
+    assertThat(issue.internalTags()).containsExactly("security", "performance", "maintainability");
+
+    issue.setInternalTags(List.of("reliability"));
+    assertThat(issue.internalTags()).containsExactly("reliability");
   }
 }

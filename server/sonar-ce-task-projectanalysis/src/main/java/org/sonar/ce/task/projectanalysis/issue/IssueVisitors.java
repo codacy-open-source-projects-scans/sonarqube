@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,7 +19,10 @@
  */
 package org.sonar.ce.task.projectanalysis.issue;
 
+import java.util.Arrays;
+import java.util.Comparator;
 import javax.annotation.Nullable;
+
 import org.sonar.ce.task.projectanalysis.component.Component;
 import org.sonar.core.issue.DefaultIssue;
 import org.sonar.core.issue.tracking.Input;
@@ -29,7 +32,17 @@ public class IssueVisitors {
   private final IssueVisitor[] visitors;
 
   public IssueVisitors(IssueVisitor[] visitors) {
-    this.visitors = visitors;
+    this.visitors = sortVisitorsByPriority(visitors);
+  }
+
+  private static IssueVisitor[] sortVisitorsByPriority(IssueVisitor[] visitors) {
+    return Arrays.stream(visitors)
+      .sorted(Comparator.comparingInt(IssueVisitors::getPriority).reversed())
+      .toArray(IssueVisitor[]::new);
+  }
+
+  private static int getPriority(IssueVisitor visitor) {
+    return visitor instanceof PriorityIssueVisitor priorityVisitor ? priorityVisitor.getPriority() : PriorityIssueVisitor.NORMAL_PRIORITY;
   }
 
   public void beforeComponent(Component component) {

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -199,8 +199,8 @@ public class AnalysisResult implements AnalysisObserver {
     return readFromReport(ScannerReportReader::readAdHocRules);
   }
 
-  public List<ScannerReport.Dependency> dependencies() {
-    return readFromReport(ScannerReportReader::readDependencies);
+  public List<ScannerReport.AnalysisData> analysisData() {
+    return readFromReport(ScannerReportReader::readAnalysisData);
   }
 
   @NotNull

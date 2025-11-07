@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -155,6 +155,18 @@ public class ServerMonitoringMetricsTest {
     metrics.observeComputeEngineTaskDuration(10, labelValues[0], labelValues[1]);
 
     assertThat(CollectorRegistry.defaultRegistry.getSampleValue("sonarqube_compute_engine_tasks_running_duration_seconds_sum",
+      labelNames, labelValues)).isEqualTo(10);
+  }
+
+  @Test
+  public void observeComputeEngineSystemTaskDurationTest() {
+    ServerMonitoringMetrics metrics = new ServerMonitoringMetrics();
+    String[] labelNames = {"task_type"};
+    String[] labelValues = {"AUDIT_PURGE"};
+
+    metrics.observeComputeEngineSystemTaskDuration(10, labelValues[0]);
+
+    assertThat(CollectorRegistry.defaultRegistry.getSampleValue("sonarqube_compute_engine_system_tasks_running_duration_seconds_sum",
       labelNames, labelValues)).isEqualTo(10);
   }
 

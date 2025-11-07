@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -42,11 +42,12 @@ public class CspFilterTest {
     "base-uri 'none'; " +
     "connect-src 'self' http: https:; " +
     "font-src 'self' data:; " +
+    "frame-src; " +
     "img-src * data: blob:; " +
     "object-src 'none'; " +
     "script-src 'self' 'sha256-hK8SVWFNHY0UhP61DBzX/3fvT74EI8u6/jRQvUKeZoU='; " +
     "style-src 'self' 'unsafe-inline'; " +
-    "worker-src 'none'";
+    "worker-src 'self'";
   private final ServletContext servletContext = mock(ServletContext.class, RETURNS_MOCKS);
   private final HttpServletResponse response = mock(HttpServletResponse.class);
   private final FilterChain chain = mock(FilterChain.class);

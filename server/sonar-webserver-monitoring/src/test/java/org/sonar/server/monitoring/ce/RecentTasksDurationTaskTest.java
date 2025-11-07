@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -83,6 +83,22 @@ public class RecentTasksDurationTaskTest {
     task.run();
 
     verify(metrics, times(1)).observeComputeEngineTaskDuration(anyLong(), any(), any());
+  }
+
+  @Test
+  public void run_given1TaskWithEntityUuidAnd1Without_observeDurationFor2Tasks() {
+    RecentTasksDurationTask task = new RecentTasksDurationTask(dbClient, metrics, config, system);
+    List<CeActivityDto> recentTasks = createTasks(2, 0);
+
+    recentTasks.get(0).setEntityUuid(null);
+
+    when(entityDao.selectByUuids(any(), any())).thenReturn(createEntityDtos(1));
+    when(ceActivityDao.selectNewerThan(any(), anyLong())).thenReturn(recentTasks);
+
+    task.run();
+
+    verify(metrics, times(1)).observeComputeEngineTaskDuration(anyLong(), any(), any());
+    verify(metrics, times(1)).observeComputeEngineSystemTaskDuration(anyLong(), any());
   }
 
   @Test

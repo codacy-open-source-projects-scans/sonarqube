@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -47,6 +47,7 @@ import org.sonar.server.rule.registration.RulesKeyVerifier;
 import org.sonar.server.rule.registration.RulesRegistrant;
 import org.sonar.server.rule.registration.StartupRuleUpdater;
 import org.sonar.server.rule.registration.ActiveRulesImpactInitializer;
+import org.sonar.server.startup.IssueFlagResetSetupTask;
 import org.sonar.server.startup.RegisterMetrics;
 import org.sonar.server.startup.RegisterPermissionTemplates;
 import org.sonar.server.startup.RegisterPlugins;
@@ -93,6 +94,7 @@ public class PlatformLevelStartup extends PlatformLevel {
       RenameDeprecatedPropertyKeys.class,
       CeQueueCleaner.class,
       UpgradeSuggestionsCleaner.class,
+      IssueFlagResetSetupTask.class,
       PluginConsentVerifier.class);
     add(RegisterPlugins.class,
       // RegisterServletFilters makes the WebService engine of Level4 served by the MasterServletFilter, therefore it

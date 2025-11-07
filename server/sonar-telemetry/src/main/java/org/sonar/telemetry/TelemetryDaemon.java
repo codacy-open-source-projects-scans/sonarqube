@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -38,13 +38,13 @@ import org.sonar.db.DbSession;
 import org.sonar.server.property.InternalProperties;
 import org.sonar.server.util.AbstractStoppableScheduledExecutorServiceImpl;
 import org.sonar.server.util.GlobalLockManager;
+import org.sonar.telemetry.core.MessageSerializer;
 import org.sonar.telemetry.core.TelemetryClient;
+import org.sonar.telemetry.core.schema.BaseMessage;
 import org.sonar.telemetry.legacy.TelemetryData;
 import org.sonar.telemetry.legacy.TelemetryDataJsonWriter;
 import org.sonar.telemetry.legacy.TelemetryDataLoader;
 import org.sonar.telemetry.metrics.TelemetryMetricsLoader;
-import org.sonar.telemetry.core.schema.BaseMessage;
-import org.sonar.telemetry.core.MessageSerializer;
 
 import static org.sonar.process.ProcessProperties.Property.SONAR_TELEMETRY_ENABLE;
 import static org.sonar.process.ProcessProperties.Property.SONAR_TELEMETRY_FREQUENCY_IN_SECONDS;
@@ -117,7 +117,6 @@ public class TelemetryDaemon extends AbstractStoppableScheduledExecutorServiceIm
   private Runnable telemetryCommand() {
     return () -> {
       try {
-
         if (!lockManager.tryLock(LOCK_NAME, lockDuration())) {
           return;
         }
@@ -137,7 +136,7 @@ public class TelemetryDaemon extends AbstractStoppableScheduledExecutorServiceIm
   }
 
   private void updateTelemetryProps(long now) {
-    internalProperties.write(I_PROP_LAST_PING, String.valueOf(now));
+    writeLastPing(now);
 
     Optional<String> currentSequence = internalProperties.read(I_PROP_MESSAGE_SEQUENCE);
     if (currentSequence.isEmpty()) {
@@ -147,6 +146,10 @@ public class TelemetryDaemon extends AbstractStoppableScheduledExecutorServiceIm
 
     long current = Long.parseLong(currentSequence.get());
     internalProperties.write(I_PROP_MESSAGE_SEQUENCE, String.valueOf(current + 1));
+  }
+
+  private void writeLastPing(long now) {
+    internalProperties.write(I_PROP_LAST_PING, String.valueOf(now));
   }
 
   private void optOut() {

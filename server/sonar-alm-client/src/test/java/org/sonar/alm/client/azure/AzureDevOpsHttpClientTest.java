@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -39,7 +39,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
 
 public class AzureDevOpsHttpClientTest {
-  public static final String UNABLE_TO_CONTACT_AZURE = "Unable to contact Azure DevOps server, got an unexpected response";
   @Rule
   public LogTester logTester = new LogTester();
 
@@ -63,17 +62,19 @@ public class AzureDevOpsHttpClientTest {
 
   @Test
   public void check_pat() throws InterruptedException {
-    enqueueResponse(200, " { \"count\": 1,\n" +
-      "  \"value\": [\n" +
-      "    {\n" +
-      "      \"id\": \"3311cd05-3f00-4a5e-b47f-df94a9982b6e\",\n" +
-      "      \"name\": \"Project\",\n" +
-      "      \"description\": \"Project Description\",\n" +
-      "      \"url\": \"https://ado.sonarqube.com/DefaultCollection/_apis/projects/3311cd05-3f00-4a5e-b47f-df94a9982b6e\",\n" +
-      "      \"state\": \"wellFormed\",\n" +
-      "      \"revision\": 63,\n" +
-      "      \"visibility\": \"private\"\n" +
-      "    }]}");
+    enqueueResponse(200, """
+       { "count": 1,
+        "value": [
+          {
+            "id": "3311cd05-3f00-4a5e-b47f-df94a9982b6e",
+            "name": "Project",
+            "description": "Project Description",
+            "url": "https://ado.sonarqube.com/DefaultCollection/_apis/projects/3311cd05-3f00-4a5e-b47f-df94a9982b6e",
+            "state": "wellFormed",
+            "revision": 63,
+            "visibility": "private"
+          }]}\
+      """);
 
     underTest.checkPAT(server.url("").toString(), "token");
 
@@ -108,25 +109,26 @@ public class AzureDevOpsHttpClientTest {
 
   @Test
   public void get_projects() throws InterruptedException {
-    enqueueResponse(200, " { \"count\": 2,\n" +
-      "  \"value\": [\n" +
-      "    {\n" +
-      "      \"id\": \"3311cd05-3f00-4a5e-b47f-df94a9982b6e\",\n" +
-      "      \"name\": \"Project 1\",\n" +
-      "      \"description\": \"Project Description\",\n" +
-      "      \"url\": \"https://ado.sonarqube.com/DefaultCollection/_apis/projects/3311cd05-3f00-4a5e-b47f-df94a9982b6e\",\n" +
-      "      \"state\": \"wellFormed\",\n" +
-      "      \"revision\": 63,\n" +
-      "      \"visibility\": \"private\"\n" +
-      "    }," +
-      "{\n" +
-      "      \"id\": \"3be0f34d-c931-4ff8-8d37-18a83663bd3c\",\n" +
-      "      \"name\": \"Project 2\",\n" +
-      "      \"url\": \"https://ado.sonarqube.com/DefaultCollection/_apis/projects/3be0f34d-c931-4ff8-8d37-18a83663bd3c\",\n" +
-      "      \"state\": \"wellFormed\",\n" +
-      "      \"revision\": 52,\n" +
-      "      \"visibility\": \"private\"\n" +
-      "    }]}");
+    enqueueResponse(200, """
+       { "count": 2,
+        "value": [
+          {
+            "id": "3311cd05-3f00-4a5e-b47f-df94a9982b6e",
+            "name": "Project 1",
+            "description": "Project Description",
+            "url": "https://ado.sonarqube.com/DefaultCollection/_apis/projects/3311cd05-3f00-4a5e-b47f-df94a9982b6e",
+            "state": "wellFormed",
+            "revision": 63,
+            "visibility": "private"
+          },\
+      {
+            "id": "3be0f34d-c931-4ff8-8d37-18a83663bd3c",
+            "name": "Project 2",
+            "url": "https://ado.sonarqube.com/DefaultCollection/_apis/projects/3be0f34d-c931-4ff8-8d37-18a83663bd3c",
+            "state": "wellFormed",
+            "revision": 52,
+            "visibility": "private"
+          }]}""");
 
     GsonAzureProjectList projects = underTest.getProjects(server.url("").toString(), "token");
 
@@ -146,21 +148,20 @@ public class AzureDevOpsHttpClientTest {
   @Test
   public void get_projects_non_json_payload() {
     enqueueResponse(200, NON_JSON_PAYLOAD);
-
-    assertThatThrownBy(() -> underTest.getProjects(server.url("").toString(), "token"))
+    String serverUrl = server.url("").toString();
+    assertThatThrownBy(() -> underTest.getProjects(serverUrl, "token"))
       .isInstanceOf(IllegalArgumentException.class)
-      .hasMessage(UNABLE_TO_CONTACT_AZURE);
-
-    assertThat(logTester.logs(Level.ERROR)).hasSize(1);
-    assertThat(logTester.logs(Level.ERROR).iterator().next())
-      .contains("Response from Azure for request [" + server.url("") + "_apis/projects?api-version=3.0] could not be parsed:");
+      .hasMessageContaining("Response from Azure for request")
+      .hasMessageContaining("_apis/projects?api-version=3.0")
+      .hasMessageContaining("could not be parsed");
   }
 
   @Test
   public void get_projects_with_invalid_pat() {
     enqueueResponse(401);
 
-    assertThatThrownBy(() -> underTest.getProjects(server.url("").toString(), "invalid-token"))
+    String serverUrl = server.url("").toString();
+    assertThatThrownBy(() -> underTest.getProjects(serverUrl, "invalid-token"))
       .isInstanceOf(IllegalArgumentException.class)
       .hasMessage("Invalid personal access token");
 
@@ -173,7 +174,8 @@ public class AzureDevOpsHttpClientTest {
   public void get_projects_with_invalid_url() {
     enqueueResponse(404);
 
-    assertThatThrownBy(() -> underTest.getProjects(server.url("").toString(), "invalid-token"))
+    String serverUrl = server.url("").toString();
+    assertThatThrownBy(() -> underTest.getProjects(serverUrl, "invalid-token"))
       .isInstanceOf(IllegalArgumentException.class)
       .hasMessage("Invalid Azure URL");
 
@@ -186,7 +188,8 @@ public class AzureDevOpsHttpClientTest {
   public void get_projects_with_server_error() {
     enqueueResponse(500);
 
-    assertThatThrownBy(() -> underTest.getProjects(server.url("").toString(), "token"))
+    String serverUrl = server.url("").toString();
+    assertThatThrownBy(() -> underTest.getProjects(serverUrl, "token"))
       .isInstanceOf(IllegalArgumentException.class)
       .hasMessage("Unable to contact Azure DevOps server");
 
@@ -196,27 +199,54 @@ public class AzureDevOpsHttpClientTest {
   }
 
   @Test
+  public void get_project() throws InterruptedException {
+    enqueueResponse(200, """
+      {
+        "id": "3311cd05-3f00-4a5e-b47f-df94a9982b6e",
+        "name": "Project Name",
+        "description": "Project Description",
+        "url": "https://ado.sonarqube.com/DefaultCollection/_apis/projects/3311cd05-3f00-4a5e-b47f-df94a9982b6e",
+        "state": "wellFormed",
+        "revision": 63,
+        "visibility": "private"
+      }""");
+
+    GsonAzureProject project = underTest.getProject(server.url("").toString(), "token", "Project-Name");
+
+    RecordedRequest request = server.takeRequest(10, TimeUnit.SECONDS);
+    String azureDevOpsUrlCall = request.getRequestUrl().toString();
+    assertThat(azureDevOpsUrlCall).isEqualTo(server.url("") + "_apis/projects/Project-Name?api-version=3.0");
+    assertThat(request.getMethod()).isEqualTo("GET");
+
+    assertThat(logTester.logs(Level.DEBUG))
+      .contains("--> GET " + server.url("") + "_apis/projects/Project-Name?api-version=3.0");
+    assertThat(project.getName()).isEqualTo("Project Name");
+    assertThat(project.getDescription()).isEqualTo("Project Description");
+  }
+
+  @Test
   public void get_repos_with_project_name() throws InterruptedException {
-    enqueueResponse(200, "{\n" +
-      "  \"value\": [\n" +
-      "    {\n" +
-      "      \"id\": \"741248a4-285e-4a6d-af52-1a49d8070638\",\n" +
-      "      \"name\": \"Repository 1\",\n" +
-      "      \"url\": \"https://ado.sonarqube.com/repositories/\",\n" +
-      "      \"project\": {\n" +
-      "        \"id\": \"c88ddb32-ced8-420d-ab34-764133038b34\",\n" +
-      "        \"name\": \"projectName\",\n" +
-      "        \"url\": \"https://ado.sonarqube.com/DefaultCollection/_apis/projects/c88ddb32-ced8-420d-ab34-764133038b34\",\n" +
-      "        \"state\": \"wellFormed\",\n" +
-      "        \"revision\": 29,\n" +
-      "        \"visibility\": \"private\",\n" +
-      "        \"lastUpdateTime\": \"2020-11-11T09:38:03.3Z\"\n" +
-      "      },\n" +
-      "      \"size\": 0\n" +
-      "    }\n" +
-      "  ],\n" +
-      "  \"count\": 1\n" +
-      "}");
+    enqueueResponse(200, """
+      {
+        "value": [
+          {
+            "id": "741248a4-285e-4a6d-af52-1a49d8070638",
+            "name": "Repository 1",
+            "url": "https://ado.sonarqube.com/repositories/",
+            "project": {
+              "id": "c88ddb32-ced8-420d-ab34-764133038b34",
+              "name": "projectName",
+              "url": "https://ado.sonarqube.com/DefaultCollection/_apis/projects/c88ddb32-ced8-420d-ab34-764133038b34",
+              "state": "wellFormed",
+              "revision": 29,
+              "visibility": "private",
+              "lastUpdateTime": "2020-11-11T09:38:03.3Z"
+            },
+            "size": 0
+          }
+        ],
+        "count": 1
+      }""");
 
     GsonAzureRepoList repos = underTest.getRepos(server.url("").toString(), "token", "projectName");
 
@@ -250,25 +280,29 @@ public class AzureDevOpsHttpClientTest {
   public void get_repos_non_json_payload() {
     enqueueResponse(200, NON_JSON_PAYLOAD);
 
-    assertThatThrownBy(() -> underTest.getRepos(server.url("").toString(), "token", null))
+    String serverUrl = server.url("").toString();
+    assertThatThrownBy(() -> underTest.getRepos(serverUrl, "token", null))
       .isInstanceOf(IllegalArgumentException.class)
-      .hasMessage(UNABLE_TO_CONTACT_AZURE);
+      .hasMessageContaining("Response from Azure for request")
+      .hasMessageContaining("_apis/git/repositories?api-version=3.0")
+      .hasMessageContaining("could not be parsed");
   }
 
   @Test
   public void get_repo() throws InterruptedException {
-    enqueueResponse(200, "{ " +
-      "  \"id\": \"Repo-Id-1\",\n" +
-      "  \"name\": \"Repo-Name-1\",\n" +
-      "  \"url\": \"https://ado.sonarqube.com/DefaultCollection/Repo-Id-1\",\n" +
-      "  \"project\": {\n" +
-      "    \"id\": \"84ea9d51-0c8a-44ad-be92-b2af7fe2c299\",\n" +
-      "    \"name\": \"Project-Name\",\n" +
-      "    \"description\": \"Project's description\" \n" +
-      "  },\n" +
-      "  \"defaultBranch\": \"refs/heads/default-branch\",\n" +
-      "  \"size\": 0" +
-      "}");
+    enqueueResponse(200, """
+      { \
+        "id": "Repo-Id-1",
+        "name": "Repo-Name-1",
+        "url": "https://ado.sonarqube.com/DefaultCollection/Repo-Id-1",
+        "project": {
+          "id": "84ea9d51-0c8a-44ad-be92-b2af7fe2c299",
+          "name": "Project-Name",
+          "description": "Project's description"\s
+        },
+        "defaultBranch": "refs/heads/default-branch",
+        "size": 0\
+      }""");
 
     GsonAzureRepo repo = underTest.getRepo(server.url("").toString(), "token", "Project-Name", "Repo-Name-1");
 
@@ -289,10 +323,12 @@ public class AzureDevOpsHttpClientTest {
   @Test
   public void get_repo_non_json_payload() {
     enqueueResponse(200, NON_JSON_PAYLOAD);
-
-    assertThatThrownBy(() -> underTest.getRepo(server.url("").toString(), "token", "projectName", "repoName"))
+    String serverUrl = server.url("").toString();
+    assertThatThrownBy(() -> underTest.getRepo(serverUrl, "token", "projectName", "repoName"))
       .isInstanceOf(IllegalArgumentException.class)
-      .hasMessage(UNABLE_TO_CONTACT_AZURE);
+      .hasMessageContaining("Response from Azure for request")
+      .hasMessageContaining("projectName/_apis/git/repositories/repoName?api-version=3.0")
+      .hasMessageContaining("could not be parsed");
   }
 
   @Test
@@ -300,7 +336,8 @@ public class AzureDevOpsHttpClientTest {
     enqueueResponse(400,
       "{'message':'TF200016: The following project does not exist: projectName. Verify that the name of the project is correct and that the project exists on the specified Azure DevOps Server.'}");
 
-    assertThatThrownBy(() -> underTest.getRepo(server.url("").toString(), "token", "projectName", "repoName"))
+    String serverUrl = server.url("").toString();
+    assertThatThrownBy(() -> underTest.getRepo(serverUrl, "token", "projectName", "repoName"))
       .isInstanceOf(IllegalArgumentException.class)
       .hasMessage(
         "Unable to contact Azure DevOps server : TF200016: The following project does not exist: projectName. Verify that the name of the project is correct and that the project exists on the specified Azure DevOps Server.");
@@ -318,26 +355,142 @@ public class AzureDevOpsHttpClientTest {
   }
 
   @Test
-  public void trim_url() {
-    assertThat(AzureDevOpsHttpClient.getTrimmedUrl("http://localhost:4564/"))
-      .isEqualTo("http://localhost:4564");
+  public void check_pat_with_trailing_slash() throws InterruptedException {
+    enqueueResponse(200, """
+       { "count": 1,
+        "value": [
+          {
+            "id": "3311cd05-3f00-4a5e-b47f-df94a9982b6e",
+            "name": "Project",
+            "url": "https://ado.sonarqube.com/DefaultCollection/_apis/projects/3311cd05-3f00-4a5e-b47f-df94a9982b6e",
+            "state": "wellFormed",
+            "revision": 63,
+            "visibility": "private"
+          }]}\
+      """);
+
+    // URL with trailing slash should work correctly
+    underTest.checkPAT(server.url("/").toString(), "token");
+
+    RecordedRequest request = server.takeRequest(10, TimeUnit.SECONDS);
+    String azureDevOpsUrlCall = request.getRequestUrl().toString();
+    // Verify no double slashes in the path
+    assertThat(azureDevOpsUrlCall).isEqualTo(server.url("") + "_apis/projects?api-version=3.0");
+    assertThat(request.getMethod()).isEqualTo("GET");
   }
 
   @Test
-  public void trim_url_without_ending_slash() {
-    assertThat(AzureDevOpsHttpClient.getTrimmedUrl("http://localhost:4564"))
-      .isEqualTo("http://localhost:4564");
+  public void get_repos_with_trailing_slash() throws InterruptedException {
+    enqueueResponse(200, """
+      {
+        "value": [
+          {
+            "id": "741248a4-285e-4a6d-af52-1a49d8070638",
+            "name": "Repository 1",
+            "url": "https://ado.sonarqube.com/repositories/",
+            "project": {
+              "id": "c88ddb32-ced8-420d-ab34-764133038b34",
+              "name": "projectName",
+              "url": "https://ado.sonarqube.com/DefaultCollection/_apis/projects/c88ddb32-ced8-420d-ab34-764133038b34",
+              "state": "wellFormed",
+              "revision": 29,
+              "visibility": "private",
+              "lastUpdateTime": "2020-11-11T09:38:03.3Z"
+            },
+            "size": 0
+          }
+        ],
+        "count": 1
+      }""");
+
+    // URL with trailing slash should work correctly
+    GsonAzureRepoList repos = underTest.getRepos(server.url("/").toString(), "token", "projectName");
+
+    RecordedRequest request = server.takeRequest(10, TimeUnit.SECONDS);
+    String azureDevOpsUrlCall = request.getRequestUrl().toString();
+    // Verify no double slashes in the path
+    assertThat(azureDevOpsUrlCall).isEqualTo(server.url("") + "projectName/_apis/git/repositories?api-version=3.0");
+    assertThat(repos.getValues()).hasSize(1);
   }
 
   @Test
-  public void trim_null_url() {
-    assertThat(AzureDevOpsHttpClient.getTrimmedUrl(null))
-      .isNull();
+  public void get_repo_with_path_traversal_attempt() throws InterruptedException {
+    enqueueResponse(200, """
+      { \
+        "id": "Repo-Id-1",
+        "name": "Repo-Name-1",
+        "url": "https://ado.sonarqube.com/DefaultCollection/Repo-Id-1",
+        "project": {
+          "id": "84ea9d51-0c8a-44ad-be92-b2af7fe2c299",
+          "name": "Project-Name",
+          "description": "Project's description"\s
+        },
+        "defaultBranch": "refs/heads/default-branch",
+        "size": 0\
+      }""");
+
+    // Attempt path traversal - should be encoded and NOT interpreted as path traversal
+    underTest.getRepo(server.url("").toString(), "token", "../malicious-project", "repo-name");
+
+    RecordedRequest request = server.takeRequest(10, TimeUnit.SECONDS);
+    String requestPath = request.getPath();
+    // Verify ../ is URL encoded and not interpreted as path traversal
+    assertThat(requestPath)
+      .contains("..%2Fmalicious-project")
+      .doesNotContain("/../");
   }
 
   @Test
-  public void trim_empty_url() {
-    assertThat(AzureDevOpsHttpClient.getTrimmedUrl(""))
-      .isEmpty();
+  public void get_repo_with_protocol_injection_attempt() throws InterruptedException {
+    enqueueResponse(200, """
+      { \
+        "id": "Repo-Id-1",
+        "name": "Repo-Name-1",
+        "url": "https://ado.sonarqube.com/DefaultCollection/Repo-Id-1",
+        "project": {
+          "id": "84ea9d51-0c8a-44ad-be92-b2af7fe2c299",
+          "name": "Project-Name",
+          "description": "Project's description"\s
+        },
+        "defaultBranch": "refs/heads/default-branch",
+        "size": 0\
+      }""");
+
+    // Attempt protocol injection - should be encoded and NOT create a new URL
+    underTest.getRepo(server.url("").toString(), "token", "//evil.com/attack", "repo-name");
+
+    RecordedRequest request = server.takeRequest(10, TimeUnit.SECONDS);
+    String requestPath = request.getPath();
+    // Verify // is URL encoded and doesn't create protocol injection
+    assertThat(requestPath)
+      .contains("%2F%2Fevil.com")
+      .doesNotContain("//evil.com");
+  }
+
+  @Test
+  public void get_repo_with_special_characters() throws InterruptedException {
+    enqueueResponse(200, """
+      { \
+        "id": "Repo-Id-1",
+        "name": "Repo-Name-1",
+        "url": "https://ado.sonarqube.com/DefaultCollection/Repo-Id-1",
+        "project": {
+          "id": "84ea9d51-0c8a-44ad-be92-b2af7fe2c299",
+          "name": "Project-Name",
+          "description": "Project's description"\s
+        },
+        "defaultBranch": "refs/heads/default-branch",
+        "size": 0\
+      }""");
+
+    // Special characters should be properly encoded in path segments
+    underTest.getRepo(server.url("").toString(), "token", "project?query=1", "repo/name");
+
+    RecordedRequest request = server.takeRequest(10, TimeUnit.SECONDS);
+    String requestPath = request.getPath();
+    // Verify ? and / are URL encoded in path segments (these are path-significant characters)
+    assertThat(requestPath)
+      .contains("project%3Fquery=1")  // ? is encoded
+      .contains("repo%2Fname");         // / is encoded
   }
 }

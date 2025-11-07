@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -50,7 +50,4 @@ public interface Trackable {
    * Functional update date for the issue. See {@link DefaultIssue#updateDate()}
    */
   Date getUpdateDate();
-
-  @CheckForNull
-  String getCveId();
 }

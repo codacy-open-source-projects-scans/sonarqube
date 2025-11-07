@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -24,7 +24,7 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.sonar.api.server.ws.WebService;
 import org.sonar.api.utils.System2;
-import org.sonar.api.web.UserRole;
+import org.sonar.db.permission.ProjectPermission;
 import org.sonar.core.documentation.DocumentationLinkGenerator;
 import org.sonar.core.util.UuidFactoryFast;
 import org.sonar.db.DbClient;
@@ -48,6 +48,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import static org.sonar.server.newcodeperiod.ws.NewCodePeriodsWsUtils.DOCUMENTATION_LINK;
 import static org.sonarqube.ws.NewCodePeriods.NewCodePeriodType.NUMBER_OF_DAYS;
 import static org.sonarqube.ws.NewCodePeriods.NewCodePeriodType.PREVIOUS_VERSION;
 
@@ -65,7 +66,7 @@ public class ShowActionIT {
 
   @Before
   public void setup() {
-    when(documentationLinkGenerator.getDocumentationLink(any())).thenReturn("https://docs.sonarsource.com/someddoc");
+    when(documentationLinkGenerator.getDocumentationLink(any())).thenReturn("https://docs.sonarsource.com/someddoc" + DOCUMENTATION_LINK);
     ws = new WsActionTester(new ShowAction(dbClient, userSession, componentFinder, dao, documentationLinkGenerator));
   }
 
@@ -256,15 +257,15 @@ public class ShowActionIT {
   }
 
   private void logInAsProjectAdministrator(ProjectDto project) {
-    userSession.logIn().addProjectPermission(UserRole.ADMIN, project);
+    userSession.logIn().addProjectPermission(ProjectPermission.ADMIN, project);
   }
 
   private void logInAsProjectScan(ProjectDto project) {
-    userSession.logIn().addProjectPermission(UserRole.SCAN, project);
+    userSession.logIn().addProjectPermission(ProjectPermission.SCAN, project);
   }
 
   private void logInAsProjectIssueAdmin(ProjectDto project) {
-    userSession.logIn().addProjectPermission(UserRole.ISSUE_ADMIN, project);
+    userSession.logIn().addProjectPermission(ProjectPermission.ISSUE_ADMIN, project);
   }
 
 }

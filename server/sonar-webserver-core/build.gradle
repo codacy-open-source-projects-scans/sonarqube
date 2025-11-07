@@ -32,7 +32,6 @@ dependencies {
   api 'org.slf4j:slf4j-api'
   api 'org.sonarsource.api.plugin:sonar-plugin-api'
   api 'org.sonarsource.update-center:sonar-update-center-common'
-  api 'org.mindrot:jbcrypt'
 
   api project(':server:sonar-ce-common')
   api project(':server:sonar-ce-task')
@@ -64,8 +63,6 @@ dependencies {
   testImplementation 'org.apache.logging.log4j:log4j-core'
   testImplementation 'org.assertj:assertj-core'
   testImplementation 'org.assertj:assertj-guava'
-  testImplementation 'org.eclipse.jetty:jetty-server'
-  testImplementation 'org.eclipse.jetty:jetty-servlet'
   testImplementation 'org.hamcrest:hamcrest'
   testImplementation 'org.junit.jupiter:junit-jupiter-api'
   testImplementation 'org.junit.jupiter:junit-jupiter-params'
@@ -81,6 +78,7 @@ dependencies {
   testImplementation project(':sonar-testing-harness')
 
   testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine'
+  testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
   testRuntimeOnly 'org.junit.vintage:junit-vintage-engine'
 
   runtimeOnly 'io.jsonwebtoken:jjwt-jackson'

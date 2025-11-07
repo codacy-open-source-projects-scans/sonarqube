@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -28,15 +28,14 @@ import java.util.function.BinaryOperator;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import javax.annotation.Nullable;
-
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.sonar.alm.client.azure.AzureDevOpsHttpClient;
 import org.sonar.alm.client.azure.GsonAzureRepo;
 import org.sonar.alm.client.azure.GsonAzureRepoList;
 import org.sonar.api.server.ws.Request;
 import org.sonar.api.server.ws.Response;
 import org.sonar.api.server.ws.WebService;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
 import org.sonar.db.alm.pat.AlmPatDto;
@@ -53,7 +52,7 @@ import static java.util.Comparator.comparing;
 import static java.util.Objects.requireNonNull;
 import static java.util.stream.Collectors.toMap;
 import static java.util.stream.Collectors.toSet;
-import static org.apache.commons.lang3.StringUtils.containsIgnoreCase;
+import static org.apache.commons.lang3.Strings.CI;
 import static org.sonar.db.permission.GlobalPermission.PROVISION_PROJECTS;
 import static org.sonar.server.ws.WsUtils.writeProtobuf;
 
@@ -135,7 +134,7 @@ public class SearchAzureReposAction implements AlmIntegrationsWsAction {
         .sorted(comparing(AzureRepo::getName, String::compareToIgnoreCase))
         .toList();
 
-      LOG.debug(repositories.toString());
+      LOG.atDebug().log(repositories::toString);
 
       return SearchAzureReposWsResponse.newBuilder()
         .addAllRepositories(repositories)
@@ -171,8 +170,8 @@ public class SearchAzureReposAction implements AlmIntegrationsWsAction {
   }
 
   private static boolean doesSearchCriteriaMatchProjectOrRepo(GsonAzureRepo repo, String criteria) {
-    boolean matchProject = containsIgnoreCase(repo.getProject().getName(), criteria);
-    boolean matchRepo = containsIgnoreCase(repo.getName(), criteria);
+    boolean matchProject = CI.contains(repo.getProject().getName(), criteria);
+    boolean matchRepo = CI.contains(repo.getName(), criteria);
     return matchProject || matchRepo;
   }
 

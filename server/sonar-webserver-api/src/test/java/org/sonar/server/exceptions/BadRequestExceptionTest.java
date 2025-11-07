@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -66,6 +66,28 @@ public class BadRequestExceptionTest {
     assertThatThrownBy(() -> BadRequestException.create(asList("error", "")))
       .isInstanceOf(IllegalArgumentException.class)
       .hasMessage("Message cannot be empty");
+  }
+
+  @Test
+  public void fail_when_creating_exception_with_empty_message() {
+    assertThatThrownBy(() -> BadRequestException.createWithRelatedField("", "relatedField"))
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage("Message cannot be empty");
+  }
+
+  @Test
+  public void fail_when_creating_exception_with_empty_relatedField() {
+    assertThatThrownBy(() -> BadRequestException.createWithRelatedField("message", ""))
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage("Related field cannot be empty");
+  }
+
+  @Test
+  public void create_exception_with_relatedField() {
+    BadRequestException underTest = BadRequestException.createWithRelatedField("error message", "related field");
+
+    assertThat(underTest.getRelatedField()).contains("related field");
+    assertThat(underTest).hasToString("BadRequestException{errors=[error message], relatedField=related field}");
   }
 
   @Test

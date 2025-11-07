@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,6 +19,7 @@
  */
 package org.sonar.scanner.sensor;
 
+import java.io.InputStream;
 import java.io.Serializable;
 import javax.annotation.concurrent.ThreadSafe;
 import org.sonar.api.SonarRuntime;
@@ -57,6 +58,7 @@ import org.sonar.api.utils.Version;
 import org.sonar.core.platform.PluginInfo;
 import org.sonar.scanner.bootstrap.ScannerPluginRepository;
 import org.sonar.scanner.cache.AnalysisCacheEnabled;
+import org.sonar.scanner.repository.featureflags.FeatureFlagsRepository;
 import org.sonar.scanner.scan.branch.BranchConfiguration;
 import org.sonar.scanner.sensor.noop.NoOpNewAnalysisError;
 
@@ -65,7 +67,6 @@ public class ProjectSensorContext implements SensorContext {
 
   static final NoOpNewAnalysisError NO_OP_NEW_ANALYSIS_ERROR = new NoOpNewAnalysisError();
 
-  private final Settings mutableSettings;
   private final FileSystem fs;
   private final ActiveRules activeRules;
   private final DefaultSensorStorage sensorStorage;
@@ -79,16 +80,25 @@ public class ProjectSensorContext implements SensorContext {
   private final AnalysisCacheEnabled analysisCacheEnabled;
   private final ExecutingSensorContext executingSensorContext;
   private final ScannerPluginRepository pluginRepo;
+  private final FeatureFlagsRepository featureFlagsRepository;
 
-  public ProjectSensorContext(DefaultInputProject project, Configuration config, Settings mutableSettings, FileSystem fs,
-                              ActiveRules activeRules,
-                              DefaultSensorStorage sensorStorage, SonarRuntime sonarRuntime, BranchConfiguration branchConfiguration,
-                              WriteCache writeCache, ReadCache readCache,
-                              AnalysisCacheEnabled analysisCacheEnabled, UnchangedFilesHandler unchangedFilesHandler,
-                              ExecutingSensorContext executingSensorContext, ScannerPluginRepository pluginRepo) {
+  public ProjectSensorContext(DefaultInputProject project,
+    Configuration config,
+    FileSystem fs,
+    ActiveRules activeRules,
+    DefaultSensorStorage sensorStorage,
+    SonarRuntime sonarRuntime,
+    BranchConfiguration branchConfiguration,
+    WriteCache writeCache,
+    ReadCache readCache,
+    AnalysisCacheEnabled analysisCacheEnabled,
+    UnchangedFilesHandler unchangedFilesHandler,
+    ExecutingSensorContext executingSensorContext,
+    ScannerPluginRepository pluginRepo,
+    FeatureFlagsRepository featureFlagsRepository) {
+
     this.project = project;
     this.config = config;
-    this.mutableSettings = mutableSettings;
     this.fs = fs;
     this.activeRules = activeRules;
     this.sensorStorage = sensorStorage;
@@ -100,11 +110,12 @@ public class ProjectSensorContext implements SensorContext {
     this.unchangedFilesHandler = unchangedFilesHandler;
     this.executingSensorContext = executingSensorContext;
     this.pluginRepo = pluginRepo;
+    this.featureFlagsRepository = featureFlagsRepository;
   }
 
   @Override
   public Settings settings() {
-    return mutableSettings;
+    throw new UnsupportedOperationException("This method is not supported anymore");
   }
 
   @Override
@@ -233,6 +244,21 @@ public class ProjectSensorContext implements SensorContext {
   }
 
   @Override
+  public void addAnalysisData(String key, String mimeType, InputStream data) {
+    if (isSonarSourcePlugin()) {
+      this.sensorStorage.storeAnalysisData(key, mimeType, data);
+    } else {
+      throw new IllegalStateException("Analysis data can only be added by SonarSource plugins");
+    }
+  }
+
+  @Override
+  public boolean isFeatureAvailable(String featureName) {
+    //Very simple way of returning if a feature is available or not, based on the feature flags returned by the Web API.
+    return featureFlagsRepository.isEnabled(featureName);
+  }
+
+  @Override
   public NewSignificantCode newSignificantCode() {
     return new DefaultSignificantCode(sensorStorage);
   }
@@ -242,6 +268,7 @@ public class ProjectSensorContext implements SensorContext {
     return this.skipUnchangedFiles;
   }
 
+
   private boolean isSonarSourcePlugin() {
     SensorId sensorExecuting = executingSensorContext.getSensorExecuting();
     if (sensorExecuting != null) {
@@ -250,4 +277,5 @@ public class ProjectSensorContext implements SensorContext {
     }
     return false;
   }
+
 }

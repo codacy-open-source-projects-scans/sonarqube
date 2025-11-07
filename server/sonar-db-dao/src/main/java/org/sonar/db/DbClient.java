@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -38,10 +38,6 @@ import org.sonar.db.component.ComponentDao;
 import org.sonar.db.component.ComponentKeyUpdaterDao;
 import org.sonar.db.component.ProjectLinkDao;
 import org.sonar.db.component.SnapshotDao;
-import org.sonar.db.dependency.CveCweDao;
-import org.sonar.db.dependency.CveDao;
-import org.sonar.db.dependency.IssuesDependencyDao;
-import org.sonar.db.dependency.ProjectDependenciesDao;
 import org.sonar.db.duplication.DuplicationDao;
 import org.sonar.db.entity.EntityDao;
 import org.sonar.db.es.EsQueueDao;
@@ -51,9 +47,17 @@ import org.sonar.db.issue.AnticipatedTransitionDao;
 import org.sonar.db.issue.IssueChangeDao;
 import org.sonar.db.issue.IssueDao;
 import org.sonar.db.issue.IssueFixedDao;
+import org.sonar.db.jira.dao.AtlassianAuthenticationDetailsDao;
+import org.sonar.db.jira.dao.JiraOrganizationBindingDao;
+import org.sonar.db.jira.dao.JiraOrganizationBindingPendingDao;
+import org.sonar.db.jira.dao.JiraProjectBindingDao;
+import org.sonar.db.jira.dao.JiraSelectedWorkTypeDao;
+import org.sonar.db.jira.dao.JiraWorkItemDao;
+import org.sonar.db.jira.dao.XsrfTokenDao;
 import org.sonar.db.measure.MeasureDao;
 import org.sonar.db.measure.ProjectMeasureDao;
 import org.sonar.db.metric.MetricDao;
+import org.sonar.db.migrationlog.MigrationLogDao;
 import org.sonar.db.newcodeperiod.NewCodePeriodDao;
 import org.sonar.db.notification.NotificationQueueDao;
 import org.sonar.db.permission.AuthorizationDao;
@@ -107,6 +111,7 @@ import org.sonar.db.user.UserDao;
 import org.sonar.db.user.UserDismissedMessagesDao;
 import org.sonar.db.user.UserGroupDao;
 import org.sonar.db.user.UserTokenDao;
+import org.sonar.db.user.ai.UserAiToolUsageDao;
 import org.sonar.db.webhook.WebhookDao;
 import org.sonar.db.webhook.WebhookDeliveryDao;
 
@@ -135,6 +140,7 @@ public class DbClient {
   private final UserDao userDao;
   private final UserGroupDao userGroupDao;
   private final UserTokenDao userTokenDao;
+  private final UserAiToolUsageDao userAiToolUsageDao;
   private final GroupMembershipDao groupMembershipDao;
   private final RoleDao roleDao;
   private final GroupPermissionDao groupPermissionDao;
@@ -143,6 +149,13 @@ public class DbClient {
   private final IssueDao issueDao;
   private final RegulatoryReportDao regulatoryReportDao;
   private final IssueChangeDao issueChangeDao;
+  private final JiraProjectBindingDao jiraProjectBindingDao;
+  private final JiraOrganizationBindingDao jiraOrganizationBindingDao;
+  private final JiraWorkItemDao jiraWorkItemDao;
+  private final JiraOrganizationBindingPendingDao jiraOrganizationBindingPendingDao;
+  private final AtlassianAuthenticationDetailsDao atlassianAuthenticationDetailsDao;
+  private final XsrfTokenDao xsrfTokenDao;
+  private final JiraSelectedWorkTypeDao jiraSelectedWorkTypeDao;
   private final CeActivityDao ceActivityDao;
   private final CeQueueDao ceQueueDao;
   private final CeTaskInputDao ceTaskInputDao;
@@ -163,6 +176,7 @@ public class DbClient {
   private final DuplicationDao duplicationDao;
   private final NotificationQueueDao notificationQueueDao;
   private final MetricDao metricDao;
+  private final MigrationLogDao migrationLogDao;
   private final GroupDao groupDao;
   private final ExternalGroupDao externalGroupDao;
   private final RuleDao ruleDao;
@@ -200,10 +214,6 @@ public class DbClient {
   private final ProjectExportDao projectExportDao;
   private final IssueFixedDao issueFixedDao;
   private final TelemetryMetricsSentDao telemetryMetricsSentDao;
-  private final CveDao cveDao;
-  private final CveCweDao cveCweDao;
-  private final IssuesDependencyDao issuesDependencyDao;
-  private final ProjectDependenciesDao projectDependenciesDao;
 
   public DbClient(Database database, MyBatis myBatis, DBSessions dbSessions, Dao... daos) {
     this.database = database;
@@ -232,6 +242,7 @@ public class DbClient {
     userDao = getDao(map, UserDao.class);
     userGroupDao = getDao(map, UserGroupDao.class);
     userTokenDao = getDao(map, UserTokenDao.class);
+    userAiToolUsageDao = getDao(map, UserAiToolUsageDao.class);
     groupMembershipDao = getDao(map, GroupMembershipDao.class);
     roleDao = getDao(map, RoleDao.class);
     groupPermissionDao = getDao(map, GroupPermissionDao.class);
@@ -239,6 +250,13 @@ public class DbClient {
     permissionTemplateCharacteristicDao = getDao(map, PermissionTemplateCharacteristicDao.class);
     issueDao = getDao(map, IssueDao.class);
     issueChangeDao = getDao(map, IssueChangeDao.class);
+    jiraProjectBindingDao = getDao(map, JiraProjectBindingDao.class);
+    jiraOrganizationBindingDao = getDao(map, JiraOrganizationBindingDao.class);
+    jiraWorkItemDao = getDao(map, JiraWorkItemDao.class);
+    jiraOrganizationBindingPendingDao = getDao(map, JiraOrganizationBindingPendingDao.class);
+    atlassianAuthenticationDetailsDao = getDao(map, AtlassianAuthenticationDetailsDao.class);
+    xsrfTokenDao = getDao(map, XsrfTokenDao.class);
+    jiraSelectedWorkTypeDao = getDao(map, JiraSelectedWorkTypeDao.class);
     ceActivityDao = getDao(map, CeActivityDao.class);
     ceQueueDao = getDao(map, CeQueueDao.class);
     ceTaskInputDao = getDao(map, CeTaskInputDao.class);
@@ -260,6 +278,7 @@ public class DbClient {
     regulatoryReportDao = getDao(map, RegulatoryReportDao.class);
     notificationQueueDao = getDao(map, NotificationQueueDao.class);
     metricDao = getDao(map, MetricDao.class);
+    migrationLogDao = getDao(map, MigrationLogDao.class);
     groupDao = getDao(map, GroupDao.class);
     githubOrganizationGroupDao = getDao(map, GithubOrganizationGroupDao.class);
     devopsPermissionsMappingDao = getDao(map, DevOpsPermissionsMappingDao.class);
@@ -298,10 +317,6 @@ public class DbClient {
     projectExportDao = getDao(map, ProjectExportDao.class);
     issueFixedDao = getDao(map, IssueFixedDao.class);
     telemetryMetricsSentDao = getDao(map, TelemetryMetricsSentDao.class);
-    cveDao = getDao(map, CveDao.class);
-    cveCweDao = getDao(map, CveCweDao.class);
-    issuesDependencyDao = getDao(map, IssuesDependencyDao.class);
-    projectDependenciesDao = getDao(map, ProjectDependenciesDao.class);
   }
 
   public DbSession openSession(boolean batch) {
@@ -354,6 +369,34 @@ public class DbClient {
 
   public IssueFixedDao issueFixedDao() {
     return issueFixedDao;
+  }
+
+  public JiraProjectBindingDao jiraProjectBindingDao() {
+    return jiraProjectBindingDao;
+  }
+
+  public JiraOrganizationBindingDao jiraOrganizationBindingDao() {
+    return jiraOrganizationBindingDao;
+  }
+
+  public JiraWorkItemDao jiraWorkItemDao() {
+    return jiraWorkItemDao;
+  }
+
+  public JiraOrganizationBindingPendingDao jiraOrganizationBindingPendingDao() {
+    return jiraOrganizationBindingPendingDao;
+  }
+
+  public AtlassianAuthenticationDetailsDao atlassianAuthenticationDetailsDao() {
+    return atlassianAuthenticationDetailsDao;
+  }
+
+  public XsrfTokenDao xsrfTokenDao() {
+    return xsrfTokenDao;
+  }
+
+  public JiraSelectedWorkTypeDao jiraSelectedWorkTypeDao() {
+    return jiraSelectedWorkTypeDao;
   }
 
   public TelemetryMetricsSentDao telemetryMetricsSentDao() {
@@ -410,6 +453,10 @@ public class DbClient {
 
   public UserDao userDao() {
     return userDao;
+  }
+
+  public UserAiToolUsageDao userAiToolUsageDao() {
+    return userAiToolUsageDao;
   }
 
   public UserGroupDao userGroupDao() {
@@ -518,6 +565,10 @@ public class DbClient {
 
   public MetricDao metricDao() {
     return metricDao;
+  }
+
+  public MigrationLogDao migrationLogDao() {
+    return migrationLogDao;
   }
 
   public GroupDao groupDao() {
@@ -656,21 +707,5 @@ public class DbClient {
 
   public ProjectExportDao projectExportDao() {
     return projectExportDao;
-  }
-
-  public CveDao cveDao() {
-    return cveDao;
-  }
-
-  public CveCweDao cveCweDao() {
-    return cveCweDao;
-  }
-
-  public IssuesDependencyDao issuesDependencyDao() {
-    return issuesDependencyDao;
-  }
-
-  public ProjectDependenciesDao projectDependenciesDao() {
-    return projectDependenciesDao;
   }
 }

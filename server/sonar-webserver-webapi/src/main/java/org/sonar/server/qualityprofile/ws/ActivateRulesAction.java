@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -109,7 +109,8 @@ public class ActivateRulesAction implements QProfileWsAction {
       wsSupport.checkNotBuiltIn(profile);
       RuleQuery ruleQuery = ruleQueryFactory.createRuleQuery(dbSession, request);
       ruleQuery.setIncludeExternal(false);
-      result = qProfileRules.bulkActivateAndCommit(dbSession, profile, ruleQuery, request.param(PARAM_TARGET_SEVERITY), request.paramAsBoolean(PARAM_PRIORITIZED_RULE));
+      result = qProfileRules.bulkActivateAndCommit(dbSession, profile, ruleQuery, request.param(PARAM_TARGET_SEVERITY),
+        request.paramAsBoolean(PARAM_PRIORITIZED_RULE));
     }
 
     writeResponse(result, response);

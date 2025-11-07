@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -88,5 +88,13 @@ class FileStructureTest {
 
     FileStructure structure = new FileStructure(dir);
     assertThat(structure.telemetryEntries()).exists().isFile().isEqualTo(file);
+  }
+
+  @Test
+  void scaDir_shouldExist() {
+    File sca = new File(temp, "sca");
+
+    FileStructure structure = new FileStructure(temp);
+    assertThat(structure.scaDir()).exists().isDirectory().isEqualTo(sca);
   }
 }

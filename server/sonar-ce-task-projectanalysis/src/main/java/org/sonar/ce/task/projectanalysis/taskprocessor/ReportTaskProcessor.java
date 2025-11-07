@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -27,12 +27,12 @@ import org.sonar.ce.task.CeTask;
 import org.sonar.ce.task.CeTaskResult;
 import org.sonar.ce.task.container.TaskContainer;
 import org.sonar.ce.task.projectanalysis.container.ContainerFactory;
+import org.sonar.ce.task.projectanalysis.container.ReportAnalysisComponentProvider;
 import org.sonar.ce.task.step.ComputationStepExecutor;
 import org.sonar.ce.task.taskprocessor.CeTaskProcessor;
 import org.sonar.ce.task.taskprocessor.TaskResultHolder;
 import org.sonar.core.platform.SpringComponentContainer;
 import org.sonar.db.ce.CeTaskTypes;
-import org.sonar.ce.task.projectanalysis.container.ReportAnalysisComponentProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 
 public class ReportTaskProcessor implements CeTaskProcessor {

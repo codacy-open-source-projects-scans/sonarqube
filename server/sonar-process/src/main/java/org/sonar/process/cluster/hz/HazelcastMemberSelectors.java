@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,6 +19,7 @@
  */
 package org.sonar.process.cluster.hz;
 
+import com.hazelcast.cluster.Member;
 import com.hazelcast.cluster.MemberSelector;
 import java.util.List;
 import org.sonar.process.ProcessId;
@@ -38,5 +39,9 @@ public class HazelcastMemberSelectors {
       ProcessId memberProcessId = fromKey(member.getAttribute(PROCESS_KEY.getKey()));
       return processIdList.contains(memberProcessId);
     };
+  }
+
+  public static MemberSelector selectorForMember(Member member) {
+    return m -> m.getUuid().equals(member.getUuid());
   }
 }

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -83,9 +83,11 @@ class RulesRegistrationContext {
       String ruleUuid = entry.getKey();
       RuleDto rule = dbRulesByRuleUuid.get(ruleUuid);
       if (rule == null) {
-        LOG.warn("Could not retrieve rule with uuid %s referenced by a deprecated rule key. " +
-          "The following deprecated rule keys seem to be referencing a non-existing rule",
-          ruleUuid, entry.getValue());
+        LOG.warn("Could not retrieve rule with uuid {} referenced by a deprecated rule key. " +
+            "The following deprecated rule keys seem to be referencing a non-existing rule: {}",
+          ruleUuid, entry.getValue().stream()
+            .map(SingleDeprecatedRuleKey::getOldRuleKeyAsRuleKey)
+            .collect(Collectors.toSet()));
       } else {
         entry.getValue().forEach(d -> rulesByKey.put(d.getOldRuleKeyAsRuleKey(), rule));
       }

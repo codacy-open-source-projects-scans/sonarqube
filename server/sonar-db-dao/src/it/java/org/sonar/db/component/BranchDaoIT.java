@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -52,6 +52,7 @@ import static org.assertj.core.api.Assertions.tuple;
 import static org.sonar.api.measures.CoreMetrics.ALERT_STATUS_KEY;
 import static org.sonar.db.component.BranchType.BRANCH;
 import static org.sonar.db.component.BranchType.PULL_REQUEST;
+import static org.sonar.db.qualityprofile.QualityProfileTesting.newQualityProfileDto;
 
 class BranchDaoIT {
 
@@ -869,6 +870,75 @@ class BranchDaoIT {
 
     assertThat(branchDtos).hasSize(10);
     assertThat(branchDtos).extracting(BranchDto::isMain).allMatch(b -> true);
+  }
+
+  @Test
+  void selectMainBranches() {
+    ProjectData projectData1 = db.components().insertPrivateProject();
+    BranchDto branch1 = projectData1.getMainBranchDto();
+    db.components().insertProjectBranch(projectData1.getProjectDto());
+
+    ProjectData projectData2 = db.components().insertPrivateProject();
+    BranchDto branch3 = projectData2.getMainBranchDto();
+
+    List<BranchDto> branchDtos = underTest.selectMainBranches(dbSession);
+
+    assertThat(branchDtos).hasSize(2);
+    assertThat(branchDtos).extracting(BranchDto::getUuid, BranchDto::getProjectUuid, BranchDto::isMain).containsExactlyInAnyOrder(
+      tuple(branch1.getUuid(), projectData1.projectUuid(), true),
+      tuple(branch3.getUuid(), projectData2.projectUuid(), true));
+  }
+
+  @Test
+  void selectMainBranchesAssociatedToDefaultQualityProfile() {
+    ProjectData projectData1 = db.components().insertPrivateProject();
+    BranchDto branch1 = projectData1.getMainBranchDto();
+    db.components().insertProjectBranch(projectData1.getProjectDto());
+
+    ProjectData projectData2 = db.components().insertPrivateProject();
+
+    db.qualityProfiles().associateWithProject(projectData2.getProjectDto(), newQualityProfileDto());
+
+    List<BranchDto> branchDtos = underTest.selectMainBranchesAssociatedToDefaultQualityProfile(dbSession);
+
+    assertThat(branchDtos).hasSize(1);
+    assertThat(branchDtos).extracting(BranchDto::getUuid, BranchDto::getProjectUuid, BranchDto::isMain).containsExactly(
+      tuple(branch1.getUuid(), projectData1.projectUuid(), true));
+  }
+
+  @Test
+  void selectPullRequestsTargetingBranch() {
+    BranchDto mainBranch = new BranchDto();
+    mainBranch.setProjectUuid("U1");
+    mainBranch.setUuid("U1");
+    mainBranch.setIsMain(true);
+    mainBranch.setBranchType(BranchType.BRANCH);
+    mainBranch.setKey("master");
+    underTest.insert(dbSession, mainBranch);
+
+    BranchDto prBranch = new BranchDto();
+    prBranch.setProjectUuid("U1");
+    prBranch.setUuid("U2");
+    prBranch.setIsMain(false);
+    prBranch.setBranchType(PULL_REQUEST);
+    prBranch.setKey("1234");
+    prBranch.setMergeBranchUuid("U1");
+    underTest.insert(dbSession, prBranch);
+
+    // make a second PR also targeting main branch
+    prBranch.setUuid("U3");
+    prBranch.setKey("4321");
+    prBranch.setMergeBranchUuid("U1");
+    underTest.insert(dbSession, prBranch);
+
+    // make a third PR NOT targeting main branch to be sure we filter it out
+    prBranch.setUuid("U4");
+    prBranch.setKey("5678");
+    prBranch.setMergeBranchUuid("U42");
+    underTest.insert(dbSession, prBranch);
+
+    var result = underTest.selectPullRequestsTargetingBranch(dbSession, "U1", "U1");
+    assertThat(result.stream().map(BranchDto::getUuid).toList()).containsExactlyInAnyOrder("U2", "U3");
   }
 
   private void insertBranchesForProjectUuids(boolean mainBranch, String... uuids) {

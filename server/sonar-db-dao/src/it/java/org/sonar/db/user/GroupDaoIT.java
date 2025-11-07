@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -220,6 +220,47 @@ class GroupDaoIT {
 
     // Filter on name
     assertThat(underTest.countByQuery(dbSession, textSearchQuery("sonar"))).isEqualTo(2);
+  }
+
+  @Test
+  void findByQuery_withUserId_countAndFindExpectedUsers() {
+    GroupDto group1 = db.users().insertGroup("sonar-users");
+    GroupDto group2 = db.users().insertGroup("SONAR-ADMINS");
+    GroupDto group3 = db.users().insertGroup("customers-group1");
+
+    UserDto user = db.users().insertUser();
+    UserDto user2 = db.users().insertUser();
+    db.users().insertMember(group1, user);
+    db.users().insertMember(group2, user);
+    db.users().insertMember(group2, user2);
+    db.users().insertMember(group3, user2);
+
+    GroupQuery groupQueryIncludingUser = GroupQuery.builder().userId(user.getUuid()).build();
+
+    assertThat(underTest.countByQuery(dbSession, groupQueryIncludingUser)).isEqualTo(2);
+    assertThat(underTest.selectByQuery(dbSession, groupQueryIncludingUser, 1, 100))
+      .extracting(GroupDto::getUuid)
+      .containsExactlyInAnyOrder(group1.getUuid(), group2.getUuid());
+  }
+
+  @Test
+  void findByQuery_withExcludedUserId_countAndFindExpectedUsers() {
+    GroupDto group1 = db.users().insertGroup("sonar-users");
+    GroupDto group2 = db.users().insertGroup("SONAR-ADMINS");
+    GroupDto group3 = db.users().insertGroup("customers-group1");
+
+    UserDto user = db.users().insertUser();
+    UserDto user2 = db.users().insertUser();
+    db.users().insertMember(group1, user);
+    db.users().insertMember(group2, user);
+    db.users().insertMember(group2, user2);
+    db.users().insertMember(group3, user2);
+
+    GroupQuery groupQueryExcludingUser = GroupQuery.builder().excludedUserId(user.getUuid()).build();
+    assertThat(underTest.countByQuery(dbSession, groupQueryExcludingUser)).isEqualTo(1);
+    assertThat(underTest.selectByQuery(dbSession, groupQueryExcludingUser, 1, 100))
+      .extracting(GroupDto::getUuid)
+      .containsExactlyInAnyOrder(group3.getUuid());
   }
 
   @Test

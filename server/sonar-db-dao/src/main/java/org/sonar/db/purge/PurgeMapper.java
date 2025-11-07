@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -194,4 +194,18 @@ public interface PurgeMapper {
   void deleteAnticipatedTransitionsByProjectUuidAndCreationDate(@Param("projectUuid") String projectUuid, @Param("createdAtBefore") Long createdAtBefore);
 
   void deleteIssuesFixedByBranchUuid(@Param("branchUuid") String branchUuid);
+
+  void deleteScaAnalysesByComponentUuid(@Param("componentUuid") String componentUuid);
+
+  void deleteScaDependenciesByComponentUuid(@Param("componentUuid") String componentUuid);
+
+  void deleteScaIssuesReleasesByComponentUuid(@Param("componentUuid") String componentUuid);
+
+  void deleteScaIssuesReleasesChangesByComponentUuid(@Param("componentUuid") String componentUuid);
+
+  void deleteScaReleasesByComponentUuid(@Param("componentUuid") String componentUuid);
+
+  void deleteScaLicenseProfileProjectsByProjectUuid(@Param("projectUuid") String projectUuid);
+
+  void deleteArchitectureGraphsByBranchUuid(@Param("branchUuid") String branchUuid);
 }

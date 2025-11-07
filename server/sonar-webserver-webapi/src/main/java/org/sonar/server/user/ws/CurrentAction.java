@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -48,8 +48,7 @@ import static java.util.Optional.empty;
 import static java.util.Optional.of;
 import static java.util.Optional.ofNullable;
 import static org.apache.commons.lang3.StringUtils.EMPTY;
-import static org.sonar.api.web.UserRole.USER;
-import static org.sonar.server.user.ws.DismissNoticeAction.AVAILABLE_NOTICE_KEYS;
+import static org.sonar.db.permission.ProjectPermission.USER;
 import static org.sonar.server.ws.WsUtils.writeProtobuf;
 import static org.sonarqube.ws.Users.CurrentWsResponse.HomepageType.APPLICATION;
 import static org.sonarqube.ws.Users.CurrentWsResponse.HomepageType.PORTFOLIO;
@@ -89,7 +88,8 @@ public class CurrentAction implements UsersWsAction {
         new Change("7.1", "'parameter' is replaced by 'component' and 'organization' in the response"),
         new Change("9.2", "boolean 'usingSonarLintConnectedMode' and 'sonarLintAdSeen' fields are now returned in the response"),
         new Change("9.5", "showOnboardingTutorial is not returned anymore in the response"),
-        new Change("9.6", "'sonarLintAdSeen' is removed and replaced by a 'dismissedNotices' map that support multiple values")
+        new Change("9.6", "'sonarLintAdSeen' is removed and replaced by a 'dismissedNotices' map that support multiple values"),
+        new Change("2025.6", "Response field 'id' has been added")
       );
   }
 
@@ -122,9 +122,11 @@ public class CurrentAction implements UsersWsAction {
       .addAllScmAccounts(user.getSortedScmAccounts())
       .setPermissions(Permissions.newBuilder().addAllGlobal(getGlobalPermissions()).build())
       .setHomepage(buildHomepage(dbSession, user))
-      .setUsingSonarLintConnectedMode(user.getLastSonarlintConnectionDate() != null);
+      .setUsingSonarLintConnectedMode(user.getLastSonarlintConnectionDate() != null)
+      .setId(user.getUuid());
 
-    AVAILABLE_NOTICE_KEYS.forEach(key -> builder.putDismissedNotices(key, isNoticeDismissed(user, key)));
+    DismissNoticeAction.DismissNotices.getAvailableKeys()
+      .forEach(key -> builder.putDismissedNotices(key, isNoticeDismissed(user, key)));
     
     ofNullable(emptyToNull(user.getEmail())).ifPresent(builder::setEmail);
     ofNullable(emptyToNull(user.getEmail())).ifPresent(u -> builder.setAvatar(avatarResolver.create(user)));

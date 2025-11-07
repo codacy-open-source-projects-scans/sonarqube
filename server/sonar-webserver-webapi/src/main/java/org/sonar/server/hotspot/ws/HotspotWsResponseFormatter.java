@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -113,7 +113,6 @@ public class HotspotWsResponseFormatter {
       builder.setCreationDate(formatDateTime(hotspot.getIssueCreationDate()));
       builder.setUpdateDate(formatDateTime(hotspot.getIssueUpdateDate()));
       completeHotspotLocations(hotspot, builder, searchResponseData);
-      ofNullable(hotspot.getCveId()).ifPresent(builder::setCveId);
       hotspotsList.add(builder.build());
     }
     return hotspotsList;

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -278,6 +278,11 @@ class DefaultIssueTest {
   }
 
   @Test
+  void internalTags_whenNull_shouldReturnEmptySet() {
+    assertThat(issue.internalTags()).isEmpty();
+  }
+
+  @Test
   void codeVariants_whenNull_shouldReturnEmptySet() {
     assertThat(issue.codeVariants()).isEmpty();
   }
@@ -336,5 +341,12 @@ class DefaultIssueTest {
     assertThat(issue.isPrioritizedRule()).isFalse();
     issue.setPrioritizedRule(true);
     assertThat(issue.isPrioritizedRule()).isTrue();
+  }
+
+  @Test
+  void fromSonarQubeUpdate_shouldHaveCorrectDefaultValue() {
+    assertThat(issue.isFromSonarQubeUpdate()).isFalse();
+    issue.setFromSonarQubeUpdate(true);
+    assertThat(issue.isFromSonarQubeUpdate()).isTrue();
   }
 }

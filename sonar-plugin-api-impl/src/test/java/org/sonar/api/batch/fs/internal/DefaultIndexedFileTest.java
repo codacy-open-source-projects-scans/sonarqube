@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -42,5 +42,15 @@ public class DefaultIndexedFileTest {
     Assertions.assertThatThrownBy(() -> DefaultIndexedFile.checkSanitize(invalidPath))
       .isInstanceOf(IllegalArgumentException.class)
       .hasMessageContaining(invalidPath);
+  }
+
+  @Test
+  public void uri_should_be_cached() {
+    String projectKey = "12345";
+    Path baseDir = Paths.get("");
+    String path = "foo/bar";
+
+    DefaultIndexedFile file = new DefaultIndexedFile(projectKey, baseDir, path, null);
+    Assertions.assertThat(file.uri()).isSameAs(file.uri());
   }
 }

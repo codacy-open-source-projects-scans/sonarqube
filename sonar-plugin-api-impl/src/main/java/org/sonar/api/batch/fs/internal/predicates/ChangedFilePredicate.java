@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -24,15 +24,9 @@ import org.sonar.api.batch.fs.InputFile;
 
 public class ChangedFilePredicate implements FilePredicate {
 
-  private final FilePredicate originalPredicate;
-
-  public ChangedFilePredicate(FilePredicate originalPredicate) {
-    this.originalPredicate = originalPredicate;
-  }
-
   @Override
   public boolean apply(InputFile inputFile) {
-    return originalPredicate.apply(inputFile) && InputFile.Status.SAME != inputFile.status();
+    return InputFile.Status.SAME != inputFile.status();
   }
 
 }

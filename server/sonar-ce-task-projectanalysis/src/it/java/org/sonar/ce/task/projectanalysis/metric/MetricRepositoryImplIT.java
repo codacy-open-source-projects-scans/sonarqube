@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -85,6 +85,45 @@ public class MetricRepositoryImplIT {
 
     assertThat(underTest.getByKey("ncloc").getUuid()).isEqualTo(ncloc.getUuid());
     assertThat(underTest.getByKey("coverage").getUuid()).isEqualTo(coverage.getUuid());
+  }
+
+  @Test
+  public void getOptionalByKey_throws_NPE_if_arg_is_null() {
+    assertThatThrownBy(() -> underTest.getOptionalByKey(null))
+      .isInstanceOf(NullPointerException.class);
+  }
+
+  @Test
+  public void getOptionalByKey_throws_ISE_if_start_has_not_been_called() {
+    assertThatThrownBy(() -> underTest.getOptionalByKey(SOME_KEY))
+      .isInstanceOf(IllegalStateException.class)
+      .hasMessage("Metric cache has not been initialized");
+  }
+
+  @Test
+  public void getOptionalByKey_whenMetricDoesNotExist_thenReturnsOptionalEmpty() {
+    underTest.start();
+    assertThat(underTest.getOptionalByKey(SOME_KEY)).isNotPresent();
+  }
+
+  @Test
+  public void getOptionalByKey_whenMetricIsDisabled_thenReturnsOptionalEmpty() {
+    dbTester.measures().insertMetric(t -> t.setKey("complexity").setEnabled(false));
+
+    underTest.start();
+
+    assertThat(underTest.getOptionalByKey("complexity")).isNotPresent();
+  }
+
+  @Test
+  public void getOptionalByKey_find_enabled_Metrics() {
+    MetricDto ncloc = dbTester.measures().insertMetric(t -> t.setKey("ncloc").setEnabled(true));
+    MetricDto coverage = dbTester.measures().insertMetric(t -> t.setKey("coverage").setEnabled(true));
+
+    underTest.start();
+
+    assertThat(underTest.getOptionalByKey("ncloc").get().getUuid()).isEqualTo(ncloc.getUuid());
+    assertThat(underTest.getOptionalByKey("coverage").get().getUuid()).isEqualTo(coverage.getUuid());
   }
 
   @Test

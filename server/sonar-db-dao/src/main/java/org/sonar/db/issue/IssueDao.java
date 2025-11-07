@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -162,6 +162,10 @@ public class IssueDao implements Dao {
     return mapper(session).selectByKeysIfNotUpdatedAt(keys, updatedAt);
   }
 
+  public List<IssueCount> countSandboxIssuesPerProject(DbSession dbSession) {
+    return mapper(dbSession).countSandboxIssuesPerProject();
+  }
+
   public void insertAsNewCodeOnReferenceBranch(DbSession session, NewCodeReferenceIssueDto dto) {
     mapper(session).insertAsNewCodeOnReferenceBranch(dto);
   }
@@ -187,6 +191,10 @@ public class IssueDao implements Dao {
    */
   public List<String> selectIssueKeysByQuery(DbSession dbSession, IssueListQuery issueListQuery, Pagination pagination) {
     return mapper(dbSession).selectIssueKeysByQuery(issueListQuery, pagination);
+  }
+
+  public int resetFlagFromSonarQubeUpdate(DbSession session) {
+    return mapper(session).resetFlagFromSonarQubeUpdate(System.currentTimeMillis());
   }
 
 }

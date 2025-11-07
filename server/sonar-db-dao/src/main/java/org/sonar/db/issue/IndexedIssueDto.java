@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -59,6 +59,7 @@ public final class IndexedIssueDto {
   private boolean isNewCodeReferenceIssue = false;
   private String codeVariants = null;
   private boolean prioritizedRule = false;
+  private boolean fromSonarQubeUpdate = false;
 
   private Set<ImpactDto> impacts = new HashSet<>();
   private Set<ImpactDto> ruleDefaultImpacts = new HashSet<>();
@@ -339,6 +340,15 @@ public final class IndexedIssueDto {
 
   public IndexedIssueDto setPrioritizedRule(boolean prioritizedRule) {
     this.prioritizedRule = prioritizedRule;
+    return this;
+  }
+
+  public boolean isFromSonarQubeUpdate() {
+    return fromSonarQubeUpdate;
+  }
+
+  public IndexedIssueDto setFromSonarQubeUpdate(boolean fromSonarQubeUpdate) {
+    this.fromSonarQubeUpdate = fromSonarQubeUpdate;
     return this;
   }
 }

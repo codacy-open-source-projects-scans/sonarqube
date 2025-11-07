@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -21,6 +21,11 @@ package org.sonar.server.v2.config;
 
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.info.Info;
+import jakarta.validation.Validation;
+import org.hibernate.validator.messageinterpolation.ParameterMessageInterpolator;
+import org.sonar.api.internal.MetadataLoader;
+import org.sonar.api.utils.System2;
+import org.sonar.api.utils.Version;
 import org.sonar.server.v2.common.RestResponseEntityExceptionHandler;
 import org.springdoc.core.properties.SpringDocConfigProperties;
 import org.springframework.beans.factory.config.BeanFactoryPostProcessor;
@@ -29,7 +34,9 @@ import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.PropertySource;
 import org.springframework.http.MediaType;
-import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
+import org.springframework.validation.Validator;
+import org.springframework.validation.beanvalidation.SpringValidatorAdapter;
+import org.springframework.web.servlet.config.annotation.ContentNegotiationConfigurer;
 import org.springframework.web.servlet.config.annotation.EnableWebMvc;
 import org.springframework.web.servlet.config.annotation.PathMatchConfigurer;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
@@ -48,9 +55,26 @@ public class CommonWebConfig implements WebMvcConfigurer {
     configurer.setUrlPathHelper(urlPathHelper).setUseTrailingSlashMatch(true);
   }
 
-  @Bean
-  public LocalValidatorFactoryBean validator() {
-    return new LocalValidatorFactoryBean();
+  @Override
+  public Validator getValidator() {
+    // This validator gets returned from the
+    // WebMvcConfigurationSupport#mvcValidator bean factory method.
+    // We can create a new one each time here and an instance will be cached
+    // in the Spring context.
+    //
+    // One reason we override the validator is to avoid a dependency
+    // on an expression language implementation like expressly.
+    //
+    // This same validator must also be configured in ControllerTester,
+    // otherwise unit test behavior will not match production behavior.
+    //
+    // The validator errors are formatted in RestResponseEntityExceptionHandler.
+    var jakartaValidator = Validation.byDefaultProvider()
+      .configure()
+      .messageInterpolator(new ParameterMessageInterpolator())
+      .buildValidatorFactory()
+      .getValidator();
+    return new SpringValidatorAdapter(jakartaValidator);
   }
 
   @Bean
@@ -60,18 +84,24 @@ public class CommonWebConfig implements WebMvcConfigurer {
 
   @Bean
   public OpenAPI customOpenAPI() {
+    Version sqVersion = MetadataLoader.loadSQVersion(System2.INSTANCE);
     return new OpenAPI()
       .info(new Info()
-          .title("SonarQube Web API v2")
-          .description("""
-            The SonarQube API v2 is a REST API which enables you to interact with SonarQube programmatically. Endpoint listed here should work as expected.
-            However, you should not consider the API stable for now as it is still under development. New releases of SonarQube can bring changes to existing endpoint definitions.
-            """)
-      );
+        .title("SonarQube Web API v2")
+        .description("""
+          The SonarQube API v2 is a REST API which enables you to interact with SonarQube programmatically.
+          While not all endpoints of the former Web API are available yet, the ones available are stable and can be used in production environments.
+          """)
+        .version(sqVersion.toString()));
   }
 
   @Bean
   public BeanFactoryPostProcessor beanFactoryPostProcessor1(SpringDocConfigProperties springDocConfigProperties) {
     return beanFactory -> springDocConfigProperties.setDefaultProducesMediaType(MediaType.APPLICATION_JSON_VALUE);
+  }
+
+  @Override
+  public void configureContentNegotiation(ContentNegotiationConfigurer configurer) {
+    configurer.defaultContentType(MediaType.APPLICATION_JSON, MediaType.ALL);
   }
 }

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -20,7 +20,7 @@
 package org.sonar.server.authentication;
 
 import org.junit.Test;
-import org.sonar.api.web.UserRole;
+import org.sonar.db.permission.ProjectPermission;
 import org.sonar.db.permission.GlobalPermission;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -46,8 +46,8 @@ public class SafeModeUserSessionTest {
     assertThat(underTest.shouldResetPassword()).isFalse();
     assertThat(underTest.isSystemAdministrator()).isFalse();
     assertThat(underTest.hasPermissionImpl(GlobalPermission.ADMINISTER)).isFalse();
-    assertThat(underTest.hasEntityUuidPermission(UserRole.USER, "foo")).isFalse();
-    assertThat(underTest.hasChildProjectsPermission(UserRole.USER, "foo")).isFalse();
-    assertThat(underTest.hasPortfolioChildProjectsPermission(UserRole.USER, "foo")).isFalse();
+    assertThat(underTest.hasEntityUuidPermission(ProjectPermission.USER, "foo")).isFalse();
+    assertThat(underTest.hasChildProjectsPermission(ProjectPermission.USER, "foo")).isFalse();
+    assertThat(underTest.hasPortfolioChildProjectsPermission(ProjectPermission.USER, "foo")).isFalse();
   }
 }

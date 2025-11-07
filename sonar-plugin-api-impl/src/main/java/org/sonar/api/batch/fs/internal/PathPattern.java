@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -29,6 +29,9 @@ import org.slf4j.LoggerFactory;
 import org.sonar.api.utils.PathUtils;
 import org.sonar.api.utils.WildcardPattern;
 
+import static org.apache.commons.lang3.Strings.CI;
+import static org.apache.commons.lang3.Strings.CS;
+
 @ThreadSafe
 public abstract class PathPattern {
 
@@ -51,8 +54,8 @@ public abstract class PathPattern {
 
   public static PathPattern create(String s) {
     String trimmed = StringUtils.trim(s);
-    if (StringUtils.startsWithIgnoreCase(trimmed, ABSOLUTE_PATH_PATTERN_PREFIX)) {
-      LOG.warn("Using absolute path pattern is deprecated. Please use relative path instead of '" + trimmed + "'");
+    if (CI.startsWith(trimmed, ABSOLUTE_PATH_PATTERN_PREFIX)) {
+      LOG.warn("Using absolute path pattern is deprecated. Please use relative path instead of '{}'", trimmed);
       return new AbsolutePathPattern(StringUtils.substring(trimmed, ABSOLUTE_PATH_PATTERN_PREFIX.length()));
     }
     return new RelativePathPattern(trimmed);
@@ -82,7 +85,7 @@ public abstract class PathPattern {
       if (!caseSensitiveFileExtension) {
         String extension = sanitizeExtension(FilenameUtils.getExtension(path));
         if (StringUtils.isNotBlank(extension)) {
-          path = StringUtils.removeEndIgnoreCase(path, extension);
+          path = CI.removeEnd(path, extension);
           path = path + extension;
         }
       }
@@ -114,7 +117,7 @@ public abstract class PathPattern {
       if (!caseSensitiveFileExtension) {
         String extension = sanitizeExtension(FilenameUtils.getExtension(path));
         if (StringUtils.isNotBlank(extension)) {
-          path = StringUtils.removeEndIgnoreCase(path, extension);
+          path = CI.removeEnd(path, extension);
           path = path + extension;
         }
       }
@@ -128,6 +131,6 @@ public abstract class PathPattern {
   }
 
   static String sanitizeExtension(String suffix) {
-    return StringUtils.lowerCase(StringUtils.removeStart(suffix, "."));
+    return StringUtils.lowerCase(CS.removeStart(suffix, "."));
   }
 }

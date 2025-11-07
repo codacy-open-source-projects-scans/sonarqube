@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -36,6 +36,8 @@ public final class SqTables {
     "analysis_properties",
     "app_branch_project_branch",
     "app_projects",
+    "architecture_graphs",
+    "atlassian_auth_details",
     "audits",
     "ce_activity",
     "ce_queue",
@@ -43,8 +45,6 @@ public final class SqTables {
     "ce_task_input",
     "ce_task_message",
     "ce_scanner_context",
-    "cves",
-    "cve_cwe",
     "components",
     "default_qprofiles",
     "deprecated_rule_keys",
@@ -62,12 +62,12 @@ public final class SqTables {
     "internal_component_props",
     "internal_properties",
     "issues",
-    "issues_dependency",
     "issues_fixed",
     "issues_impacts",
     "issue_changes",
     "measures",
     "metrics",
+    "migration_logs",
     "new_code_periods",
     "new_code_reference_issues",
     "notifications",
@@ -109,6 +109,18 @@ public final class SqTables {
     "rules_parameters",
     "rules_profiles",
     "rule_repositories",
+    "sca_analyses",
+    "sca_dependencies",
+    "sca_encountered_licenses",
+    "sca_issues",
+    "sca_issues_releases",
+    "sca_issue_rels_changes",
+    "sca_lic_prof_categories",
+    "sca_lic_prof_customs",
+    "sca_lic_prof_projects",
+    "sca_license_profiles",
+    "sca_releases",
+    "sca_vulnerability_issues",
     "scanner_analysis_cache",
     "schema_migrations",
     "scim_groups",
@@ -118,6 +130,7 @@ public final class SqTables {
     "snapshots",
     "telemetry_metrics_sent",
     "users",
+    "user_ai_tool_usages",
     "user_dismissed_messages",
     "user_roles",
     "user_tokens",

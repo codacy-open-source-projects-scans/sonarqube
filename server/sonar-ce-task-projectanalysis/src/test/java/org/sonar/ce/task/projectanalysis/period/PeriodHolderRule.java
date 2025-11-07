@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -71,6 +71,16 @@ public class PeriodHolderRule implements TestRule, PeriodHolder, AfterEachCallba
   @Override
   public Period getPeriod() {
     return delegate.getPeriod();
+  }
+
+  @Override
+  public PeriodOrigin getPeriodOrigin() {
+    return delegate.getPeriodOrigin();
+  }
+
+  public PeriodHolderRule setPeriodOrigin(PeriodOrigin periodOrigin) {
+    delegate.setPeriodOrigin(periodOrigin);
+    return this;
   }
 
 }

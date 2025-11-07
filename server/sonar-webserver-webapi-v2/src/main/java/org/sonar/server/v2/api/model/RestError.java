@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,4 +19,13 @@
  */
 package org.sonar.server.v2.api.model;
 
-public record RestError(String message) {}
+import com.fasterxml.jackson.annotation.JsonInclude;
+import javax.annotation.Nullable;
+
+public record RestError(
+  String message,
+  @Nullable @JsonInclude(JsonInclude.Include.NON_NULL) String relatedField) {
+  public RestError(String errorMessage) {
+    this(errorMessage, null);
+  }
+}

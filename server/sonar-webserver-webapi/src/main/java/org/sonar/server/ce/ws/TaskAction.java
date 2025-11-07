@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -33,7 +33,7 @@ import org.sonar.api.server.ws.Change;
 import org.sonar.api.server.ws.Request;
 import org.sonar.api.server.ws.Response;
 import org.sonar.api.server.ws.WebService;
-import org.sonar.api.web.UserRole;
+import org.sonar.db.permission.ProjectPermission;
 import org.sonar.core.util.Uuids;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
@@ -139,8 +139,8 @@ public class TaskAction implements CeWsAction {
   private void checkComponentPermission(ComponentDto component) {
     if (userSession.hasPermission(GlobalPermission.ADMINISTER) ||
       userSession.hasPermission(GlobalPermission.SCAN) ||
-      userSession.hasComponentPermission(UserRole.ADMIN, component) ||
-      userSession.hasComponentPermission(UserRole.SCAN, component)) {
+      userSession.hasComponentPermission(ProjectPermission.ADMIN, component) ||
+      userSession.hasComponentPermission(ProjectPermission.SCAN, component)) {
       return;
     }
     throw insufficientPrivilegesException();

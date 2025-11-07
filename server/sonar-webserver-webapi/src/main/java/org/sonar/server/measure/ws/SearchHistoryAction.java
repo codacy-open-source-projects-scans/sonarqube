@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -23,7 +23,6 @@ import com.google.common.collect.Sets;
 import java.util.Date;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
@@ -37,7 +36,6 @@ import org.sonar.api.server.ws.Request;
 import org.sonar.api.server.ws.Response;
 import org.sonar.api.server.ws.WebService;
 import org.sonar.api.server.ws.WebService.Param;
-import org.sonar.api.web.UserRole;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
 import org.sonar.db.component.ComponentDto;
@@ -51,6 +49,7 @@ import org.sonar.db.measure.PastMeasureQuery;
 import org.sonar.db.measure.ProjectMeasureDto;
 import org.sonar.db.metric.MetricDto;
 import org.sonar.db.metric.RemovedMetricConverter;
+import org.sonar.db.permission.ProjectPermission;
 import org.sonar.server.component.ComponentFinder;
 import org.sonar.server.telemetry.TelemetryPortfolioActivityGraphTypeProvider;
 import org.sonar.server.telemetry.TelemetryPortfolioActivityRequestedMetricProvider;
@@ -109,6 +108,9 @@ public class SearchHistoryAction implements MeasuresWsAction {
       .setResponseExample(getClass().getResource("search_history-example.json"))
       .setSince("6.3")
       .setChangelog(
+        new Change("2025.4", format(
+          "The following SCA metrics are available on licensed enterprise/datacenter editions with SCA enabled: %s",
+          MeasuresWsModule.getNewScaMetricsInSonarQube202504())),
         new Change("10.8", String.format("The following metrics are not deprecated anymore: %s",
           MeasuresWsModule.getUndeprecatedMetricsinSonarQube108())),
         new Change("10.8", String.format("Added new accepted values for the 'metricKeys' param: %s",
@@ -184,8 +186,7 @@ public class SearchHistoryAction implements MeasuresWsAction {
   }
 
   private void writeTelemetry(Request request, SearchHistoryResult searchResult) {
-    Map<String, String> headers = request.getHeaders();
-    String referer = headers.getOrDefault("referer", "");
+    String referer = request.header("referer").orElse("");
     if (referer.contains("project/activity") && List.of(VIEW, SUBVIEW).contains(searchResult.getComponent().qualifier())) {
       toWsRequest(request).metrics.forEach(telemetryRequestedMetricProvider::metricRequested);
       getGraphType(referer).ifPresent(telemetryGraphTypeProvider::incrementCount);
@@ -227,9 +228,9 @@ public class SearchHistoryAction implements MeasuresWsAction {
 
   private ComponentDto searchComponent(SearchHistoryRequest request, DbSession dbSession) {
     ComponentDto component = loadComponent(dbSession, request);
-    userSession.checkComponentPermission(UserRole.USER, component);
+    userSession.checkComponentPermission(ProjectPermission.USER, component);
     if (ComponentScopes.PROJECT.equals(component.scope()) && ComponentQualifiers.APP.equals(component.qualifier())) {
-      userSession.checkChildProjectsPermission(UserRole.USER, component);
+      userSession.checkChildProjectsPermission(ProjectPermission.USER, component);
     }
     return component;
   }

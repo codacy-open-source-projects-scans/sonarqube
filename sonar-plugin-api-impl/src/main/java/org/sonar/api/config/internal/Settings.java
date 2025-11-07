@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -37,6 +37,7 @@ import org.sonar.api.utils.DateUtils;
 
 import static java.util.Objects.requireNonNull;
 import static org.apache.commons.lang3.StringUtils.trim;
+import static org.apache.commons.lang3.Strings.CS;
 
 /**
  * Implementation of the deprecated Settings interface
@@ -456,7 +457,7 @@ public abstract class Settings extends org.sonar.api.config.Settings {
   @Override
   public List<String> getKeysStartingWith(String prefix) {
     return getProperties().keySet().stream()
-      .filter(key -> StringUtils.startsWith(key, prefix))
+      .filter(key -> CS.startsWith(key, prefix))
       .toList();
   }
 

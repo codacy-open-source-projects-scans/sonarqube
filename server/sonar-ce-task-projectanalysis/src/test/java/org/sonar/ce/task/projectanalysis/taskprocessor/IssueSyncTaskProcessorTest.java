@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -52,7 +52,7 @@ public class IssueSyncTaskProcessorTest {
       .build();
 
     IssueSyncTaskProcessor.newContainerPopulator(task).populateContainer(container);
-    Mockito.verify(container, Mockito.times(5)).add(any());
+    Mockito.verify(container, Mockito.times(6)).add(any());
   }
 
   @Test

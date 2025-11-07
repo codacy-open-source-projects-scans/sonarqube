@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -41,6 +41,7 @@ import org.sonar.scanner.repository.language.Language;
 import org.sonar.scanner.repository.language.LanguagesRepository;
 
 import static java.util.Collections.unmodifiableMap;
+import static org.apache.commons.lang3.Strings.CS;
 
 /**
  * Detect language of a source file based on its suffix and configured patterns.
@@ -87,7 +88,9 @@ public class LanguageDetection {
     PathPattern[] defaultLanguagePatterns = Stream.concat(fileSuffixes, filenamePatterns)
       .distinct()
       .toArray(PathPattern[]::new);
-    LOG.debug("Declared patterns of language {} were converted to {}", language, getDetails(language, defaultLanguagePatterns));
+    if (LOG.isDebugEnabled()) {
+      LOG.debug("Declared patterns of language {} were converted to {}", language, getDetails(language, defaultLanguagePatterns));
+    }
     return defaultLanguagePatterns;
   }
 
@@ -137,6 +140,6 @@ public class LanguageDetection {
   }
 
   static String sanitizeExtension(String suffix) {
-    return StringUtils.lowerCase(StringUtils.removeStart(suffix, "."));
+    return StringUtils.lowerCase(CS.removeStart(suffix, "."));
   }
 }

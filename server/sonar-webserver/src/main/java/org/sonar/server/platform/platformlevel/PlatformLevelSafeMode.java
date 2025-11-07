@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -26,6 +26,7 @@ import org.sonar.server.platform.db.migration.AutoDbMigration;
 import org.sonar.server.platform.db.migration.DatabaseMigrationImpl;
 import org.sonar.server.platform.db.migration.MigrationEngineModule;
 import org.sonar.server.platform.db.migration.NoopDatabaseMigrationImpl;
+import org.sonar.server.platform.web.NoCacheFilter;
 import org.sonar.server.platform.web.WebServiceFilter;
 import org.sonar.server.platform.ws.IndexAction;
 import org.sonar.server.platform.ws.L10nWs;
@@ -59,6 +60,7 @@ public class PlatformLevelSafeMode extends PlatformLevel {
       SafeModeUserSession.class,
       WebServiceEngine.class,
       WebServiceFilter.class,
+      NoCacheFilter.class,
 
       // Monitoring
       ServerMonitoringMetrics.class);

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -99,7 +99,7 @@ class TelemetryDaemonTest {
   }
 
   @Test
-  void send_data_via_client_at_startup_after_initial_delay() throws IOException {
+  void start_sendsDataAtStartupAfterInitialDelay() throws IOException {
     initTelemetrySettingsToDefaultValues();
     when(lockManager.tryLock(any(), anyInt())).thenReturn(true);
     settings.setProperty("sonar.telemetry.frequencyInSeconds", "1");
@@ -112,23 +112,13 @@ class TelemetryDaemonTest {
     verify(dataJsonWriter).writeTelemetryData(any(JsonWriter.class), same(SOME_TELEMETRY_DATA));
   }
 
-  private void mockDataJsonWriterDoingSomething() {
-    doAnswer(t -> {
-      JsonWriter json = t.getArgument(0);
-      json.beginObject().prop("foo", "bar").endObject();
-      return null;
-    })
-      .when(dataJsonWriter)
-      .writeTelemetryData(any(), any());
-  }
-
   @Test
-  void check_if_should_send_data_periodically() throws IOException {
+  void start_whenLastPingEarlierThanOneDayAgo_shouldNotSendData() throws IOException {
     initTelemetrySettingsToDefaultValues();
     when(lockManager.tryLock(any(), anyInt())).thenReturn(true);
     long now = system2.now();
     long twentyHoursAgo = now - (ONE_HOUR * 20L);
-    long oneDayAgo = now - ONE_DAY;
+    long moreThanOneDayAgo = now - ONE_DAY - ONE_HOUR;
     internalProperties.write("telemetry.lastPing", String.valueOf(twentyHoursAgo));
     settings.setProperty("sonar.telemetry.frequencyInSeconds", "1");
     when(dataLoader.load()).thenReturn(SOME_TELEMETRY_DATA);
@@ -139,29 +129,14 @@ class TelemetryDaemonTest {
     verify(dataJsonWriter, after(2_000).never()).writeTelemetryData(any(JsonWriter.class), same(SOME_TELEMETRY_DATA));
     verify(client, never()).upload(anyString());
 
-    internalProperties.write("telemetry.lastPing", String.valueOf(oneDayAgo));
+    internalProperties.write("telemetry.lastPing", String.valueOf(moreThanOneDayAgo));
 
     verify(client, timeout(2_000)).upload(anyString());
     verify(dataJsonWriter).writeTelemetryData(any(JsonWriter.class), same(SOME_TELEMETRY_DATA));
   }
 
   @Test
-  void do_not_send_data_if_last_ping_earlier_than_one_day_ago() throws IOException {
-    initTelemetrySettingsToDefaultValues();
-    when(lockManager.tryLock(any(), anyInt())).thenReturn(true);
-    settings.setProperty("sonar.telemetry.frequencyInSeconds", "1");
-    long now = system2.now();
-    long twentyHoursAgo = now - (ONE_HOUR * 20L);
-    mockDataJsonWriterDoingSomething();
-
-    internalProperties.write("telemetry.lastPing", String.valueOf(twentyHoursAgo));
-    underTest.start();
-
-    verify(client, after(2_000).never()).upload(anyString());
-  }
-
-  @Test
-  void send_data_if_last_ping_is_over_one_day_ago() throws IOException {
+  void start_whenLastPingOverOneDayAgo_shouldSendData() throws IOException {
     initTelemetrySettingsToDefaultValues();
     when(lockManager.tryLock(any(), anyInt())).thenReturn(true);
     settings.setProperty("sonar.telemetry.frequencyInSeconds", "1");
@@ -180,7 +155,7 @@ class TelemetryDaemonTest {
   }
 
   @Test
-  void opt_out_sent_once() throws IOException {
+  void start_whenOptOut_shouldSendOnceAndLogsPresent() throws IOException {
     initTelemetrySettingsToDefaultValues();
     when(lockManager.tryLock(any(), anyInt())).thenReturn(true);
     settings.setProperty("sonar.telemetry.frequencyInSeconds", "1");
@@ -196,7 +171,7 @@ class TelemetryDaemonTest {
   }
 
   @Test
-  void write_sequence_as_one_if_not_previously_present() {
+  void start_whenSequenceNotPresent_shouldBeSetToOne() {
     initTelemetrySettingsToDefaultValues();
     when(lockManager.tryLock(any(), anyInt())).thenReturn(true);
     settings.setProperty("sonar.telemetry.frequencyInSeconds", "1");
@@ -208,7 +183,7 @@ class TelemetryDaemonTest {
   }
 
   @Test
-  void write_sequence_correctly_incremented() {
+  void start_whenSequencePresent_shouldIncrementCorrectly() {
     initTelemetrySettingsToDefaultValues();
     when(lockManager.tryLock(any(), anyInt())).thenReturn(true);
     settings.setProperty("sonar.telemetry.frequencyInSeconds", "1");
@@ -229,6 +204,16 @@ class TelemetryDaemonTest {
     settings.setProperty(SONAR_TELEMETRY_ENABLE.getKey(), SONAR_TELEMETRY_ENABLE.getDefaultValue());
     settings.setProperty(SONAR_TELEMETRY_URL.getKey(), SONAR_TELEMETRY_URL.getDefaultValue());
     settings.setProperty(SONAR_TELEMETRY_FREQUENCY_IN_SECONDS.getKey(), SONAR_TELEMETRY_FREQUENCY_IN_SECONDS.getDefaultValue());
+  }
+
+  private void mockDataJsonWriterDoingSomething() {
+    doAnswer(t -> {
+      JsonWriter json = t.getArgument(0);
+      json.beginObject().prop("foo", "bar").endObject();
+      return null;
+    })
+      .when(dataJsonWriter)
+      .writeTelemetryData(any(), any());
   }
 
 }

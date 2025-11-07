@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -21,6 +21,10 @@ package org.sonar.core.config;
 
 public final class AiCodeFixEnablementConstants {
   public static final String SUGGESTION_FEATURE_ENABLED_PROPERTY = "sonar.ai.suggestions.enabled";
+  public static final String SUGGESTION_PROVIDER_KEY_PROPERTY = "sonar.ai.suggestions.provider.key";
+  public static final String SUGGESTION_PROVIDER_MODEL_KEY_PROPERTY = "sonar.ai.suggestions.provider.modelKey";
+  public static final String SUGGESTION_PROVIDER_ENDPOINT_PROPERTY = "sonar.ai.suggestions.provider.endpoint";
+  public static final String SUGGESTION_PROVIDER_API_KEY_INTERNAL_PROPERTY = "sonar.ai.suggestions.provider.apiKey";
 
   private AiCodeFixEnablementConstants() {
   }

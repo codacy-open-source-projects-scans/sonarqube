@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -83,7 +83,7 @@ public class RunMapper {
 
   private List<NewAdHocRule> toNewAdHocRules(Run run, String driverName,
     Map<String, Result.Level> ruleSeveritiesByRuleId, Map<String, Result.Level> ruleSeveritiesByRuleIdForNewCCT) {
-    Set<ReportingDescriptor> driverRules = run.getTool().getDriver().getRules();
+    Set<ReportingDescriptor> driverRules = Optional.ofNullable(run.getTool().getDriver().getRules()).orElse(Set.of());
     Set<ReportingDescriptor> extensionRules = hasExtensions(run.getTool())
       ? run.getTool().getExtensions().stream().filter(RunMapper::hasRules).flatMap(extension -> extension.getRules().stream()).collect(toSet())
       : Set.of();

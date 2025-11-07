@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -191,9 +191,11 @@ public class ScmMediumIT {
     File xooScmFile = new File(baseDir, CHANGED_CONTENT_SCM_ON_SERVER_XOO + ".scm");
     FileUtils.write(xooScmFile,
       // revision,author,dateTime
-      "1,foo,2013-01-04\n" +
-        "1,bar,2013-01-04\n" +
-        "2,biz,2014-01-04\n",
+      """
+        1,foo,2013-01-04
+        1,bar,2013-01-04
+        2,biz,2014-01-04
+        """,
       StandardCharsets.UTF_8);
 
     File sameContentScmOnServer = new File(baseDir, SAME_CONTENT_SCM_ON_SERVER_XOO);
@@ -209,8 +211,10 @@ public class ScmMediumIT {
     xooScmFile = new File(baseDir, SAME_CONTENT_NO_SCM_ON_SERVER_XOO + ".scm");
     FileUtils.write(xooScmFile,
       // revision,author,dateTime
-      "1,foo,2013-01-04\n" +
-        "1,bar,2013-01-04\n",
+      """
+        1,foo,2013-01-04
+        1,bar,2013-01-04
+        """,
       StandardCharsets.UTF_8);
 
     tester.newAnalysis()
@@ -237,7 +241,7 @@ public class ScmMediumIT {
     assertThat(getChangesets(baseDir, NO_BLAME_SCM_ON_SERVER_XOO)).isNull();
 
     // 5 .xoo files + 3 .scm files, but only 4 marked for publishing. 1 file is SAME so not included in the total
-    assertThat(logTester.logs()).containsSubsequence("8 files indexed");
+    assertThat(logTester.logs()).anyMatch(s -> s.startsWith("8 files indexed (done) | time="));
     assertThat(logTester.logs()).containsSubsequence("SCM Publisher 4 source files to be analyzed");
     assertThat(logTester.logs().stream().anyMatch(s -> Pattern.matches("SCM Publisher 3/4 source files have been analyzed \\(done\\) \\| time=[0-9]+ms", s))).isTrue();
     assertThat(logTester.logs()).containsSubsequence(MISSING_BLAME_INFORMATION_FOR_THE_FOLLOWING_FILES, "  * src/no_blame_scm_on_server.xoo");
@@ -252,8 +256,10 @@ public class ScmMediumIT {
     File xooScmFile = new File(baseDir, SAME_CONTENT_SCM_ON_SERVER_XOO + ".scm");
     FileUtils.write(xooScmFile,
       // revision,author,dateTime
-      "1,foo,2013-01-04\n" +
-        "1,bar,2013-01-04\n",
+      """
+        1,foo,2013-01-04
+        1,bar,2013-01-04
+        """,
       StandardCharsets.UTF_8);
 
     AnalysisBuilder analysisBuilder = tester.newAnalysis()

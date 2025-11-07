@@ -38,6 +38,7 @@ dependencies {
   api project(':server:sonar-ce-task')
   api project(':server:sonar-server-common')
   api project(':sonar-core')
+  api project(':sonar-scanner-protocol')
 
   compileOnlyApi 'com.github.spotbugs:spotbugs-annotations'
 
@@ -56,7 +57,11 @@ dependencies {
   testImplementation testFixtures(project(':server:sonar-server-common'))
 
   testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine'
+  testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
   testRuntimeOnly 'org.junit.vintage:junit-vintage-engine'
+
+  testFixturesApi 'junit:junit'
+  testFixturesApi 'org.junit.jupiter:junit-jupiter-api'
 }
 
 test {

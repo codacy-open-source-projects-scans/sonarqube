@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -69,7 +69,7 @@ public class SafeModeMonitoringMetricAction implements MonitoringWsAction {
       throw new ForbiddenException("Insufficient privileges");
     }
 
-    String requestContentType = request.getHeaders().get("accept");
+    String requestContentType = request.header("accept").orElse(null);
     String contentType = TextFormat.chooseContentType(requestContentType);
 
     response.setHeader(HttpHeaders.CONTENT_TYPE, contentType);

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -202,5 +202,14 @@ public class ProjectsService extends BaseService {
         .setParam("projectVisibility", request.getProjectVisibility())
         .setMediaType(MediaTypes.JSON)
     ).content();
+  }
+
+  public void setContainsAiCode(String projectKey, boolean containsAiCode) {
+    call(
+      new PostRequest(path("set_contains_ai_code"))
+        .setParam("project", projectKey)
+        .setParam("contains_ai_code", containsAiCode)
+        .setMediaType(MediaTypes.JSON)
+      ).content();
   }
 }

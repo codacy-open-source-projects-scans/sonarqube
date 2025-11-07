@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -97,6 +97,11 @@ public class MetricRepositoryRule extends ExternalResource implements MetricRepo
     Metric res = metricsByKey.get(key);
     checkState(res != null, format("No Metric can be found for key %s", key));
     return res;
+  }
+
+  @Override
+  public Optional<Metric> getOptionalByKey(String key) {
+    return Optional.ofNullable(metricsByKey.get(key));
   }
 
   @Override

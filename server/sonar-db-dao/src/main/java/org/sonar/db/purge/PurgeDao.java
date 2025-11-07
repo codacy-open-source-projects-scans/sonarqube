@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -249,19 +249,20 @@ public class PurgeDao implements Dao {
   }
 
   private static void logProfiling(PurgeProfiler profiler, long start) {
-    if (!LOG.isDebugEnabled()) {
-      return;
+    if (LOG.isDebugEnabled()) {
+      long duration = System.currentTimeMillis() - start;
+      LOG.debug("");
+      LOG.atDebug()
+        .addArgument(() -> TimeUtils.formatDuration(duration))
+        .log(" -------- Profiling for project deletion: {} --------");
+      LOG.debug("");
+      for (String line : profiler.getProfilingResult(duration)) {
+        LOG.debug(line);
+      }
+      LOG.debug("");
+      LOG.debug(" -------- End of profiling for project deletion--------");
+      LOG.debug("");
     }
-    long duration = System.currentTimeMillis() - start;
-    LOG.debug("");
-    LOG.atDebug().setMessage(" -------- Profiling for project deletion: {} --------").addArgument(() -> TimeUtils.formatDuration(duration)).log();
-    LOG.debug("");
-    for (String line : profiler.getProfilingResult(duration)) {
-      LOG.debug(line);
-    }
-    LOG.debug("");
-    LOG.debug(" -------- End of profiling for project deletion--------");
-    LOG.debug("");
   }
 
   private static void deleteBranch(String branchUuid, PurgeCommands commands) {
@@ -277,8 +278,11 @@ public class PurgeDao implements Dao {
     commands.deleteApplicationBranchProjects(branchUuid);
     commands.deleteComponents(branchUuid);
     commands.deleteReportSchedules(branchUuid);
+    commands.deleteBranchInPortfolios(branchUuid);
     commands.deleteReportSubscriptions(branchUuid);
     commands.deleteIssuesFixed(branchUuid);
+    commands.deleteScaActivity(branchUuid);
+    commands.deleteArchitectureGraphs(branchUuid);
   }
 
   private static void deleteProject(String projectUuid, PurgeMapper mapper, PurgeCommands commands) {
@@ -311,6 +315,7 @@ public class PurgeDao implements Dao {
     commands.deleteOutdatedProperties(projectUuid);
     commands.deleteReportSchedules(projectUuid);
     commands.deleteReportSubscriptions(projectUuid);
+    commands.deleteScaLicenseProfiles(projectUuid);
   }
 
   /**

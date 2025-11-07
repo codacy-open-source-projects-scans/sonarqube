@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -24,4 +24,12 @@ public interface SonarQubeFeature {
   String getName();
 
   boolean isAvailable();
+
+  default boolean isEnabled() {
+    return isAvailable();
+  }
+
+  default void setEnabled(boolean enabled) {
+    throw new UnsupportedOperationException("This feature does not support enabling/disabling.");
+  }
 }

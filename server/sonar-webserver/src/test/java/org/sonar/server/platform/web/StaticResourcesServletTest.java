@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,10 +19,11 @@
  */
 package org.sonar.server.platform.web;
 
+import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletResponse;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.InetSocketAddress;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -31,11 +32,10 @@ import java.nio.charset.Charset;
 import java.util.Optional;
 import javax.annotation.CheckForNull;
 import javax.annotation.Nullable;
+import org.apache.catalina.Context;
 import org.apache.catalina.connector.ClientAbortException;
+import org.apache.catalina.startup.Tomcat;
 import org.apache.commons.io.IOUtils;
-import org.eclipse.jetty.server.Server;
-import org.eclipse.jetty.servlet.ServletContextHandler;
-import org.eclipse.jetty.servlet.ServletHolder;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -51,12 +51,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-public class StaticResourcesServletTest {
+class StaticResourcesServletTest {
 
   @RegisterExtension
   LogTesterJUnit5 logTester = new LogTesterJUnit5();
 
-  private Server jetty;
+  private Tomcat tomcat;
+  private int port;
 
   private final PluginRepository pluginRepository = mock(PluginRepository.class);
   private final CoreExtensionRepository coreExtensionRepository = mock(CoreExtensionRepository.class);
@@ -65,36 +66,44 @@ public class StaticResourcesServletTest {
   @BeforeEach
   void setUp() throws Exception {
     logTester.setLevel(Level.TRACE);
-    jetty = new Server(InetSocketAddress.createUnresolved("localhost", 0));
-    ServletContextHandler context = new ServletContextHandler(ServletContextHandler.SESSIONS);
-    context.setContextPath("/");
-    ServletHolder servletHolder = new ServletHolder(new StaticResourcesServlet(system));
-    context.addServlet(servletHolder, "/static/*");
-    jetty.setHandler(context);
-    jetty.start();
+    tomcat = new Tomcat();
+    tomcat.setPort(0); // Use an ephemeral port
+
+    String contextPath = "/";
+    String docBase = new File(".").getAbsolutePath();
+
+    Context context = tomcat.addContext(contextPath, docBase);
+
+    HttpServlet servlet = new StaticResourcesServlet(system);
+    String servletName = "staticResourcesServlet";
+    Tomcat.addServlet(context, servletName, servlet);
+    context.addServletMappingDecoded("/static/*", servletName);
+
+    tomcat.start();
+    port = tomcat.getConnector().getLocalPort();
   }
 
   @AfterEach
-  public void tearDown() throws Exception {
-    if (jetty != null) {
-      jetty.stop();
+  void tearDown() throws Exception {
+    if (tomcat != null) {
+      tomcat.stop();
     }
   }
 
   private HttpResponse<String> callAndStop(String path) throws Exception {
     HttpClient client = HttpClient.newHttpClient();
     HttpRequest request = HttpRequest.newBuilder()
-      .uri(jetty.getURI().resolve(URI.create(path)))
+      .uri(URI.create("http://localhost:" + port + path))
       .build();
 
     HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
 
-    jetty.stop();
+    tomcat.stop();
     return response;
   }
 
   @Test
-  public void return_content_if_exists_in_installed_plugin() throws Exception {
+  void return_content_if_exists_in_installed_plugin() throws Exception {
     system.pluginStream = IOUtils.toInputStream("bar", Charset.defaultCharset());
     when(pluginRepository.hasPlugin("myplugin")).thenReturn(true);
 
@@ -106,7 +115,7 @@ public class StaticResourcesServletTest {
   }
 
   @Test
-  public void return_content_of_folder_of_installed_plugin() throws Exception {
+  void return_content_of_folder_of_installed_plugin() throws Exception {
     system.pluginStream = IOUtils.toInputStream("bar", Charset.defaultCharset());
     when(pluginRepository.hasPlugin("myplugin")).thenReturn(true);
 
@@ -118,7 +127,7 @@ public class StaticResourcesServletTest {
   }
 
   @Test
-  public void return_content_of_folder_of_installed_core_extension() throws Exception {
+  void return_content_of_folder_of_installed_core_extension() throws Exception {
     system.coreExtensionStream = IOUtils.toInputStream("bar", Charset.defaultCharset());
     when(coreExtensionRepository.isInstalled("coreext")).thenReturn(true);
 
@@ -130,7 +139,7 @@ public class StaticResourcesServletTest {
   }
 
   @Test
-  public void return_content_of_folder_of_installed_core_extension_over_installed_plugin_in_case_of_key_conflict() throws Exception {
+  void return_content_of_folder_of_installed_core_extension_over_installed_plugin_in_case_of_key_conflict() throws Exception {
     system.coreExtensionStream = IOUtils.toInputStream("bar of plugin", Charset.defaultCharset());
     when(coreExtensionRepository.isInstalled("samekey")).thenReturn(true);
     system.coreExtensionStream = IOUtils.toInputStream("bar of core extension", Charset.defaultCharset());
@@ -145,7 +154,7 @@ public class StaticResourcesServletTest {
   }
 
   @Test
-  public void mime_type_is_set_on_response() throws Exception {
+  void mime_type_is_set_on_response() throws Exception {
     system.pluginStream = IOUtils.toInputStream("bar", Charset.defaultCharset());
     when(pluginRepository.hasPlugin("myplugin")).thenReturn(true);
 
@@ -157,7 +166,7 @@ public class StaticResourcesServletTest {
   }
 
   @Test
-  public void return_404_if_resource_not_found_in_installed_plugin() throws Exception {
+  void return_404_if_resource_not_found_in_installed_plugin() throws Exception {
     system.pluginStream = null;
     when(pluginRepository.hasPlugin("myplugin")).thenReturn(true);
 
@@ -168,7 +177,7 @@ public class StaticResourcesServletTest {
   }
 
   @Test
-  public void return_404_if_plugin_does_not_exist() throws Exception {
+  void return_404_if_plugin_does_not_exist() throws Exception {
     system.pluginStream = null;
     when(pluginRepository.hasPlugin("myplugin")).thenReturn(false);
 
@@ -179,7 +188,7 @@ public class StaticResourcesServletTest {
   }
 
   @Test
-  public void return_resource_if_exists_in_requested_plugin() throws Exception {
+  void return_resource_if_exists_in_requested_plugin() throws Exception {
     system.pluginStream = IOUtils.toInputStream("bar", Charset.defaultCharset());
     when(pluginRepository.hasPlugin("myplugin")).thenReturn(true);
     when(pluginRepository.getPluginInfo("myplugin")).thenReturn(new PluginInfo("myplugin"));
@@ -192,7 +201,7 @@ public class StaticResourcesServletTest {
   }
 
   @Test
-  public void do_not_fail_nor_log_ERROR_when_response_is_already_committed_and_plugin_does_not_exist() throws Exception {
+  void do_not_fail_nor_log_ERROR_when_response_is_already_committed_and_plugin_does_not_exist() throws Exception {
     system.pluginStream = null;
     system.isCommitted = true;
     when(pluginRepository.hasPlugin("myplugin")).thenReturn(false);
@@ -205,7 +214,7 @@ public class StaticResourcesServletTest {
   }
 
   @Test
-  public void do_not_fail_nor_log_ERROR_when_sendError_throws_IOException_and_plugin_does_not_exist() throws Exception {
+  void do_not_fail_nor_log_ERROR_when_sendError_throws_IOException_and_plugin_does_not_exist() throws Exception {
     system.sendErrorException = new IOException("Simulating sendError throwing IOException");
     when(pluginRepository.hasPlugin("myplugin")).thenReturn(false);
 
@@ -217,7 +226,7 @@ public class StaticResourcesServletTest {
   }
 
   @Test
-  public void do_not_fail_nor_log_ERROR_when_response_is_already_committed_and_resource_does_not_exist_in_installed_plugin() throws Exception {
+  void do_not_fail_nor_log_ERROR_when_response_is_already_committed_and_resource_does_not_exist_in_installed_plugin() throws Exception {
     system.isCommitted = true;
     system.pluginStream = null;
     when(pluginRepository.hasPlugin("myplugin")).thenReturn(true);
@@ -230,7 +239,7 @@ public class StaticResourcesServletTest {
   }
 
   @Test
-  public void do_not_fail_nor_log_not_attempt_to_send_error_if_ClientAbortException_is_raised() throws Exception {
+  void do_not_fail_nor_log_not_attempt_to_send_error_if_ClientAbortException_is_raised() throws Exception {
     system.pluginStreamException = new ClientAbortException("Simulating ClientAbortException");
     when(pluginRepository.hasPlugin("myplugin")).thenReturn(true);
 
@@ -243,7 +252,7 @@ public class StaticResourcesServletTest {
   }
 
   @Test
-  public void do_not_fail_when_response_is_committed_after_other_error() throws Exception {
+  void do_not_fail_when_response_is_committed_after_other_error() throws Exception {
     system.isCommitted = true;
     system.pluginStreamException = new RuntimeException("Simulating a error");
     when(pluginRepository.hasPlugin("myplugin")).thenReturn(true);

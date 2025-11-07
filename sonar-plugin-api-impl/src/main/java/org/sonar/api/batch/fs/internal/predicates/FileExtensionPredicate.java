@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -58,5 +58,10 @@ public class FileExtensionPredicate extends AbstractFilePredicate {
 
   private static String lowercase(String extension) {
     return extension.toLowerCase(Locale.ENGLISH);
+  }
+
+  @Override
+  public int priority() {
+    return USE_INDEX;
   }
 }

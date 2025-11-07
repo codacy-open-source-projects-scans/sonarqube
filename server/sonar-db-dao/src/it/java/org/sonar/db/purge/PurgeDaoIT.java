@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -29,7 +29,9 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Random;
 import java.util.Set;
@@ -44,7 +46,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.slf4j.event.Level;
 import org.sonar.api.issue.Issue;
-import org.sonar.db.component.ComponentQualifiers;
 import org.sonar.api.testfixtures.log.LogAndArguments;
 import org.sonar.api.testfixtures.log.LogTesterJUnit5;
 import org.sonar.api.utils.System2;
@@ -67,6 +68,7 @@ import org.sonar.db.component.BranchDto;
 import org.sonar.db.component.BranchType;
 import org.sonar.db.component.ComponentDbTester;
 import org.sonar.db.component.ComponentDto;
+import org.sonar.db.component.ComponentQualifiers;
 import org.sonar.db.component.ComponentTesting;
 import org.sonar.db.component.ProjectData;
 import org.sonar.db.component.SnapshotDto;
@@ -83,6 +85,7 @@ import org.sonar.db.measure.ProjectMeasureDto;
 import org.sonar.db.metric.MetricDto;
 import org.sonar.db.newcodeperiod.NewCodePeriodDto;
 import org.sonar.db.newcodeperiod.NewCodePeriodType;
+import org.sonar.db.portfolio.PortfolioDto;
 import org.sonar.db.portfolio.PortfolioProjectDto;
 import org.sonar.db.project.ProjectDto;
 import org.sonar.db.property.PropertyDto;
@@ -119,6 +122,7 @@ import static org.sonar.db.component.SnapshotTesting.newSnapshot;
 import static org.sonar.db.event.EventDto.CATEGORY_SQ_UPGRADE;
 import static org.sonar.db.event.EventDto.CATEGORY_VERSION;
 import static org.sonar.db.issue.IssueTesting.newCodeReferenceIssue;
+import static org.sonar.db.portfolio.PortfolioDto.SelectionMode.MANUAL;
 import static org.sonar.db.webhook.WebhookDeliveryTesting.newDto;
 import static org.sonar.db.webhook.WebhookDeliveryTesting.selectAllDeliveryUuids;
 
@@ -136,6 +140,7 @@ class PurgeDaoIT {
   private final LogTesterJUnit5 logTester = new LogTesterJUnit5();
   private final DbClient dbClient = db.getDbClient();
   private final DbSession dbSession = db.getSession();
+
   private final PurgeDao underTest = db.getDbClient().purgeDao();
 
   @Test
@@ -1262,6 +1267,31 @@ project.getProjectDto().getKey());
   }
 
   @Test
+  void delete_portfolio_branch_when_deleting_branch() {
+    ComponentDto root = db.components()
+      .insertPrivatePortfolio(component -> component.setKey("ROOT"), portfolio -> portfolio.setSelectionMode(MANUAL));
+    PortfolioDto rootPortfolio = db.components().getPortfolioDto(root);
+    var project1 = db.components().insertPrivateProject(project -> project.setKey("project:one").setName("Project One")).getProjectDto();
+
+    db.components().addPortfolioProject(rootPortfolio, project1);
+    BranchDto mainBranch = db.getDbClient().branchDao().selectMainBranchByProjectUuid(db.getSession(), project1.getUuid()).orElseThrow();
+    db.components().addPortfolioProjectBranch(rootPortfolio, project1, mainBranch.getUuid());
+
+    var featureBranch = db.components().insertProjectBranch(project1, b -> b.setKey("feature-branch"));
+    db.components().addPortfolioProjectBranch(rootPortfolio, project1, featureBranch.getUuid());
+    db.commit();
+
+    db.getDbClient().portfolioDao().selectPortfolioProjects(dbSession, rootPortfolio.getUuid())
+      .forEach(pp -> assertThat(pp.getBranchUuids()).containsExactlyInAnyOrder(featureBranch.getUuid(), mainBranch.getUuid()));
+
+    underTest.deleteBranch(dbSession, featureBranch.getUuid());
+    dbSession.commit();
+
+    db.getDbClient().portfolioDao().selectPortfolioProjects(dbSession, rootPortfolio.getUuid())
+      .forEach(pp -> assertThat(pp.getBranchUuids()).containsOnly(mainBranch.getUuid()));
+  }
+
+  @Test
   void delete_view_and_child() {
     ComponentDto project = db.components().insertPrivateProject().getMainBranchComponent();
     ComponentDto view = db.components().insertPrivatePortfolio();
@@ -1958,6 +1988,128 @@ oldCreationDate));
     assertThat(uuidsIn("project_branches")).containsOnly(branch.getUuid());
     assertThat(uuidsIn("projects")).containsOnly("uuid");
 
+  }
+
+  private <K, V> Map<K, V> merge(Map<? extends K, ? extends V> map1, Map<? extends K, ? extends V> map2) {
+    Map<K, V> result = new HashMap<>(map1);
+    result.putAll(map2);
+    return result;
+  }
+
+  // the SCA mappers are in an extension, so we have to use direct sql here.
+  // A cleaner approach would be to allow extensions to add purge logic on branch
+  // deletion and remove SCA knowledge from the core PurgeMapper.
+  private void insertScaData(String branch1Uuid, String branch2Uuid) {
+    var releaseBase = Map.of("package_url", "purl1",
+      "package_manager", "MAVEN",
+      "package_name", "whatever",
+      "version", "1.0",
+      "license_expression", "MIT",
+      "known", true,
+      "known_package", true,
+      "is_new", false,
+      "created_at", 0L, "updated_at", 0L);
+    db.executeInsert("sca_releases", merge(releaseBase, Map.of("uuid", "release-uuid1", "component_uuid", branch1Uuid)));
+    db.executeInsert("sca_releases", merge(releaseBase, Map.of("uuid", "release-uuid2", "component_uuid", branch2Uuid)));
+    assertThat(db.countRowsOfTable(dbSession, "sca_releases")).isEqualTo(2);
+
+    var dependencyBase = Map.of("created_at", 0L, "updated_at", 0L,
+      "direct", true, "scope", "compile", "is_new", true);
+    db.executeInsert("sca_dependencies", merge(dependencyBase, Map.of("uuid", "dependency-uuid1", "sca_release_uuid", "release-uuid1")));
+    db.executeInsert("sca_dependencies", merge(dependencyBase, Map.of("uuid", "dependency-uuid2", "sca_release_uuid", "release-uuid2")));
+    assertThat(db.countRowsOfTable(dbSession, "sca_dependencies")).isEqualTo(2);
+
+    // the issue uuids here don't even exist but doesn't matter, we don't delete issues so not testing that
+    var issueReleaseBase = Map.of("created_at", 0L, "updated_at", 0L,
+      "severity", "INFO", "original_severity", "INFO", "manual_severity", false,
+      "severity_sort_key", 42, "status", "TO_REVIEW");
+    db.executeInsert("sca_issues_releases", merge(issueReleaseBase, Map.of("uuid", "issue-release-uuid1",
+      "sca_issue_uuid", "issue-uuid1", "sca_release_uuid", "release-uuid1")));
+    db.executeInsert("sca_issues_releases", merge(issueReleaseBase, Map.of("uuid", "issue-release-uuid2",
+      "sca_issue_uuid", "issue-uuid2", "sca_release_uuid", "release-uuid2")));
+
+    assertThat(db.countRowsOfTable(dbSession, "sca_issues_releases")).isEqualTo(2);
+
+    var issueReleaseChangeBase = Map.of("created_at", 0L, "updated_at", 0L);
+    db.executeInsert("sca_issue_rels_changes", merge(issueReleaseChangeBase, Map.of("uuid", "issue-release-change-uuid1",
+      "sca_issues_releases_uuid", "issue-release-uuid1")));
+    db.executeInsert("sca_issue_rels_changes", merge(issueReleaseChangeBase, Map.of("uuid", "issue-release-change-uuid2",
+      "sca_issues_releases_uuid", "issue-release-uuid2")));
+
+    assertThat(db.countRowsOfTable(dbSession, "sca_issue_rels_changes")).isEqualTo(2);
+
+    var analysisBase = Map.of(
+      "created_at", 0L,
+      "updated_at", 0L,
+      "status", "COMPLETED",
+      "errors", "[]",
+      "parsed_files", "[]",
+      "failed_reason", "something");
+    db.executeInsert("sca_analyses", merge(analysisBase, Map.of(
+      "uuid", "analysis-uuid1",
+      "component_uuid", branch1Uuid)));
+    db.executeInsert("sca_analyses", merge(analysisBase, Map.of(
+      "uuid", "analysis-uuid2",
+      "component_uuid", branch2Uuid)));
+    assertThat(db.countRowsOfTable(dbSession, "sca_analyses")).isEqualTo(2);
+  }
+
+  @Test
+  void deleteBranch_purgesScaActivity() {
+    ProjectDto project = db.components().insertPublicProject().getProjectDto();
+    BranchDto branch1 = db.components().insertProjectBranch(project);
+    BranchDto branch2 = db.components().insertProjectBranch(project);
+
+    insertScaData(branch1.getUuid(), branch2.getUuid());
+
+    underTest.deleteBranch(dbSession, branch1.getUuid());
+
+    assertThat(db.countRowsOfTable(dbSession, "sca_releases")).isEqualTo(1);
+    assertThat(db.countRowsOfTable(dbSession, "sca_dependencies")).isEqualTo(1);
+    assertThat(db.countRowsOfTable(dbSession, "sca_issues_releases")).isEqualTo(1);
+    assertThat(db.countRowsOfTable(dbSession, "sca_issue_rels_changes")).isEqualTo(1);
+    assertThat(db.countRowsOfTable(dbSession, "sca_analyses")).isEqualTo(1);
+  }
+
+  @Test
+  void deleteProject_purgesScaLicenseProfiles() {
+    ProjectDto project = db.components().insertPublicProject().getProjectDto();
+
+    var scaLicenseProfileProjectBase = Map.of(
+      "sca_license_profile_uuid", "sca-license-profile-uuid1",
+      "created_at", 0L,
+      "updated_at", 0L);
+
+    db.executeInsert("sca_lic_prof_projects", merge(scaLicenseProfileProjectBase, Map.of(
+      "uuid", "sca-lic-prof-project-uuid1",
+      "project_uuid", project.getUuid())));
+
+    db.executeInsert("sca_lic_prof_projects", merge(scaLicenseProfileProjectBase, Map.of(
+      "uuid", "sca-lic-prof-project-uuid2",
+      "project_uuid", "other-project-uuid")));
+
+    assertThat(db.countRowsOfTable(dbSession, "sca_lic_prof_projects")).isEqualTo(2);
+
+    underTest.deleteProject(dbSession, project.getUuid(), project.getQualifier(), project.getName(), project.getKey());
+
+    assertThat(db.countRowsOfTable(dbSession, "sca_lic_prof_projects")).isEqualTo(1);
+  }
+
+  @Test
+  void whenDeleteBranch_thenPurgeArchitectureGraphs() {
+    ProjectDto project = db.components().insertPublicProject().getProjectDto();
+    BranchDto branch1 = db.components().insertProjectBranch(project);
+    BranchDto branch2 = db.components().insertProjectBranch(project);
+
+    db.executeInsert("architecture_graphs", Map.of("uuid", "12345", "branch_uuid", branch1.getUuid(), "ecosystem", "xoo", "type", "file_graph", "graph_data", "{}"));
+    db.executeInsert("architecture_graphs", Map.of("uuid", "123456", "branch_uuid", branch1.getUuid(), "ecosystem", "xoo", "type", "class_graph", "graph_data", "{}"));
+    db.executeInsert("architecture_graphs", Map.of("uuid", "1234567", "branch_uuid", branch2.getUuid(), "ecosystem", "xoo", "type", "file_graph", "graph_data", "{}"));
+
+    assertThat(db.countRowsOfTable(dbSession, "architecture_graphs")).isEqualTo(3);
+    underTest.deleteBranch(dbSession, branch1.getUuid());
+    assertThat(db.countRowsOfTable(dbSession, "architecture_graphs")).isEqualTo(1);
+    underTest.deleteBranch(dbSession, branch2.getUuid());
+    assertThat(db.countRowsOfTable(dbSession, "architecture_graphs")).isZero();
   }
 
   private AnticipatedTransitionDto getAnticipatedTransitionsDto(String uuid, String projectUuid, Date creationDate) {

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -40,5 +40,13 @@ public interface ComponentIssuesRepository {
    * @throws IllegalArgumentException if the component is not the component that contains current issues.
    */
   List<DefaultIssue> getIssues(Component component);
+
+  /**
+   * Return issues from the component, excluding issues in sandbox status
+   *
+   * @throws IllegalStateException if no issues have been set
+   * @throws IllegalArgumentException if the component is not the component that contains current issues.
+   */
+  List<DefaultIssue> getNotSandboxedIssues(Component component);
 
 }

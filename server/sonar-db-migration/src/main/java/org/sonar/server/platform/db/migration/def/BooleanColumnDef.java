@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -30,7 +30,7 @@ import org.sonar.db.dialect.PostgreSql;
 import static org.sonar.server.platform.db.migration.def.Validations.validateColumnName;
 
 /**
- * Used to define VARCHAR column
+ * Used to define BOOLEAN column
  */
 @Immutable
 public class BooleanColumnDef extends AbstractColumnDef {

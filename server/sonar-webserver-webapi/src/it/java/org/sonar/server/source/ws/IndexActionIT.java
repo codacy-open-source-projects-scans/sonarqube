@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -37,8 +37,8 @@ import org.sonar.server.ws.TestResponse;
 import org.sonar.server.ws.WsActionTester;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.sonar.api.web.UserRole.CODEVIEWER;
-import static org.sonar.api.web.UserRole.USER;
+import static org.sonar.db.permission.ProjectPermission.CODEVIEWER;
+import static org.sonar.db.permission.ProjectPermission.USER;
 import static org.sonar.db.component.ComponentTesting.newFileDto;
 import static org.sonar.test.JsonAssert.assertJson;
 
@@ -63,12 +63,13 @@ public class IndexActionIT {
       .setParam("resource", file.getKey())
       .execute();
 
-    assertJson(request.getInput()).isSimilarTo("[\n" +
-      "  {\n" +
-      "    \"1\": \"public class HelloWorld {\",\n" +
-      "    \"2\": \"}\"\n" +
-      "  }\n" +
-      "]");
+    assertJson(request.getInput()).isSimilarTo("""
+      [
+        {
+          "1": "public class HelloWorld {",
+          "2": "}"
+        }
+      ]""");
   }
 
   @Test
@@ -84,12 +85,13 @@ public class IndexActionIT {
       .setParam("to", "5")
       .execute();
 
-    assertJson(request.getInput()).isSimilarTo("[\n" +
-      "  {\n" +
-      "    \"3\": \"public class HelloWorld {\",\n" +
-      "    \"4\": \"}\"\n" +
-      "  }\n" +
-      "]");
+    assertJson(request.getInput()).isSimilarTo("""
+      [
+        {
+          "3": "public class HelloWorld {",
+          "4": "}"
+        }
+      ]""");
   }
 
   @Test
@@ -101,7 +103,7 @@ public class IndexActionIT {
     assertThatThrownBy(() -> tester.newRequest()
       .setParam("resource", file.getKey())
       .execute())
-      .isInstanceOf(ForbiddenException.class);
+        .isInstanceOf(ForbiddenException.class);
   }
 
   @Test
@@ -109,7 +111,7 @@ public class IndexActionIT {
     assertThatThrownBy(() -> tester.newRequest()
       .setParam("resource", "unknown")
       .execute())
-      .isInstanceOf(NotFoundException.class);
+        .isInstanceOf(NotFoundException.class);
   }
 
   private static DbFileSources.Data newData(String... lines) {

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -59,7 +59,7 @@ public enum GlobalPermission {
         return p;
       }
     }
-    throw new IllegalArgumentException("Unsupported permission: " + key);
+    throw new IllegalArgumentException("Unsupported global permission: " + key);
   }
 
   public static boolean contains(String key) {

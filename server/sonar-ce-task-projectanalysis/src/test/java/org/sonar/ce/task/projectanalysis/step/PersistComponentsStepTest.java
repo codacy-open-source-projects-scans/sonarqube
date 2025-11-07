@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -24,7 +24,6 @@ import org.sonar.api.utils.System2;
 import org.sonar.ce.task.projectanalysis.component.BranchPersister;
 import org.sonar.ce.task.projectanalysis.component.Component;
 import org.sonar.ce.task.projectanalysis.component.MutableDisabledComponentsHolder;
-import org.sonar.ce.task.projectanalysis.dependency.ProjectDependenciesHolder;
 import org.sonar.ce.task.projectanalysis.component.ProjectPersister;
 import org.sonar.ce.task.projectanalysis.component.TreeRootHolder;
 import org.sonar.ce.task.step.TestComputationStepContext;
@@ -61,8 +60,7 @@ public class PersistComponentsStepTest {
       System2.INSTANCE,
       mock(MutableDisabledComponentsHolder.class),
       mock(BranchPersister.class),
-      mock(ProjectPersister.class),
-      mock(ProjectDependenciesHolder.class));
+      mock(ProjectPersister.class));
 
     var context = new TestComputationStepContext();
     assertThatThrownBy(() -> underTest.execute(context))

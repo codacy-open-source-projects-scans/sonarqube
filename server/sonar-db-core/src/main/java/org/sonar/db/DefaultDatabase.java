@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -30,7 +30,6 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import javax.sql.DataSource;
-import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.sonar.api.config.internal.Settings;
@@ -43,6 +42,7 @@ import org.sonar.process.logging.LogbackHelper;
 
 import static com.google.common.base.Preconditions.checkState;
 import static java.lang.String.format;
+import static org.apache.commons.lang3.Strings.CS;
 import static org.sonar.process.ProcessProperties.Property.JDBC_EMBEDDED_PORT;
 import static org.sonar.process.ProcessProperties.Property.JDBC_MAX_IDLE_TIMEOUT;
 import static org.sonar.process.ProcessProperties.Property.JDBC_MAX_KEEP_ALIVE_TIME;
@@ -96,8 +96,7 @@ public class DefaultDatabase implements Database {
     JDBC_MAX_LIFETIME.getKey(),
     "sonar.jdbc.leakDetectionThreshold",
     JDBC_MAX_KEEP_ALIVE_TIME.getKey(),
-    JDBC_MAX_IDLE_TIMEOUT.getKey()
-  );
+    JDBC_MAX_IDLE_TIMEOUT.getKey());
 
   private static final Map<String, String> SONAR_JDBC_TO_HIKARI_PROPERTY_MAPPINGS = Map.of(
     JDBC_USERNAME.getKey(), "dataSource.user",
@@ -144,7 +143,9 @@ public class DefaultDatabase implements Database {
   }
 
   private void initDataSource() {
-    LOG.info("Create JDBC data source for {}", properties.getProperty(JDBC_URL.getKey(), DEFAULT_URL));
+    LOG.atInfo()
+      .addArgument(() -> properties.getProperty(JDBC_URL.getKey(), DEFAULT_URL))
+      .log("Create JDBC data source for {}");
     HikariDataSource ds = createHikariDataSource();
     datasource = new ProfiledDataSource(ds, NullConnectionInterceptor.INSTANCE);
     enableSqlLogging(datasource, logbackHelper.getLoggerLevel("sql") == Level.TRACE);
@@ -227,7 +228,7 @@ public class DefaultDatabase implements Database {
         }
         continue;
       }
-      if (StringUtils.startsWith(key, SONAR_JDBC)) {
+      if (CS.startsWith(key, SONAR_JDBC)) {
         String resolvedKey = toHikariPropertyKey(key);
         String existingValue = (String) result.setProperty(resolvedKey, (String) entry.getValue());
         checkState(existingValue == null || existingValue.equals(entry.getValue()),
@@ -249,7 +250,7 @@ public class DefaultDatabase implements Database {
       return SONAR_JDBC_TO_HIKARI_PROPERTY_MAPPINGS.get(key);
     }
 
-    return StringUtils.removeStart(key, SONAR_JDBC);
+    return CS.removeStart(key, SONAR_JDBC);
   }
 
   @Override

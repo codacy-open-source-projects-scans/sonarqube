@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -23,7 +23,7 @@ import javax.annotation.Nullable;
 import org.sonar.api.server.ws.Request;
 import org.sonar.api.server.ws.Response;
 import org.sonar.api.server.ws.WebService;
-import org.sonar.api.web.UserRole;
+import org.sonar.db.permission.ProjectPermission;
 import org.sonar.core.documentation.DocumentationLinkGenerator;
 import org.sonar.core.platform.EditionProvider;
 import org.sonar.core.platform.PlatformEditionProvider;
@@ -32,13 +32,13 @@ import org.sonar.db.DbSession;
 import org.sonar.db.component.BranchDto;
 import org.sonar.db.newcodeperiod.NewCodePeriodDao;
 import org.sonar.db.project.ProjectDto;
+import org.sonar.server.common.newcodeperiod.CaycUtils;
 import org.sonar.server.component.ComponentFinder;
 import org.sonar.server.exceptions.NotFoundException;
-import org.sonar.server.common.newcodeperiod.CaycUtils;
 import org.sonar.server.user.UserSession;
 
 import static java.lang.String.format;
-import static org.sonar.server.ws.WsUtils.createHtmlExternalLink;
+import static org.sonar.server.newcodeperiod.ws.NewCodePeriodsWsUtils.createNewCodePeriodHtmlLink;
 
 public class UnsetAction implements NewCodePeriodsWsAction {
   private static final String BRANCH = "branch";
@@ -52,7 +52,7 @@ public class UnsetAction implements NewCodePeriodsWsAction {
   private final ComponentFinder componentFinder;
   private final PlatformEditionProvider editionProvider;
   private final NewCodePeriodDao newCodePeriodDao;
-  private final String newCodeDefinitionDocumentationUrl;
+  private final DocumentationLinkGenerator documentationLinkGenerator;
 
   public UnsetAction(DbClient dbClient, UserSession userSession, ComponentFinder componentFinder,
     PlatformEditionProvider editionProvider, NewCodePeriodDao newCodePeriodDao, DocumentationLinkGenerator documentationLinkGenerator) {
@@ -61,14 +61,14 @@ public class UnsetAction implements NewCodePeriodsWsAction {
     this.componentFinder = componentFinder;
     this.editionProvider = editionProvider;
     this.newCodePeriodDao = newCodePeriodDao;
-    this.newCodeDefinitionDocumentationUrl = documentationLinkGenerator.getDocumentationLink("/project-administration/clean-as-you-code-settings/defining-new-code/");
+    this.documentationLinkGenerator = documentationLinkGenerator;
   }
 
   @Override
   public void define(WebService.NewController context) {
     WebService.NewAction action = context.createAction("unset")
       .setPost(true)
-      .setDescription("Unsets the " + createHtmlExternalLink(newCodeDefinitionDocumentationUrl, "new code definition") +
+      .setDescription("Unsets the " + createNewCodePeriodHtmlLink(documentationLinkGenerator) +
         " for a branch, project or global. It requires the inherited New Code Definition to be compatible with the Clean as You Code methodology, " +
         "and one of the following permissions: " +
         "<ul>" +
@@ -102,7 +102,7 @@ public class UnsetAction implements NewCodePeriodsWsAction {
 
       if (projectKey != null) {
         ProjectDto project = getProject(dbSession, projectKey);
-        userSession.checkEntityPermission(UserRole.ADMIN, project);
+        userSession.checkEntityPermission(ProjectPermission.ADMIN, project);
         projectUuid = project.getUuid();
 
         if (branchKey != null) {

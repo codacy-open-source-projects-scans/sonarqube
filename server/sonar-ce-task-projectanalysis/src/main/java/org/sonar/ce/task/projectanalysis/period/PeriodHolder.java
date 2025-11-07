@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -50,5 +50,11 @@ public interface PeriodHolder {
    * @throws IllegalStateException if there is no period
    */
   Period getPeriod();
+
+  /**
+   * Retrieve the context from which this period is coming from. For example, it can be coming from a scanner parameter, a global setting, etc.
+   * See {@link PeriodOrigin} for the possible values.
+   */
+  PeriodOrigin getPeriodOrigin();
 
 }

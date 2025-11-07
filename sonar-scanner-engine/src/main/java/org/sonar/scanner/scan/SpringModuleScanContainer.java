@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -54,7 +54,6 @@ public class SpringModuleScanContainer extends SpringComponentContainer {
     add(
       module.definition(),
       module,
-      MutableModuleSettings.class,
       SonarGlobalPropertiesFilter.class,
       ModuleConfigurationProvider.class,
 
@@ -68,8 +67,7 @@ public class SpringModuleScanContainer extends SpringComponentContainer {
       ModuleSensorOptimizer.class,
 
       ModuleSensorContext.class,
-      ModuleSensorExtensionDictionary.class
-    );
+      ModuleSensorExtensionDictionary.class);
   }
 
   private void addExtensions() {

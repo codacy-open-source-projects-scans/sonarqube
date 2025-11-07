@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -30,7 +30,6 @@ import org.sonar.api.server.authentication.UnauthorizedException;
 import org.sonar.api.server.authentication.UserIdentity;
 import org.sonar.api.server.http.HttpRequest;
 import org.sonar.auth.github.GithubBinding.Permissions;
-import org.sonar.auth.github.client.GithubApplicationClient;
 import org.sonar.auth.github.scribe.ScribeServiceBuilder;
 import org.sonar.db.DbClient;
 import org.sonar.server.property.InternalProperties;
@@ -234,8 +233,7 @@ public class GitHubIdentityProviderTest {
 
     OAuth2AccessToken accessToken = mockAccessToken(scribeService, context, httpRequest, user);
 
-    when(gitHubRestClient.isOrganizationMember(scribeService, accessToken, "organization1", "login")).thenReturn(false);
-    when(gitHubRestClient.isOrganizationMember(scribeService, accessToken, "organization2", "login")).thenReturn(true);
+    when(gitHubRestClient.getUserOrganizations(scribeService, accessToken)).thenReturn(List.of(new GsonOrganization("organization2")));
 
     when(userIdentityFactory.create(user, "email", null)).thenReturn(userIdentity);
     return context;
@@ -250,8 +248,7 @@ public class GitHubIdentityProviderTest {
 
     OAuth2AccessToken accessToken = mockAccessToken(scribeService, context, httpRequest, user);
 
-    when(gitHubRestClient.isOrganizationMember(scribeService, accessToken, "organization1", "login")).thenReturn(false);
-    when(gitHubRestClient.isOrganizationMember(scribeService, accessToken, "organization2", "login")).thenReturn(false);
+    when(gitHubRestClient.getUserOrganizations(scribeService, accessToken)).thenReturn(List.of(new GsonOrganization("organization3")));
 
     when(userIdentityFactory.create(user, "email", null)).thenReturn(userIdentity);
     return context;

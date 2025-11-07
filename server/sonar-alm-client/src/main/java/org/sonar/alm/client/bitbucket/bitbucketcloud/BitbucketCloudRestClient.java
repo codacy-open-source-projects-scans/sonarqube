@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -22,12 +22,12 @@ package org.sonar.alm.client.bitbucket.bitbucketcloud;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonParseException;
+import jakarta.inject.Inject;
 import java.io.IOException;
 import java.util.Objects;
 import java.util.function.Function;
 import java.util.function.UnaryOperator;
 import javax.annotation.Nullable;
-import jakarta.inject.Inject;
 import okhttp3.Credentials;
 import okhttp3.FormBody;
 import okhttp3.HttpUrl;
@@ -37,12 +37,12 @@ import okhttp3.Request;
 import okhttp3.RequestBody;
 import okhttp3.Response;
 import okhttp3.ResponseBody;
-import org.sonar.api.server.ServerSide;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.sonar.api.server.ServerSide;
 import org.sonar.server.exceptions.NotFoundException;
 
-import static org.apache.commons.lang3.StringUtils.removeEnd;
+import static org.apache.commons.lang3.Strings.CS;
 
 @ServerSide
 public class BitbucketCloudRestClient {
@@ -67,7 +67,6 @@ public class BitbucketCloudRestClient {
   private final String bitbucketCloudEndpoint;
   private final String accessTokenEndpoint;
 
-
   @Inject
   public BitbucketCloudRestClient(OkHttpClient bitBucketCloudHttpClient) {
     this(bitBucketCloudHttpClient, ENDPOINT, ACCESS_TOKEN_ENDPOINT);
@@ -86,7 +85,10 @@ public class BitbucketCloudRestClient {
     Token token = validateAccessToken(clientId, clientSecret);
 
     if (token.getScopes() == null || !token.getScopes().contains("pullrequest")) {
-      LOG.info(MISSING_PULL_REQUEST_READ_PERMISSION + String.format(SCOPE, token.getScopes()));
+      LOG.atInfo()
+        .addArgument(MISSING_PULL_REQUEST_READ_PERMISSION)
+        .addArgument(() -> String.format(SCOPE, token.getScopes()))
+        .log("{}{}");
       throw new IllegalArgumentException(ERROR_BBC_SERVERS + ": " + MISSING_PULL_REQUEST_READ_PERMISSION);
     }
 
@@ -115,9 +117,9 @@ public class BitbucketCloudRestClient {
         return buildGson().fromJson(response.body().charStream(), Token.class);
       }
 
-      ErrorDetails errorMsg = getTokenError(response.body());
+      ErrorDetails errorMsg = getTokenError(response.body(), response.message());
       if (errorMsg.body != null) {
-        LOG.info(String.format(BBC_FAIL_WITH_RESPONSE, response.request().url(), response.code(), errorMsg.body));
+        LOG.atInfo().log(() -> String.format(BBC_FAIL_WITH_RESPONSE, response.request().url(), response.code(), errorMsg.body));
         switch (errorMsg.body) {
           case "invalid_grant":
             throw new IllegalArgumentException(UNABLE_TO_CONTACT_BBC_SERVERS + ": " + OAUTH_CONSUMER_NOT_PRIVATE);
@@ -131,7 +133,7 @@ public class BitbucketCloudRestClient {
             }
         }
       } else {
-        LOG.info(String.format(BBC_FAIL_WITH_RESPONSE, response.request().url(), response.code(), response.message()));
+        LOG.atInfo().log(() -> String.format(BBC_FAIL_WITH_RESPONSE, response.request().url(), response.code(), response.message()));
       }
       throw new IllegalArgumentException(UNABLE_TO_CONTACT_BBC_SERVERS);
 
@@ -167,7 +169,7 @@ public class BitbucketCloudRestClient {
   }
 
   protected HttpUrl buildUrl(String relativeUrl) {
-    return HttpUrl.parse(removeEnd(bitbucketCloudEndpoint, "/") + "/" + VERSION + relativeUrl);
+    return HttpUrl.parse(CS.removeEnd(bitbucketCloudEndpoint, "/") + "/" + VERSION + relativeUrl);
   }
 
   protected <G> G doGet(String accessToken, HttpUrl url, Function<Response, G> handler) {
@@ -193,8 +195,8 @@ public class BitbucketCloudRestClient {
   }
 
   private static void handleError(Response response) throws IOException {
-    ErrorDetails error = getError(response.body());
-    LOG.info(String.format(BBC_FAIL_WITH_RESPONSE, response.request().url(), response.code(), error.body));
+    ErrorDetails error = getError(response.body(), response.message());
+    LOG.atInfo().log(() -> String.format(BBC_FAIL_WITH_RESPONSE, response.request().url(), response.code(), error.body));
     if (error.parsedErrorMsg != null) {
       throw new IllegalStateException(ERROR_BBC_SERVERS + ": " + error.parsedErrorMsg);
     } else {
@@ -202,8 +204,8 @@ public class BitbucketCloudRestClient {
     }
   }
 
-  private static ErrorDetails getError(@Nullable ResponseBody body) throws IOException {
-    return getErrorDetails(body, s -> {
+  private static ErrorDetails getError(@Nullable ResponseBody body, @Nullable String fallbackMessage) throws IOException {
+    return getErrorDetails(body, fallbackMessage, s -> {
       Error gsonError = buildGson().fromJson(s, Error.class);
       if (gsonError != null && gsonError.errorMsg != null && gsonError.errorMsg.message != null) {
         return gsonError.errorMsg.message;
@@ -212,11 +214,14 @@ public class BitbucketCloudRestClient {
     });
   }
 
-  private static ErrorDetails getTokenError(@Nullable ResponseBody body) throws IOException {
+  private static ErrorDetails getTokenError(@Nullable ResponseBody body, @Nullable String fallbackMessage) throws IOException {
     if (body == null) {
-      return new ErrorDetails(null, null);
+      return new ErrorDetails(fallbackMessage, null);
     }
     String bodyStr = body.string();
+    if (bodyStr.isBlank()) {
+      return new ErrorDetails(fallbackMessage, null);
+    }
     if (body.contentType() != null && Objects.equals(JSON_MEDIA_TYPE.type(), body.contentType().type())) {
       try {
         TokenError gsonError = buildGson().fromJson(bodyStr, TokenError.class);
@@ -243,9 +248,9 @@ public class BitbucketCloudRestClient {
     }
   }
 
-  private static ErrorDetails getErrorDetails(@Nullable ResponseBody body, UnaryOperator<String> parser) throws IOException {
+  private static ErrorDetails getErrorDetails(@Nullable ResponseBody body,@Nullable String fallbackMessage, UnaryOperator<String> parser) throws IOException {
     if (body == null) {
-      return new ErrorDetails("", null);
+      return new ErrorDetails(fallbackMessage, null);
     }
     String bodyStr = body.string();
     if (body.contentType() != null && Objects.equals(JSON_MEDIA_TYPE.type(), body.contentType().type())) {

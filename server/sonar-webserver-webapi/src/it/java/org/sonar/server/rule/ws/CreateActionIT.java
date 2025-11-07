@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -50,7 +50,7 @@ import static org.mockito.AdditionalAnswers.returnsFirstArg;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
-import static org.sonar.api.rules.RuleType.BUG;
+import static org.sonar.core.rule.RuleType.BUG;
 import static org.sonar.db.permission.GlobalPermission.ADMINISTER_QUALITY_PROFILES;
 import static org.sonar.db.rule.RuleTesting.newCustomRule;
 import static org.sonar.db.rule.RuleTesting.newTemplateRule;
@@ -134,8 +134,8 @@ public class CreateActionIT {
               "type": "STRING"
             }
           ],
-          "cleanCodeAttribute": "CONVENTIONAL",
-          "cleanCodeAttributeCategory": "CONSISTENT",
+          "cleanCodeAttribute": "CLEAR",
+          "cleanCodeAttributeCategory": "INTENTIONAL",
           "impacts": [
             {
               "softwareQuality": "RELIABILITY",
@@ -224,16 +224,18 @@ public class CreateActionIT {
       .execute();
 
     assertThat(response.getStatus()).isEqualTo(409);
-    assertJson(response.getInput()).isSimilarTo("{\n" +
-      "  \"rule\": {\n" +
-      "    \"key\": \"java:MY_CUSTOM\",\n" +
-      "    \"repo\": \"java\",\n" +
-      "    \"name\": \"My custom rule\",\n" +
-      "    \"severity\": \"MAJOR\",\n" +
-      "    \"status\": \"REMOVED\",\n" +
-      "    \"isTemplate\": false\n" +
-      "  }\n" +
-      "}\n");
+    assertJson(response.getInput()).isSimilarTo("""
+      {
+        "rule": {
+          "key": "java:MY_CUSTOM",
+          "repo": "java",
+          "name": "My custom rule",
+          "severity": "MAJOR",
+          "status": "REMOVED",
+          "isTemplate": false
+        }
+      }
+      """);
   }
 
   @Test
@@ -308,11 +310,13 @@ public class CreateActionIT {
       .setParam("type", BUG.name())
       .execute().getInput();
 
-    assertJson(result).isSimilarTo("{\n" +
-      "  \"rule\": {\n" +
-      "    \"severity\": \"MAJOR\"" +
-      "  }\n" +
-      "}\n");
+    assertJson(result).isSimilarTo("""
+      {
+        "rule": {
+          "severity": "MAJOR"\
+        }
+      }
+      """);
   }
 
   @Test

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -36,8 +36,7 @@ public class ResourceUtilsTest {
   @Test
   public void whenReadValidClasspathResource_thenReadIt() {
     String result = ResourceUtils.readClasspathResource(ResourceUtilsTest.class, "classpath_resource.txt");
-    assertThat(result)
-      .isEqualTo("OK\n");
+    assertThat(result.strip()).isEqualTo("OK");
   }
 
   @Test

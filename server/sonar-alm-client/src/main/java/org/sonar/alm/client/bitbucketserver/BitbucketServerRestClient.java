@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -47,7 +47,7 @@ import static java.lang.String.format;
 import static java.net.HttpURLConnection.HTTP_NOT_FOUND;
 import static java.net.HttpURLConnection.HTTP_UNAUTHORIZED;
 import static java.util.Locale.ENGLISH;
-import static org.apache.commons.lang3.StringUtils.removeEnd;
+import static org.apache.commons.lang3.Strings.CS;
 
 @ServerSide
 public class BitbucketServerRestClient {
@@ -117,7 +117,7 @@ public class BitbucketServerRestClient {
     if (serverUrl == null || !(serverUrl.toLowerCase(ENGLISH).startsWith("http://") || serverUrl.toLowerCase(ENGLISH).startsWith("https://"))) {
       throw new IllegalArgumentException("url must start with http:// or https://");
     }
-    return HttpUrl.parse(removeEnd(serverUrl, "/") + relativeUrl);
+    return HttpUrl.parse(CS.removeEnd(serverUrl, "/") + relativeUrl);
   }
 
   protected <G> G doGet(String token, HttpUrl url, Function<String, G> handler) {
@@ -146,7 +146,7 @@ public class BitbucketServerRestClient {
 
   private String getBodyString(Request request) {
     try (Response response = client.newCall(request).execute()) {
-      String bodyString = response.body() == null ? "" : response.body().string();
+      String bodyString = response.body().string();
       validateResponseBody(response.isSuccessful(), bodyString);
       handleHttpErrorIfAny(response.isSuccessful(), response.code(), bodyString);
       return bodyString;

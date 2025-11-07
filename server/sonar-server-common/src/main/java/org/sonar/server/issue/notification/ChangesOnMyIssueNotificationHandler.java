@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -44,7 +44,7 @@ import static org.sonar.server.notification.NotificationManager.SubscriberPermis
 
 public class ChangesOnMyIssueNotificationHandler extends EmailNotificationHandler<IssuesChangesNotification> {
 
-  private static final String KEY = "ChangesOnMyIssue";
+  public static final String KEY = "ChangesOnMyIssue";
   private static final NotificationDispatcherMetadata METADATA = NotificationDispatcherMetadata.create(KEY)
     .setProperty(NotificationDispatcherMetadata.GLOBAL_NOTIFICATION, String.valueOf(true))
     .setProperty(NotificationDispatcherMetadata.PER_PROJECT_NOTIFICATION, String.valueOf(true));

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -28,15 +28,13 @@ import org.sonar.ce.task.log.CeTaskMessagesImpl;
 import org.sonar.ce.task.projectanalysis.analysis.AnalysisFromSonarQube94Visitor;
 import org.sonar.ce.task.projectanalysis.analysis.AnalysisMetadataHolderImpl;
 import org.sonar.ce.task.projectanalysis.api.posttask.PostProjectAnalysisTasksExecutor;
-import org.sonar.ce.task.projectanalysis.batch.BatchReportDirectoryHolderImpl;
-import org.sonar.ce.task.projectanalysis.batch.BatchReportReaderImpl;
+import org.sonar.ce.task.projectanalysis.component.BranchComponentUuidsDelegate;
 import org.sonar.ce.task.projectanalysis.component.BranchLoader;
 import org.sonar.ce.task.projectanalysis.component.BranchPersisterImpl;
 import org.sonar.ce.task.projectanalysis.component.ConfigurationRepositoryImpl;
 import org.sonar.ce.task.projectanalysis.component.DisabledComponentsHolderImpl;
 import org.sonar.ce.task.projectanalysis.component.FileStatusesImpl;
 import org.sonar.ce.task.projectanalysis.component.PreviousSourceHashRepositoryImpl;
-import org.sonar.ce.task.projectanalysis.dependency.ProjectDependenciesHolderImpl;
 import org.sonar.ce.task.projectanalysis.component.ProjectPersister;
 import org.sonar.ce.task.projectanalysis.component.ReferenceBranchComponentUuids;
 import org.sonar.ce.task.projectanalysis.component.SiblingComponentsWithOpenIssues;
@@ -49,6 +47,7 @@ import org.sonar.ce.task.projectanalysis.duplication.IntegrateCrossProjectDuplic
 import org.sonar.ce.task.projectanalysis.event.EventRepositoryImpl;
 import org.sonar.ce.task.projectanalysis.filemove.AddedFileRepositoryImpl;
 import org.sonar.ce.task.projectanalysis.filemove.FileSimilarityImpl;
+import org.sonar.ce.task.projectanalysis.filemove.HeapSizeCheckerImpl;
 import org.sonar.ce.task.projectanalysis.filemove.MutableMovedFilesRepositoryImpl;
 import org.sonar.ce.task.projectanalysis.filemove.ScoreMatrixDumperImpl;
 import org.sonar.ce.task.projectanalysis.filemove.SourceSimilarityImpl;
@@ -130,6 +129,8 @@ import org.sonar.ce.task.projectanalysis.qualityprofile.ActiveRulesHolderImpl;
 import org.sonar.ce.task.projectanalysis.qualityprofile.PrioritizedRulesHolderImpl;
 import org.sonar.ce.task.projectanalysis.qualityprofile.QProfileStatusRepositoryImpl;
 import org.sonar.ce.task.projectanalysis.qualityprofile.QualityProfileRuleChangeResolver;
+import org.sonar.ce.task.projectanalysis.scanner.ScannerReportDirectoryHolderImpl;
+import org.sonar.ce.task.projectanalysis.scanner.ScannerReportReaderImpl;
 import org.sonar.ce.task.projectanalysis.scm.ScmInfoDbLoader;
 import org.sonar.ce.task.projectanalysis.scm.ScmInfoRepositoryImpl;
 import org.sonar.ce.task.projectanalysis.source.DbLineHashVersion;
@@ -145,6 +146,8 @@ import org.sonar.ce.task.projectanalysis.source.SourceLinesDiffImpl;
 import org.sonar.ce.task.projectanalysis.source.SourceLinesHashCache;
 import org.sonar.ce.task.projectanalysis.source.SourceLinesHashRepositoryImpl;
 import org.sonar.ce.task.projectanalysis.source.SourceLinesRepositoryImpl;
+import org.sonar.ce.task.projectanalysis.step.DefaultPersistScaStepImpl;
+import org.sonar.ce.task.projectanalysis.step.DefaultScaStepImpl;
 import org.sonar.ce.task.projectanalysis.step.ReportComputationSteps;
 import org.sonar.ce.task.projectanalysis.step.SmallChangesetQualityGateSpecialCase;
 import org.sonar.ce.task.projectanalysis.webhook.WebhookPostTask;
@@ -152,6 +155,7 @@ import org.sonar.ce.task.setting.SettingsLoader;
 import org.sonar.ce.task.step.ComputationStepExecutor;
 import org.sonar.ce.task.step.ComputationSteps;
 import org.sonar.ce.task.taskprocessor.MutableTaskResultHolderImpl;
+import org.sonar.ce.task.telemetry.StepsTelemetryHolderImpl;
 import org.sonar.core.issue.tracking.Tracker;
 import org.sonar.core.platform.ContainerPopulator;
 import org.sonar.server.issue.TaintChecker;
@@ -179,7 +183,13 @@ public final class ProjectAnalysisTaskContainerPopulator implements ContainerPop
     for (ReportAnalysisComponentProvider componentProvider : componentProviders) {
       container.add(componentProvider.getComponents());
     }
-    container.add(steps.orderedStepClasses());
+
+    // Exclude interfaces because they can't be instantiated directly.
+    // The concrete class for interfaces must be added to the container separately.
+    container.add(steps.orderedStepClasses()
+      .stream()
+      .filter(stepClass -> !stepClass.isInterface())
+      .toList());
   }
 
   /**
@@ -208,9 +218,8 @@ public final class ProjectAnalysisTaskContainerPopulator implements ContainerPop
       // holders
       AnalysisMetadataHolderImpl.class,
       CrossProjectDuplicationStatusHolderImpl.class,
-      BatchReportDirectoryHolderImpl.class,
+      ScannerReportDirectoryHolderImpl.class,
       TreeRootHolderImpl.class,
-      ProjectDependenciesHolderImpl.class,
       PeriodHolderImpl.class,
       PrioritizedRulesHolderImpl.class,
       QualityGateHolderImpl.class,
@@ -219,10 +228,14 @@ public final class ProjectAnalysisTaskContainerPopulator implements ContainerPop
       ActiveRulesHolderImpl.class,
       MeasureComputersHolderImpl.class,
       MutableTaskResultHolderImpl.class,
-      BatchReportReaderImpl.class,
+      ScannerReportReaderImpl.class,
       ReferenceBranchComponentUuids.class,
       NewCodeReferenceBranchComponentUuids.class,
+      BranchComponentUuidsDelegate.class,
       SiblingComponentsWithOpenIssues.class,
+      DefaultScaStepImpl.class,
+      DefaultPersistScaStepImpl.class,
+      StepsTelemetryHolderImpl.class,
 
       // repositories
       PreviousSourceHashRepositoryImpl.class,
@@ -328,6 +341,7 @@ public final class ProjectAnalysisTaskContainerPopulator implements ContainerPop
       FileSimilarityImpl.class,
       MutableMovedFilesRepositoryImpl.class,
       AddedFileRepositoryImpl.class,
+      HeapSizeCheckerImpl.class,
 
       // duplication
       IntegrateCrossProjectDuplications.class,

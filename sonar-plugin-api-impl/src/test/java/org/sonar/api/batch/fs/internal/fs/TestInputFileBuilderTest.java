@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -55,12 +55,14 @@ public class TestInputFileBuilderTest {
     DefaultInputFile file = TestInputFileBuilder.create("module", new File("baseDir"), new File("baseDir", "path"))
       .setStatus(Status.SAME)
       .setType(Type.MAIN)
+      .setHidden(true)
       .build();
 
     assertThat(file.type()).isEqualTo(Type.MAIN);
     assertThat(file.status()).isEqualTo(Status.SAME);
     assertThat(file.isPublished()).isTrue();
     assertThat(file.type()).isEqualTo(Type.MAIN);
+    assertThat(file.isHidden()).isTrue();
     assertThat(file.relativePath()).isEqualTo("path");
     assertThat(file.absolutePath()).isEqualTo("baseDir/path");
 

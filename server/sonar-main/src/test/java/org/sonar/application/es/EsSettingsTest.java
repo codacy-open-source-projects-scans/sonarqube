@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -364,6 +364,25 @@ public class EsSettingsTest {
     assertThatThrownBy(settings::build)
       .isInstanceOf(MessageException.class)
       .hasMessage("Property 'node.store.allow_mmapfs' is no longer supported. Use 'node.store.allow_mmap' instead.");
+  }
+
+  @Test
+  @UseDataProvider("clusterEnabledOrNot")
+  public void disable_disk_threshold_if_configured_in_search_additional_props(boolean clusterEnabled) throws Exception {
+    Props props = minProps(clusterEnabled);
+    props.set("sonar.search.javaAdditionalOpts", "-Dcluster.routing.allocation.disk.threshold_enabled=false");
+    Map<String, String> settings = new EsSettings(props, new EsInstallation(props), system).build();
+
+    assertThat(settings).containsEntry("cluster.routing.allocation.disk.threshold_enabled", "false");
+  }
+
+  @Test
+  @UseDataProvider("clusterEnabledOrNot")
+  public void disk_threshold_not_set_by_default(boolean clusterEnabled) throws Exception {
+    Props props = minProps(clusterEnabled);
+    Map<String, String> settings = new EsSettings(props, new EsInstallation(props), system).build();
+
+    assertThat(settings.get("cluster.routing.allocation.disk.threshold_enabled")).isNull();
   }
 
   @Test

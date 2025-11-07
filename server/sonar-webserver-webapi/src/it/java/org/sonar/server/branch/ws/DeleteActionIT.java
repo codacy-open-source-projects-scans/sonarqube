@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -24,7 +24,7 @@ import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import org.sonar.api.server.ws.WebService;
 import org.sonar.api.utils.System2;
-import org.sonar.api.web.UserRole;
+import org.sonar.db.permission.ProjectPermission;
 import org.sonar.db.DbSession;
 import org.sonar.db.DbTester;
 import org.sonar.db.component.BranchDto;
@@ -39,7 +39,6 @@ import org.sonar.server.project.ProjectLifeCycleListeners;
 import org.sonar.server.tester.UserSessionRule;
 import org.sonar.server.ws.WsActionTester;
 
-import static java.util.Collections.emptySet;
 import static java.util.Collections.singleton;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -64,8 +63,8 @@ public class DeleteActionIT {
   @Test
   public void delete_branch() {
     ProjectDto project = db.components().insertPrivateProject().getProjectDto();
-    db.components().insertProjectBranch(project, b -> b.setKey("branch1"));
-    userSession.logIn().addProjectPermission(UserRole.ADMIN, project);
+    BranchDto branchDto = db.components().insertProjectBranch(project, b -> b.setKey("branch1"));
+    userSession.logIn().addProjectPermission(ProjectPermission.ADMIN, project);
 
     tester.newRequest()
       .setParam("project", project.getKey())
@@ -73,7 +72,7 @@ public class DeleteActionIT {
       .execute();
 
     verifyDeletedKey("branch1");
-    verify(projectLifeCycleListeners).onProjectBranchesChanged(singleton(Project.fromProjectDtoWithTags(project)), emptySet());
+    verify(projectLifeCycleListeners).onProjectBranchesChanged(singleton(Project.fromProjectDtoWithTags(project)), singleton(branchDto.getUuid()));
   }
 
   @Test
@@ -104,7 +103,7 @@ public class DeleteActionIT {
   @Test
   public void fail_if_branch_does_not_exist() {
     ProjectDto project = db.components().insertPrivateProject().getProjectDto();
-    userSession.logIn().addProjectPermission(UserRole.ADMIN, project);
+    userSession.logIn().addProjectPermission(ProjectPermission.ADMIN, project);
 
     assertThatThrownBy(() -> tester.newRequest()
       .setParam("project", project.getKey())

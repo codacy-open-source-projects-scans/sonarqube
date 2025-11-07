@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -38,10 +38,6 @@ import org.sonar.db.component.ComponentDao;
 import org.sonar.db.component.ComponentKeyUpdaterDao;
 import org.sonar.db.component.ProjectLinkDao;
 import org.sonar.db.component.SnapshotDao;
-import org.sonar.db.dependency.CveCweDao;
-import org.sonar.db.dependency.CveDao;
-import org.sonar.db.dependency.IssuesDependencyDao;
-import org.sonar.db.dependency.ProjectDependenciesDao;
 import org.sonar.db.duplication.DuplicationDao;
 import org.sonar.db.entity.EntityDao;
 import org.sonar.db.es.EsQueueDao;
@@ -51,9 +47,17 @@ import org.sonar.db.issue.AnticipatedTransitionDao;
 import org.sonar.db.issue.IssueChangeDao;
 import org.sonar.db.issue.IssueDao;
 import org.sonar.db.issue.IssueFixedDao;
+import org.sonar.db.jira.dao.AtlassianAuthenticationDetailsDao;
+import org.sonar.db.jira.dao.JiraOrganizationBindingDao;
+import org.sonar.db.jira.dao.JiraOrganizationBindingPendingDao;
+import org.sonar.db.jira.dao.JiraProjectBindingDao;
+import org.sonar.db.jira.dao.JiraSelectedWorkTypeDao;
+import org.sonar.db.jira.dao.JiraWorkItemDao;
+import org.sonar.db.jira.dao.XsrfTokenDao;
 import org.sonar.db.measure.MeasureDao;
 import org.sonar.db.measure.ProjectMeasureDao;
 import org.sonar.db.metric.MetricDao;
+import org.sonar.db.migrationlog.MigrationLogDao;
 import org.sonar.db.newcodeperiod.NewCodePeriodDao;
 import org.sonar.db.notification.NotificationQueueDao;
 import org.sonar.db.permission.AuthorizationDao;
@@ -107,6 +111,7 @@ import org.sonar.db.user.UserDao;
 import org.sonar.db.user.UserDismissedMessagesDao;
 import org.sonar.db.user.UserGroupDao;
 import org.sonar.db.user.UserTokenDao;
+import org.sonar.db.user.ai.UserAiToolUsageDao;
 import org.sonar.db.webhook.WebhookDao;
 import org.sonar.db.webhook.WebhookDeliveryDao;
 
@@ -130,8 +135,6 @@ public class DaoModule extends Module {
     CeTaskMessageDao.class,
     ComponentDao.class,
     ComponentKeyUpdaterDao.class,
-    CveDao.class,
-    CveCweDao.class,
     DefaultQProfileDao.class,
     DevOpsPermissionsMappingDao.class,
     DuplicationDao.class,
@@ -153,10 +156,16 @@ public class DaoModule extends Module {
     IssueChangeDao.class,
     IssueDao.class,
     IssueFixedDao.class,
-    IssuesDependencyDao.class,
+    JiraProjectBindingDao.class,
+    JiraOrganizationBindingDao.class,
+    JiraWorkItemDao.class,
+    JiraSelectedWorkTypeDao.class,
+    JiraOrganizationBindingPendingDao.class,
+    AtlassianAuthenticationDetailsDao.class,
     MeasureDao.class,
     ProjectMeasureDao.class,
     MetricDao.class,
+    MigrationLogDao.class,
     NewCodePeriodDao.class,
     NotificationQueueDao.class,
     PermissionTemplateCharacteristicDao.class,
@@ -164,7 +173,6 @@ public class DaoModule extends Module {
     PluginDao.class,
     ProjectDao.class,
     ProjectBadgeTokenDao.class,
-    ProjectDependenciesDao.class,
     ProjectExportDao.class,
     PortfolioDao.class,
     ProjectLinkDao.class,
@@ -196,13 +204,15 @@ public class DaoModule extends Module {
     SnapshotDao.class,
     SessionTokensDao.class,
     TelemetryMetricsSentDao.class,
+    UserAiToolUsageDao.class,
     UserDao.class,
     UserDismissedMessagesDao.class,
     UserGroupDao.class,
     UserPermissionDao.class,
     UserTokenDao.class,
     WebhookDao.class,
-    WebhookDeliveryDao.class);
+    WebhookDeliveryDao.class,
+    XsrfTokenDao.class);
 
   @Override
   protected void configureModule() {

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -25,10 +25,12 @@ import org.sonar.core.platform.ListContainer;
 import static org.assertj.core.api.Assertions.assertThat;
 
 public class QualityGateModuleTest {
+  // This is essentially a snapshot test to make sure nothing got added or
+  // removed that you didn't expect to add or remove.
   @Test
   public void verify_count_of_added_components() {
     ListContainer container = new ListContainer();
     new QualityGateModule().configure(container);
-    assertThat(container.getAddedObjects()).hasSize(8);
+    assertThat(container.getAddedObjects()).hasSize(10);
   }
 }

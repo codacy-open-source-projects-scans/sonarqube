@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -391,6 +391,15 @@ public class QualitygatesService extends BaseService {
       new PostRequest(path("remove_group"))
         .setParam("groupName", request.getGroup())
         .setParam("gateName", request.getQualityGate())
+        .setMediaType(MediaTypes.JSON)
+    ).content();
+  }
+
+  public void setAiCodeAssurance(String gateName, boolean aiCodeAssurance) {
+    call(
+      new PostRequest(path("set_ai_code_assurance"))
+        .setParam("gateName", gateName)
+        .setParam("aiCodeAssurance", aiCodeAssurance)
         .setMediaType(MediaTypes.JSON)
     ).content();
   }

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -92,11 +92,11 @@ public class ValidationActionTest {
     doReturn(true).when(userSession).hasSession();
     doReturn(true).when(userSession).isSystemAdministrator();
     final String mockedHtmlContent = "mocked html content";
-    doReturn(mockedHtmlContent).when(samlAuthenticator).getAuthenticationStatusPage(any(), any());
+    doReturn(mockedHtmlContent).when(samlAuthenticator).getAuthenticationStatusPage(any());
 
     underTest.doFilter(new JakartaHttpRequest(servletRequest), new JakartaHttpResponse(servletResponse), filterChain);
 
-    verify(samlAuthenticator).getAuthenticationStatusPage(any(), any());
+    verify(samlAuthenticator).getAuthenticationStatusPage(any());
     verify(servletResponse).getWriter();
     CSP_HEADERS.forEach(h -> verify(servletResponse).setHeader(eq(h), anyString()));
     assertEquals(mockedHtmlContent, stringWriter.toString());

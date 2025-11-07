@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -46,7 +46,8 @@ public abstract class PermissionChange {
         "Invalid global permission '%s'. Valid values are %s", permission,
         permissionService.getGlobalPermissions().stream().map(GlobalPermission::getKey).toList());
     } else {
-      checkRequest(permissionService.getAllProjectPermissions().contains(permission), "Invalid project permission '%s'. Valid values are %s", permission,
+      checkRequest(permissionService.getAllProjectPermissions().stream().anyMatch(p -> p.getKey().equals(permission)),
+        "Invalid project permission '%s'. Valid values are %s", permission,
         permissionService.getAllProjectPermissions());
     }
   }

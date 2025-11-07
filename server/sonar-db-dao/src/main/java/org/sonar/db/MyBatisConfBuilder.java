@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -51,11 +51,15 @@ class MyBatisConfBuilder {
     this.conf.setLocalCacheScope(LocalCacheScope.STATEMENT);
   }
 
-  void loadAlias(String alias, Class dtoClass) {
+  void loadTypeHandler(Class<?> typeHandlerClass) {
+    this.conf.getTypeHandlerRegistry().register(typeHandlerClass);
+  }
+
+  void loadAlias(String alias, Class<?> dtoClass) {
     conf.getTypeAliasRegistry().registerAlias(alias, dtoClass);
   }
 
-  void loadMapper(Class mapperClass) {
+  void loadMapper(Class<?> mapperClass) {
     String configFile = configFilePath(mapperClass);
     InputStream input = null;
     try {

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -20,6 +20,7 @@
 package org.sonar.api.batch.sensor.internal;
 
 import java.io.File;
+import java.io.InputStream;
 import java.io.Serializable;
 import java.nio.charset.Charset;
 import java.nio.file.Path;
@@ -117,6 +118,7 @@ public class SensorContextTester implements SensorContext {
   private boolean canSkipUnchangedFiles;
   private boolean cancelled;
   private boolean cacheEnabled = false;
+  private final List<String> availableFeatures = new ArrayList<>();
 
   private SensorContextTester(Path moduleBaseDir) {
     this.settings = new MapSettings();
@@ -447,6 +449,21 @@ public class SensorContextTester implements SensorContext {
     sensorStorage.storeTelemetry(key, value);
   }
 
+  @Override
+  public void addAnalysisData(String key, String mimeType, InputStream data) {
+    //No Need to check the source of the plugin in the tester
+    sensorStorage.storeAnalysisData(key,mimeType, data);
+  }
+
+  @Override
+  public boolean isFeatureAvailable(String featureName) {
+    return availableFeatures.contains(featureName);
+  }
+
+  public void addAvailableFeatures(String... featureName) {
+    Collections.addAll(this.availableFeatures, featureName);
+  }
+
   public void setCacheEnabled(boolean enabled) {
     this.cacheEnabled = enabled;
   }
@@ -455,4 +472,5 @@ public class SensorContextTester implements SensorContext {
   public NewSignificantCode newSignificantCode() {
     return new DefaultSignificantCode(sensorStorage);
   }
+
 }

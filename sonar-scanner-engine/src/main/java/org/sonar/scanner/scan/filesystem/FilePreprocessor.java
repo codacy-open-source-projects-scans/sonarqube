@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -59,6 +59,11 @@ public class FilePreprocessor {
     InputFile.Type type, ProjectFilePreprocessor.ExclusionCounter exclusionCounter, @CheckForNull IgnoreCommand ignoreCommand) throws IOException {
     // get case of real file without resolving link
     Path realAbsoluteFile = sourceFile.toRealPath(LinkOption.NOFOLLOW_LINKS).toAbsolutePath().normalize();
+
+    if (!isValidSymbolicLink(realAbsoluteFile, module.getBaseDir())) {
+      return Optional.empty();
+    }
+
     Path projectRelativePath = project.getBaseDir().relativize(realAbsoluteFile);
     Path moduleRelativePath = module.getBaseDir().relativize(realAbsoluteFile);
     boolean included = isFileIncluded(moduleExclusionFilters, realAbsoluteFile, projectRelativePath, moduleRelativePath, type);
@@ -135,5 +140,42 @@ public class FilePreprocessor {
 
   private boolean isFileSizeBiggerThanLimit(Path filePath) throws IOException {
     return Files.size(filePath) > properties.fileSizeLimit() * 1024L * 1024L;
+  }
+
+  private boolean isValidSymbolicLink(Path absolutePath, Path moduleBaseDirectory) throws IOException {
+    if (!Files.isSymbolicLink(absolutePath)) {
+      return true;
+    }
+
+    Optional<Path> target = resolvePathToTarget(absolutePath);
+    if (target.isEmpty() || !Files.exists(target.get())) {
+      LOG.warn("File '{}' is ignored. It is a symbolic link targeting a file that does not exist.", absolutePath);
+      return false;
+    }
+
+    if (!target.get().startsWith(project.getBaseDir())) {
+      LOG.warn("File '{}' is ignored. It is a symbolic link targeting a file not located in project basedir.", absolutePath);
+      return false;
+    }
+
+    if (!target.get().startsWith(moduleBaseDirectory)) {
+      LOG.info("File '{}' is ignored. It is a symbolic link targeting a file not located in module basedir.", absolutePath);
+      return false;
+    }
+
+    return true;
+  }
+
+  private static Optional<Path> resolvePathToTarget(Path symbolicLinkAbsolutePath) throws IOException {
+    Path target = Files.readSymbolicLink(symbolicLinkAbsolutePath);
+    if (target.isAbsolute()) {
+      return Optional.of(target);
+    }
+
+    try {
+      return Optional.of(symbolicLinkAbsolutePath.getParent().resolve(target).toRealPath(LinkOption.NOFOLLOW_LINKS).toAbsolutePath().normalize());
+    } catch (IOException e) {
+      return Optional.empty();
+    }
   }
 }

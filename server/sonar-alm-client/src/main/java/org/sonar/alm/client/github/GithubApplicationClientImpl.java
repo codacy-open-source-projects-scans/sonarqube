@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -47,13 +47,13 @@ import org.sonar.auth.github.ExpiringAppInstallationToken;
 import org.sonar.auth.github.GitHubSettings;
 import org.sonar.auth.github.GithubAppConfiguration;
 import org.sonar.auth.github.GithubAppInstallation;
+import org.sonar.auth.github.GithubApplicationClient;
 import org.sonar.auth.github.GithubBinding;
 import org.sonar.auth.github.GithubBinding.GsonGithubRepository;
 import org.sonar.auth.github.GithubBinding.GsonInstallations;
 import org.sonar.auth.github.GithubBinding.GsonRepositorySearch;
 import org.sonar.auth.github.GsonRepositoryCollaborator;
 import org.sonar.auth.github.GsonRepositoryTeam;
-import org.sonar.auth.github.client.GithubApplicationClient;
 import org.sonar.auth.github.security.AccessToken;
 import org.sonar.auth.github.security.UserAccessToken;
 import org.sonar.server.exceptions.ServerException;
@@ -133,9 +133,31 @@ public class GithubApplicationClientImpl implements GithubApplicationClient {
 
     if (!"http".equalsIgnoreCase(apiEndpoint.getScheme()) && !"https".equalsIgnoreCase(apiEndpoint.getScheme())) {
       throw new IllegalArgumentException("Only http and https schemes are supported");
-    } else if (!"api.github.com".equalsIgnoreCase(apiEndpoint.getHost()) && !apiEndpoint.getPath().toLowerCase(Locale.ENGLISH).startsWith("/api/v3")) {
+    } else if (!isValidGitHubUrl(apiEndpoint)) {
       throw new IllegalArgumentException("Invalid GitHub URL");
     }
+  }
+
+  private static boolean isValidGitHubUrl(URI apiEndpoint) {
+    String host = apiEndpoint.getHost();
+    String path = apiEndpoint.getPath();
+    if (host == null) {
+      return false;
+    }
+
+    String lowerCaseHost = host.toLowerCase(Locale.ENGLISH);
+    // GitHub.com (official public GitHub)
+    if ("api.github.com".equals(lowerCaseHost)) {
+      return true;
+    }
+
+    // GitHub Enterprise Server - standard format: https://github.company.com/api/v3/
+    if (path != null && path.toLowerCase(Locale.ENGLISH).startsWith("/api/v3")) {
+      return true;
+    }
+
+    // GitHub Enterprise Cloud with data residency - official format: https://api.company.ghe.com
+    return lowerCaseHost.startsWith("api.") && lowerCaseHost.endsWith(".ghe.com");
   }
 
   @Override
@@ -315,6 +337,9 @@ public class GithubApplicationClientImpl implements GithubApplicationClient {
         baseAppUrl = appUrl.substring(0, apiIndex);
       } else if (appUrl.startsWith("https://api.github.com")) {
         baseAppUrl = "https://github.com";
+      } else if (appUrl.startsWith("https://api.") && appUrl.contains(".ghe.com")) {
+        // For GHE instances with api.xx.ghe.com format, remove the "api." prefix
+        baseAppUrl = appUrl.replace("https://api.", "https://");
       } else {
         baseAppUrl = appUrl;
       }
@@ -389,7 +414,7 @@ public class GithubApplicationClientImpl implements GithubApplicationClient {
           resp -> GSON.fromJson(resp, REPOSITORY_COLLABORATORS_LIST_TYPE)));
   }
 
-  private <E> List<E> executePaginatedQuery(String appUrl, AccessToken token, String query, Function<String, List<E>> responseDeserializer) {
+  protected <E> List<E> executePaginatedQuery(String appUrl, AccessToken token, String query, Function<String, List<E>> responseDeserializer) {
     return githubPaginatedHttpClient.get(appUrl, token, query, responseDeserializer);
   }
 

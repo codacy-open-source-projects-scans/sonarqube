@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2024 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -42,7 +42,6 @@ import org.sonar.alm.client.DevopsPlatformHeaders;
 import org.sonar.alm.client.GenericApplicationHttpClient;
 import org.sonar.alm.client.TimeoutConfiguration;
 import org.sonar.api.testfixtures.log.LogTester;
-import org.sonar.api.utils.log.LoggerLevel;
 import org.sonar.auth.github.security.AccessToken;
 import org.sonar.auth.github.security.UserAccessToken;
 
@@ -62,7 +61,7 @@ public class GenericApplicationHttpClientTest {
   public MockWebServer server = new MockWebServer();
 
   @ClassRule
-  public static LogTester logTester = new LogTester().setLevel(LoggerLevel.WARN);
+  public static LogTester logTester = new LogTester().setLevel(Level.WARN);
 
   private GenericApplicationHttpClient underTest;
 
@@ -74,32 +73,32 @@ public class GenericApplicationHttpClientTest {
   @Before
   public void setUp() {
     this.appUrl = format("http://%s:%s", server.getHostName(), server.getPort());
-    this.underTest = new TestApplicationHttpClient(new GithubHeaders(), new ConstantTimeoutConfiguration(500));
+    this.underTest = new TestApplicationHttpClient(new GithubHeaders(), new ConstantTimeoutConfiguration(500), new okhttp3.OkHttpClient());
     logTester.clear();
   }
 
   private static class TestApplicationHttpClient extends GenericApplicationHttpClient {
-    public TestApplicationHttpClient(DevopsPlatformHeaders devopsPlatformHeaders, TimeoutConfiguration timeoutConfiguration) {
-      super(devopsPlatformHeaders, timeoutConfiguration);
+    public TestApplicationHttpClient(DevopsPlatformHeaders devopsPlatformHeaders, TimeoutConfiguration timeoutConfiguration, okhttp3.OkHttpClient okHttpClient) {
+      super(devopsPlatformHeaders, timeoutConfiguration, okHttpClient);
     }
   }
 
   @Test
-  public void get_fails_if_endpoint_does_not_start_with_slash() throws IOException {
+  public void get_fails_if_endpoint_does_not_start_with_slash() {
     assertThatThrownBy(() -> underTest.get(appUrl, accessToken, "api/foo/bar"))
       .hasMessage("endpoint must start with '/' or 'http'")
       .isInstanceOf(IllegalArgumentException.class);
   }
 
   @Test
-  public void get_fails_if_endpoint_does_not_start_with_http() throws IOException {
+  public void get_fails_if_endpoint_does_not_start_with_http() {
     assertThatThrownBy(() -> underTest.get(appUrl, accessToken, "ttp://api/foo/bar"))
       .isInstanceOf(IllegalArgumentException.class)
       .hasMessage("endpoint must start with '/' or 'http'");
   }
 
   @Test
-  public void get_fails_if_github_endpoint_is_invalid() throws IOException {
+  public void get_fails_if_github_endpoint_is_invalid() {
     assertThatThrownBy(() -> underTest.get("invalidUrl", accessToken, "/endpoint"))
       .isInstanceOf(IllegalArgumentException.class)
       .hasMessage("invalidUrl/endpoint is not a valid url");
@@ -185,7 +184,7 @@ public class GenericApplicationHttpClientTest {
   public void get_returns_empty_endPoint_when_link_header_does_not_have_next_rel() throws IOException {
     server.enqueue(new MockResponse().setBody(randomBody)
       .setHeader("link", "<https://api.github.com/installation/repositories?per_page=5&page=4>; rel=\"prev\", " +
-                         "<https://api.github.com/installation/repositories?per_page=5&page=1>; rel=\"first\""));
+        "<https://api.github.com/installation/repositories?per_page=5&page=1>; rel=\"first\""));
 
     GetResponse response = underTest.get(appUrl, accessToken, randomEndPoint);
 
@@ -216,34 +215,37 @@ public class GenericApplicationHttpClientTest {
 
   @Test
   public void get_returns_endPoint_when_link_header_is_from_gitlab() throws IOException {
-    String linkHeader = "<https://gitlab.com/api/v4/groups?all_available=false&order_by=name&owned=false&page=2&per_page=2&sort=asc&statistics=false&with_custom_attributes=false>; rel=\"next\", <https://gitlab.com/api/v4/groups?all_available=false&order_by=name&owned=false&page=1&per_page=2&sort=asc&statistics=false&with_custom_attributes=false>; rel=\"first\", <https://gitlab.com/api/v4/groups?all_available=false&order_by=name&owned=false&page=8&per_page=2&sort=asc&statistics=false&with_custom_attributes=false>; rel=\"last\"";
+    String linkHeader = "<https://gitlab.com/api/v4/groups?all_available=false&order_by=name&owned=false&page=2&per_page=2&sort=asc&statistics=false&with_custom_attributes=false" +
+      ">; rel=\"next\", <https://gitlab.com/api/v4/groups?all_available=false&order_by=name&owned=false&page=1&per_page=2&sort=asc&statistics=false&with_custom_attributes=false" +
+      ">; rel=\"first\", <https://gitlab.com/api/v4/groups?all_available=false&order_by=name&owned=false&page=8&per_page=2&sort=asc&statistics=false&with_custom_attributes=false" +
+      ">; rel=\"last\"";
     server.enqueue(new MockResponse().setBody(randomBody)
       .setHeader("link", linkHeader));
 
     GetResponse response = underTest.get(appUrl, accessToken, randomEndPoint);
 
     assertThat(response.getNextEndPoint()).contains("https://gitlab.com/api/v4/groups?all_available=false"
-                                                    + "&order_by=name&owned=false&page=2&per_page=2&sort=asc&statistics=false&with_custom_attributes=false");
+      + "&order_by=name&owned=false&page=2&per_page=2&sort=asc&statistics=false&with_custom_attributes=false");
   }
 
   @DataProvider
   public static Object[][] linkHeadersWithNextRel() {
     String expected = "https://api.github.com/installation/repositories?per_page=5&page=2";
-    return new Object[][] {
+    return new Object[][]{
       {"<" + expected + ">; rel=\"next\""},
       {"<" + expected + ">; rel=\"next\", " +
-       "<https://api.github.com/installation/repositories?per_page=5&page=1>; rel=\"first\""},
+        "<https://api.github.com/installation/repositories?per_page=5&page=1>; rel=\"first\""},
       {"<https://api.github.com/installation/repositories?per_page=5&page=1>; rel=\"first\", " +
-       "<" + expected + ">; rel=\"next\""},
+        "<" + expected + ">; rel=\"next\""},
       {"<https://api.github.com/installation/repositories?per_page=5&page=1>; rel=\"first\", " +
-       "<" + expected + ">; rel=\"next\", " +
-       "<https://api.github.com/installation/repositories?per_page=5&page=5>; rel=\"last\""},
+        "<" + expected + ">; rel=\"next\", " +
+        "<https://api.github.com/installation/repositories?per_page=5&page=5>; rel=\"last\""},
     };
   }
 
   @DataProvider
   public static Object[][] someHttpCodesWithContentBut200() {
-    return new Object[][] {
+    return new Object[][]{
       {201},
       {202},
       {203},
@@ -253,21 +255,21 @@ public class GenericApplicationHttpClientTest {
   }
 
   @Test
-  public void post_fails_if_endpoint_does_not_start_with_slash() throws IOException {
+  public void post_fails_if_endpoint_does_not_start_with_slash() {
     assertThatThrownBy(() -> underTest.post(appUrl, accessToken, "api/foo/bar"))
       .isInstanceOf(IllegalArgumentException.class)
       .hasMessage("endpoint must start with '/' or 'http'");
   }
 
   @Test
-  public void post_fails_if_endpoint_does_not_start_with_http() throws IOException {
+  public void post_fails_if_endpoint_does_not_start_with_http() {
     assertThatThrownBy(() -> underTest.post(appUrl, accessToken, "ttp://api/foo/bar"))
       .isInstanceOf(IllegalArgumentException.class)
       .hasMessage("endpoint must start with '/' or 'http'");
   }
 
   @Test
-  public void post_fails_if_github_endpoint_is_invalid() throws IOException {
+  public void post_fails_if_github_endpoint_is_invalid() {
     assertThatThrownBy(() -> underTest.post("invalidUrl", accessToken, "/endpoint"))
       .isInstanceOf(IllegalArgumentException.class)
       .hasMessage("invalidUrl/endpoint is not a valid url");
@@ -318,7 +320,7 @@ public class GenericApplicationHttpClientTest {
 
   @DataProvider
   public static Object[][] httpCodesBut200_201And204() {
-    return new Object[][] {
+    return new Object[][]{
       {202},
       {203},
       {400},
@@ -381,7 +383,7 @@ public class GenericApplicationHttpClientTest {
 
   @DataProvider
   public static Object[][] httpCodesBut204() {
-    return new Object[][] {
+    return new Object[][]{
       {200},
       {201},
       {202},
@@ -406,7 +408,7 @@ public class GenericApplicationHttpClientTest {
 
   @DataProvider
   public static Object[][] httpCodesBut200And204() {
-    return new Object[][] {
+    return new Object[][]{
       {201},
       {202},
       {203},
@@ -495,5 +497,37 @@ public class GenericApplicationHttpClientTest {
   @Test
   public void post_whenRateLimitHeadersAreMissing_returnsNull() throws Exception {
     testMissingRateLimitHeader(() -> underTest.post(appUrl, accessToken, randomEndPoint));
+  }
+
+  @Test
+  public void constructor_should_accept_okhttpclient() {
+    okhttp3.OkHttpClient customClient = new okhttp3.OkHttpClient();
+    TestApplicationHttpClient client = new TestApplicationHttpClient(new GithubHeaders(), new ConstantTimeoutConfiguration(500), customClient);
+
+    assertThat(client).isNotNull();
+  }
+
+  @Test
+  public void constructor_should_apply_custom_timeout_configuration() {
+    TimeoutConfiguration customTimeout = new ConstantTimeoutConfiguration(10000);
+    TestApplicationHttpClient client = new TestApplicationHttpClient(new GithubHeaders(), customTimeout, new okhttp3.OkHttpClient());
+
+    assertThat(client).isNotNull();
+  }
+
+  @Test
+  public void client_should_not_follow_redirects() throws IOException {
+    TestApplicationHttpClient client = new TestApplicationHttpClient(new GithubHeaders(), new ConstantTimeoutConfiguration(500), new okhttp3.OkHttpClient());
+
+    // Enqueue a redirect response - followRedirects(false) means it won't be automatically followed
+    server.enqueue(new MockResponse().setResponseCode(302).setHeader("Location", appUrl + "/redirected"));
+
+    GetResponse response = client.get(appUrl, accessToken, randomEndPoint);
+
+    // Verify redirect was not followed - only one request made to server
+    assertThat(server.getRequestCount()).isEqualTo(1);
+    // Verify the 302 response is treated as an error (logged and content is empty)
+    assertThat(response.getContent()).isEmpty();
+    assertThat(logTester.logs(Level.WARN)).isNotEmpty();
   }
 }
