@@ -19,18 +19,24 @@
  */
 package org.sonar.server.rule.ws;
 
+import io.sonarcloud.compliancereports.reports.MetadataRules;
+import io.sonarcloud.compliancereports.reports.MetadataRules.ComplianceCategoryRules;
+import io.sonarcloud.compliancereports.reports.ReportKey;
+import java.util.Collection;
 import java.util.Date;
 import java.util.List;
+import java.util.Map;
 import org.sonar.api.rule.RuleStatus;
-import org.sonar.core.rule.RuleType;
 import org.sonar.api.server.ServerSide;
 import org.sonar.api.server.ws.Request;
 import org.sonar.api.server.ws.WebService;
+import org.sonar.core.rule.RuleType;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
 import org.sonar.db.qualityprofile.QProfileDto;
 import org.sonar.server.rule.index.RuleQuery;
 
+import static org.sonar.server.common.ParamParsingUtils.parseComplianceStandardsFilter;
 import static org.sonar.server.exceptions.NotFoundException.checkFound;
 import static org.sonar.server.rule.ws.EnumUtils.toEnums;
 import static org.sonar.server.rule.ws.RulesWsParameters.PARAM_ACTIVATION;
@@ -39,6 +45,7 @@ import static org.sonar.server.rule.ws.RulesWsParameters.PARAM_ACTIVE_SEVERITIES
 import static org.sonar.server.rule.ws.RulesWsParameters.PARAM_AVAILABLE_SINCE;
 import static org.sonar.server.rule.ws.RulesWsParameters.PARAM_CLEAN_CODE_ATTRIBUTE_CATEGORIES;
 import static org.sonar.server.rule.ws.RulesWsParameters.PARAM_COMPARE_TO_PROFILE;
+import static org.sonar.server.rule.ws.RulesWsParameters.PARAM_COMPLIANCE_STANDARDS;
 import static org.sonar.server.rule.ws.RulesWsParameters.PARAM_CWE;
 import static org.sonar.server.rule.ws.RulesWsParameters.PARAM_IMPACT_SEVERITIES;
 import static org.sonar.server.rule.ws.RulesWsParameters.PARAM_IMPACT_SOFTWARE_QUALITIES;
@@ -64,19 +71,22 @@ import static org.sonar.server.rule.ws.RulesWsParameters.PARAM_TYPES;
 @ServerSide
 public class RuleQueryFactory {
   private final DbClient dbClient;
+  private final MetadataRules metadataRules;
 
-  public RuleQueryFactory(DbClient dbClient) {
+  public RuleQueryFactory(DbClient dbClient, MetadataRules metadataRules) {
     this.dbClient = dbClient;
+    this.metadataRules = metadataRules;
   }
 
   /**
    * Similar to {@link #createRuleQuery(DbSession, Request)} but sets additional fields which are only used
-   * for the rule search WS. 
+   * for the rule search WS.
    */
   public RuleQuery createRuleSearchQuery(DbSession dbSession, Request request) {
     RuleQuery query = createRuleQuery(dbSession, request);
     query.setIncludeExternal(request.mandatoryParamAsBoolean(PARAM_INCLUDE_EXTERNAL));
     query.setPrioritizedRule(request.paramAsBoolean(PARAM_PRIORITIZED_RULE));
+    setComplianceFilter(query, parseComplianceStandardsFilter(request.param(PARAM_COMPLIANCE_STANDARDS)));
     return query;
   }
 
@@ -122,7 +132,25 @@ public class RuleQueryFactory {
       query.setSortField(sortParam);
       query.setAscendingSort(request.mandatoryParamAsBoolean(WebService.Param.ASCENDING));
     }
+
     return query;
+  }
+
+  private void setComplianceFilter(RuleQuery query, Map<ReportKey, Collection<String>> categoriesByStandard) {
+    if (categoriesByStandard.isEmpty()) {
+      return;
+    }
+
+    query.setComplianceCategoryRules(getComplianceStandardRules(categoriesByStandard));
+  }
+
+  private ComplianceCategoryRules getComplianceStandardRules(Map<ReportKey, Collection<String>> categoriesByStandard) {
+    ComplianceCategoryRules rules = metadataRules.getRules(categoriesByStandard);
+    if (rules.ruleKeys().isEmpty() && rules.repoRuleKeys().isEmpty()) {
+      // either invalid category or category with no rules
+      return new ComplianceCategoryRules(List.of(), List.of("non-existing-uuid"));
+    }
+    return rules;
   }
 
   private void setProfile(DbSession dbSession, RuleQuery query, Request request) {

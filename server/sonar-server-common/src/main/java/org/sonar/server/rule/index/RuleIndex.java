@@ -19,7 +19,14 @@
  */
 package org.sonar.server.rule.index;
 
+import co.elastic.clients.elasticsearch._types.FieldValue;
+import co.elastic.clients.elasticsearch._types.SortOrder;
+import co.elastic.clients.elasticsearch._types.aggregations.StringTermsAggregate;
+import co.elastic.clients.elasticsearch._types.aggregations.StringTermsBucket;
+import co.elastic.clients.util.NamedValue;
 import com.google.common.base.Joiner;
+import io.sonarcloud.compliancereports.reports.MetadataRules.ComplianceCategoryRules;
+import io.sonarcloud.compliancereports.reports.MetadataRules.RepositoryRuleKey;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -52,14 +59,13 @@ import org.elasticsearch.search.aggregations.bucket.terms.TermsAggregationBuilde
 import org.elasticsearch.search.builder.SearchSourceBuilder;
 import org.elasticsearch.search.sort.FieldSortBuilder;
 import org.elasticsearch.search.sort.SortBuilders;
-import org.elasticsearch.search.sort.SortOrder;
 import org.jetbrains.annotations.NotNull;
 import org.sonar.api.config.Configuration;
 import org.sonar.api.issue.impact.SoftwareQuality;
 import org.sonar.api.rule.RuleStatus;
 import org.sonar.api.rule.Severity;
-import org.sonar.core.rule.RuleType;
 import org.sonar.api.utils.System2;
+import org.sonar.core.rule.RuleType;
 import org.sonar.db.qualityprofile.QProfileDto;
 import org.sonar.server.es.EsClient;
 import org.sonar.server.es.EsUtils;
@@ -74,7 +80,6 @@ import static com.google.common.base.Preconditions.checkArgument;
 import static java.lang.Boolean.FALSE;
 import static java.lang.Boolean.TRUE;
 import static java.util.Collections.emptyList;
-import static java.util.Optional.ofNullable;
 import static org.elasticsearch.index.query.QueryBuilders.boolQuery;
 import static org.elasticsearch.index.query.QueryBuilders.matchAllQuery;
 import static org.elasticsearch.index.query.QueryBuilders.matchPhraseQuery;
@@ -83,10 +88,10 @@ import static org.elasticsearch.index.query.QueryBuilders.nestedQuery;
 import static org.elasticsearch.index.query.QueryBuilders.termsQuery;
 import static org.elasticsearch.search.aggregations.AggregationBuilders.filters;
 import static org.elasticsearch.search.aggregations.AggregationBuilders.reverseNested;
-import static org.sonar.core.rule.RuleType.SECURITY_HOTSPOT;
-import static org.sonar.core.rule.RuleType.VULNERABILITY;
 import static org.sonar.core.config.MQRModeConstants.MULTI_QUALITY_MODE_DEFAULT_VALUE;
 import static org.sonar.core.config.MQRModeConstants.MULTI_QUALITY_MODE_ENABLED;
+import static org.sonar.core.rule.RuleType.SECURITY_HOTSPOT;
+import static org.sonar.core.rule.RuleType.VULNERABILITY;
 import static org.sonar.server.es.EsUtils.SCROLL_TIME_IN_MINUTES;
 import static org.sonar.server.es.EsUtils.optimizeScrollRequest;
 import static org.sonar.server.es.EsUtils.scrollIds;
@@ -163,6 +168,8 @@ public class RuleIndex {
   public static final String FACET_IMPACT_SOFTWARE_QUALITY = "impactSoftwareQualities";
   public static final String FACET_IMPACT_SEVERITY = "impactSeverities";
   public static final String FACET_ACTIVE_IMPACT_SEVERITY = "active_impactSeverities";
+  public static final String FACET_COMPLIANCE_STANDARDS = "complianceStandards";
+  public static final String COMPLIANCE_FILTER_FACET = "compliance";
 
   private static final BoolQueryBuilder SECURITY_IMPACT_AND_HOTSPOT_FILTER =
     boolQuery()
@@ -198,7 +205,7 @@ public class RuleIndex {
     QueryBuilder qb = buildQuery(query);
     Map<String, QueryBuilder> filters = buildFilters(query);
 
-    if (!options.getFacets().isEmpty()) {
+    if (!options.getFacets().isEmpty() || !options.getComplianceFacets().isEmpty()) {
       for (AggregationBuilder aggregation : getFacets(query, options, qb, filters).values()) {
         sourceBuilder.aggregation(aggregation);
       }
@@ -260,9 +267,9 @@ public class RuleIndex {
     BoolQueryBuilder textQuery = boolQuery();
     JavaTokenizer.split(queryText)
       .stream().map(token -> boolQuery().should(
-        matchQuery(
-          SEARCH_GRAMS_ANALYZER.subField(FIELD_RULE_NAME),
-          StringUtils.left(token, DefaultIndexSettings.MAXIMUM_NGRAM_LENGTH)).boost(20F))
+          matchQuery(
+            SEARCH_GRAMS_ANALYZER.subField(FIELD_RULE_NAME),
+            StringUtils.left(token, DefaultIndexSettings.MAXIMUM_NGRAM_LENGTH)).boost(20F))
         .should(
           matchPhraseQuery(
             ENGLISH_HTML_ANALYZER.subField(FIELD_RULE_HTML_DESCRIPTION),
@@ -280,7 +287,7 @@ public class RuleIndex {
 
   private static QueryBuilder termQuery(String field, String query, float boost) {
     return QueryBuilders.multiMatchQuery(query,
-      field, SEARCH_WORDS_ANALYZER.subField(field))
+        field, SEARCH_WORDS_ANALYZER.subField(field))
       .operator(Operator.AND)
       .boost(boost);
   }
@@ -321,6 +328,8 @@ public class RuleIndex {
     addSecurityStandardFilter(filters, FIELD_RULE_SANS_TOP_25, query.getSansTop25());
 
     addSecurityStandardFilter(filters, FIELD_RULE_SONARSOURCE_SECURITY, query.getSonarsourceSecurity());
+
+    addComplianceCategoriesFilter(filters, query.getComplianceCategoryRules());
 
     addFilter(filters, FIELD_RULE_KEY, query.getKey());
 
@@ -427,6 +436,23 @@ public class RuleIndex {
       .filter(termsQuery(FIELD_RULE_IMPACT_SOFTWARE_QUALITY, query.getImpactSoftwareQualities()))
       .filter(termsQuery(FIELD_RULE_IMPACT_SEVERITY, query.getImpactSeverities()));
     allFilters.put(FIELD_RULE_IMPACTS, nestedQuery(FIELD_ISSUE_IMPACTS, impactsFilter, ScoreMode.Avg));
+  }
+
+  private static void addComplianceCategoriesFilter(Map<String, QueryBuilder> filters, @Nullable ComplianceCategoryRules rules) {
+    if (rules == null) {
+      return;
+    }
+
+    BoolQueryBuilder boolQueryBuilder = boolQuery();
+    if (!rules.ruleKeys().isEmpty()) {
+      boolQueryBuilder.should().add(QueryBuilders.termsQuery(FIELD_RULE_RULE_KEY, rules.ruleKeys()));
+    }
+    if (!rules.repoRuleKeys().isEmpty()) {
+      Collection<String> repoRuleKeys = rules.repoRuleKeys().stream().map(RepositoryRuleKey::toString).toList();
+      boolQueryBuilder.should().add(QueryBuilders.termsQuery(FIELD_RULE_KEY, repoRuleKeys));
+    }
+
+    filters.put(COMPLIANCE_FILTER_FACET, boolQueryBuilder);
   }
 
   private void addSecurityStandardFilter(Map<String, QueryBuilder> filters, String key, Collection<String> values) {
@@ -575,9 +601,19 @@ public class RuleIndex {
     addActiveRuleImpactSeverityFacetIfNeeded(options, query, aggregations, stickyFacetBuilder);
 
     addDefaultSecurityFacets(query, options, aggregations, stickyFacetBuilder);
+    addComplianceFacetsIfNeeded(options, aggregations, stickyFacetBuilder);
   }
 
-  private static void addImpactSoftwareQualityFacetIfNeeded(SearchOptions options, RuleQuery query, Map<String, AggregationBuilder> aggregations,
+  private static void addComplianceFacetsIfNeeded(SearchOptions options, Map<String, AggregationBuilder> aggregations,
+    StickyFacetBuilder stickyFacetBuilder) {
+    if (!options.getComplianceFacets().isEmpty()) {
+      aggregations.put(COMPLIANCE_FILTER_FACET,
+        stickyFacetBuilder.buildStickyFacet(FIELD_RULE_KEY, COMPLIANCE_FILTER_FACET, COMPLIANCE_FILTER_FACET, 65525, t -> t));
+    }
+  }
+
+  private static void addImpactSoftwareQualityFacetIfNeeded(SearchOptions options, RuleQuery query,
+    Map<String, AggregationBuilder> aggregations,
     StickyFacetBuilder stickyFacetBuilder) {
     if (!options.getFacets().contains(FACET_IMPACT_SOFTWARE_QUALITY)) {
       return;
@@ -591,16 +627,19 @@ public class RuleIndex {
         buildSoftwareQualityFacetFilter(query, mainQuery, softwareQuality.name())))
       .toArray(FiltersAggregator.KeyedFilter[]::new);
 
-    NestedAggregationBuilder nestedAggregationBuilder = AggregationBuilders.nested("nested_" + FACET_IMPACT_SOFTWARE_QUALITY, FIELD_RULE_IMPACTS)
+    NestedAggregationBuilder nestedAggregationBuilder = AggregationBuilders.nested("nested_" + FACET_IMPACT_SOFTWARE_QUALITY,
+        FIELD_RULE_IMPACTS)
       .subAggregation(filters(FACET_IMPACT_SOFTWARE_QUALITY, keyedFilters));
 
-    AggregationBuilder aggregationBuilder = stickyFacetBuilder.buildNestedAggregationStickyFacet(FIELD_RULE_IMPACTS, SUB_FIELD_SOFTWARE_QUALITY,
+    AggregationBuilder aggregationBuilder = stickyFacetBuilder.buildNestedAggregationStickyFacet(FIELD_RULE_IMPACTS,
+      SUB_FIELD_SOFTWARE_QUALITY,
       FACET_IMPACT_SOFTWARE_QUALITY, nestedAggregationBuilder);
 
     aggregations.put(FACET_IMPACT_SOFTWARE_QUALITY, aggregationBuilder);
   }
 
-  private static BoolQueryBuilder buildSoftwareQualityFacetFilter(RuleQuery query, Function<String, BoolQueryBuilder> mainQuery, String value) {
+  private static BoolQueryBuilder buildSoftwareQualityFacetFilter(RuleQuery query, Function<String, BoolQueryBuilder> mainQuery,
+    String value) {
     BoolQueryBuilder boolQueryBuilder = mainQuery.apply(value);
     if (isNotEmpty(query.getImpactSeverities())) {
       return boolQueryBuilder.filter(termsQuery(FIELD_RULE_IMPACT_SEVERITY, query.getImpactSeverities()));
@@ -608,7 +647,8 @@ public class RuleIndex {
     return boolQueryBuilder;
   }
 
-  private static void addImpactSeverityFacetIfNeeded(SearchOptions options, RuleQuery query, Map<String, AggregationBuilder> aggregations, StickyFacetBuilder stickyFacetBuilder) {
+  private static void addImpactSeverityFacetIfNeeded(SearchOptions options, RuleQuery query, Map<String, AggregationBuilder> aggregations
+    , StickyFacetBuilder stickyFacetBuilder) {
     if (!options.getFacets().contains(FACET_IMPACT_SEVERITY)) {
       return;
     }
@@ -750,7 +790,8 @@ public class RuleIndex {
     return (items == null) ? (new String[0]) : items.toArray(new String[0]);
   }
 
-  private static void addStatusFacetIfNeeded(SearchOptions options, Map<String, AggregationBuilder> aggregations, StickyFacetBuilder stickyFacetBuilder) {
+  private static void addStatusFacetIfNeeded(SearchOptions options, Map<String, AggregationBuilder> aggregations,
+    StickyFacetBuilder stickyFacetBuilder) {
     if (options.getFacets().contains(FACET_STATUSES)) {
       BoolQueryBuilder facetFilter = stickyFacetBuilder.getStickyFacetFilter(FIELD_RULE_STATUS);
       AggregationBuilder statuses = AggregationBuilders.filter(FACET_STATUSES + "_filter", facetFilter)
@@ -784,7 +825,8 @@ public class RuleIndex {
       RuleIndex.addTermFilter(childrenFilter, FIELD_ACTIVE_RULE_INHERITANCE, query.getInheritance());
       QueryBuilder activeRuleFilter = childrenFilter.must(ruleFilter);
 
-      AggregationBuilder activeSeverities = JoinAggregationBuilders.children(FACET_ACTIVE_SEVERITIES + "_children", TYPE_ACTIVE_RULE.getName())
+      AggregationBuilder activeSeverities = JoinAggregationBuilders.children(FACET_ACTIVE_SEVERITIES + "_children",
+          TYPE_ACTIVE_RULE.getName())
         .subAggregation(
           AggregationBuilders.filter(FACET_ACTIVE_SEVERITIES + "_filter", activeRuleFilter)
             .subAggregation(
@@ -799,7 +841,7 @@ public class RuleIndex {
   }
 
   private static StickyFacetBuilder stickyFacetBuilder(QueryBuilder query, Map<String, QueryBuilder> filters) {
-    return new StickyFacetBuilder(query, filters, null, BucketOrder.compound(BucketOrder.count(false), BucketOrder.key(true)));
+    return new StickyFacetBuilder(query, filters, BucketOrder.compound(BucketOrder.count(false), BucketOrder.key(true)));
   }
 
   private static void setSorting(RuleQuery query, SearchSourceBuilder esSearch) {
@@ -808,17 +850,17 @@ public class RuleIndex {
     if (query.getSortField() != null) {
       FieldSortBuilder sort = SortBuilders.fieldSort(appendSortSuffixIfNeeded(query.getSortField()));
       if (query.isAscendingSort()) {
-        sort.order(SortOrder.ASC);
+        sort.order(org.elasticsearch.search.sort.SortOrder.ASC);
       } else {
-        sort.order(SortOrder.DESC);
+        sort.order(org.elasticsearch.search.sort.SortOrder.DESC);
       }
       esSearch.sort(sort);
     } else if (StringUtils.isNotEmpty(queryText)) {
       esSearch.sort(SortBuilders.scoreSort());
     } else {
-      esSearch.sort(appendSortSuffixIfNeeded(FIELD_RULE_UPDATED_AT), SortOrder.DESC);
+      esSearch.sort(appendSortSuffixIfNeeded(FIELD_RULE_UPDATED_AT), org.elasticsearch.search.sort.SortOrder.DESC);
       // deterministic sort when exactly the same updated_at (same millisecond)
-      esSearch.sort(appendSortSuffixIfNeeded(FIELD_RULE_KEY), SortOrder.ASC);
+      esSearch.sort(appendSortSuffixIfNeeded(FIELD_RULE_KEY), org.elasticsearch.search.sort.SortOrder.ASC);
     }
   }
 
@@ -841,25 +883,35 @@ public class RuleIndex {
       return emptyList();
     }
 
-    TermsAggregationBuilder termsAggregation = AggregationBuilders.terms(AGGREGATION_NAME_FOR_TAGS)
-      .field(FIELD_RULE_TAGS)
-      .size(size)
-      .order(BucketOrder.key(true))
-      .minDocCount(1);
-    ofNullable(query)
-      .map(EsUtils::escapeSpecialRegexChars)
-      .map(queryString -> ".*" + queryString + ".*")
-      .map(s -> new IncludeExclude(s, null))
-      .ifPresent(termsAggregation::includeExclude);
-
-    SearchRequest request = EsClient.prepareSearch(TYPE_RULE.getMainType())
-      .source(new SearchSourceBuilder()
-        .query(matchAllQuery())
+    co.elastic.clients.elasticsearch.core.SearchResponse<Void> esResponse = client.searchV2(req -> {
+      req.index(TYPE_RULE.getMainType().getIndex().getName())
+        .query(q -> q.matchAll(m -> m))
         .size(0)
-        .aggregation(termsAggregation));
+        .aggregations(AGGREGATION_NAME_FOR_TAGS, agg -> agg.terms(t -> {
+          t.field(FIELD_RULE_TAGS)
+            .size(size)
+            .minDocCount(1)
+            .order(NamedValue.of("_key", SortOrder.Asc));
 
-    SearchResponse esResponse = client.search(request);
-    return EsUtils.termsKeys(esResponse.getAggregations().get(AGGREGATION_NAME_FOR_TAGS));
+          // Apply include/exclude filter if query is provided
+          if (query != null) {
+            String pattern = ".*" + EsUtils.escapeSpecialRegexChars(query) + ".*";
+            t.include(i -> i.regexp(pattern));
+          }
+
+          return t;
+        }));
+      return req;
+    }, Void.class);
+
+    // Extract terms aggregation results
+    StringTermsAggregate termsAggregate =
+      esResponse.aggregations().get(AGGREGATION_NAME_FOR_TAGS).sterms();
+
+    return termsAggregate.buckets().array().stream()
+      .map(StringTermsBucket::key)
+      .map(FieldValue::stringValue)
+      .toList();
   }
 
   @CheckForNull

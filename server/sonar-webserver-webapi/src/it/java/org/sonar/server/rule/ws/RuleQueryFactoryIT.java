@@ -19,6 +19,10 @@
  */
 package org.sonar.server.rule.ws;
 
+import io.sonarcloud.compliancereports.reports.MetadataLoader;
+import io.sonarcloud.compliancereports.reports.MetadataRules;
+import io.sonarcloud.compliancereports.reports.MetadataRules.RepositoryRuleKey;
+import java.util.Set;
 import org.junit.Rule;
 import org.junit.Test;
 import org.sonar.api.impl.ws.SimpleGetRequest;
@@ -29,6 +33,7 @@ import org.sonar.api.utils.System2;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbTester;
 import org.sonar.db.qualityprofile.QProfileDto;
+import org.sonar.server.TestMetadataType;
 import org.sonar.server.exceptions.NotFoundException;
 import org.sonar.server.rule.index.RuleQuery;
 import org.sonar.server.tester.UserSessionRule;
@@ -43,11 +48,11 @@ import static org.sonar.api.rule.RuleStatus.READY;
 import static org.sonar.api.rule.Severity.CRITICAL;
 import static org.sonar.api.rule.Severity.MAJOR;
 import static org.sonar.api.rule.Severity.MINOR;
-import static org.sonar.core.rule.RuleType.BUG;
-import static org.sonar.core.rule.RuleType.CODE_SMELL;
 import static org.sonar.api.server.ws.WebService.Param.ASCENDING;
 import static org.sonar.api.server.ws.WebService.Param.SORT;
 import static org.sonar.api.server.ws.WebService.Param.TEXT_QUERY;
+import static org.sonar.core.rule.RuleType.BUG;
+import static org.sonar.core.rule.RuleType.CODE_SMELL;
 import static org.sonar.db.qualityprofile.ActiveRuleDto.INHERITED;
 import static org.sonar.db.qualityprofile.ActiveRuleDto.OVERRIDES;
 import static org.sonar.server.rule.ws.RuleWsSupport.defineGenericRuleSearchParameters;
@@ -55,6 +60,7 @@ import static org.sonar.server.rule.ws.RulesWsParameters.PARAM_ACTIVATION;
 import static org.sonar.server.rule.ws.RulesWsParameters.PARAM_ACTIVE_SEVERITIES;
 import static org.sonar.server.rule.ws.RulesWsParameters.PARAM_AVAILABLE_SINCE;
 import static org.sonar.server.rule.ws.RulesWsParameters.PARAM_COMPARE_TO_PROFILE;
+import static org.sonar.server.rule.ws.RulesWsParameters.PARAM_COMPLIANCE_STANDARDS;
 import static org.sonar.server.rule.ws.RulesWsParameters.PARAM_INCLUDE_EXTERNAL;
 import static org.sonar.server.rule.ws.RulesWsParameters.PARAM_INHERITANCE;
 import static org.sonar.server.rule.ws.RulesWsParameters.PARAM_IS_TEMPLATE;
@@ -76,8 +82,8 @@ public class RuleQueryFactoryIT {
   public UserSessionRule userSession = UserSessionRule.standalone();
 
   private DbClient dbClient = db.getDbClient();
-
-  private RuleQueryFactory underTest = new RuleQueryFactory(dbClient);
+  private MetadataRules metadataRules = new MetadataRules(new MetadataLoader(Set.of(new TestMetadataType())));
+  private RuleQueryFactory underTest = new RuleQueryFactory(dbClient, metadataRules);
 
   private FakeAction fakeAction = new FakeAction(underTest);
 
@@ -106,6 +112,7 @@ public class RuleQueryFactoryIT {
     assertThat(result.getTypes()).isEmpty();
     assertThat(result.getSortField()).isNull();
     assertThat(result.getCompareToQProfile()).isNull();
+    assertThat(result.getComplianceCategoryRules()).isNull();
   }
 
   @Test
@@ -132,12 +139,15 @@ public class RuleQueryFactoryIT {
       PARAM_TAGS, "tag1,tag2",
       PARAM_TEMPLATE_KEY, "architectural",
       PARAM_TYPES, "CODE_SMELL,BUG",
+      PARAM_COMPLIANCE_STANDARDS, "test:V1=category1",
 
       SORT, "updatedAt",
       ASCENDING, "false");
 
     assertResult(result, qualityProfile, compareToQualityProfile);
     assertThat(result.includeExternal()).isFalse();
+    assertThat(result.getComplianceCategoryRules().ruleKeys()).containsOnly("S002", "3");
+    assertThat(result.getComplianceCategoryRules().repoRuleKeys()).containsOnly(RepositoryRuleKey.of("java:S001"));
   }
 
   @Test
@@ -177,12 +187,14 @@ public class RuleQueryFactoryIT {
       PARAM_TAGS, "tag1,tag2",
       PARAM_TEMPLATE_KEY, "architectural",
       PARAM_TYPES, "CODE_SMELL,BUG",
+      PARAM_COMPLIANCE_STANDARDS, "testV1=category1",
 
       SORT, "updatedAt",
       ASCENDING, "false");
 
     assertResult(result, qualityProfile, compareToQualityProfile);
     assertThat(result.includeExternal()).isFalse();
+    assertThat(result.getComplianceCategoryRules()).isNull();
   }
 
   @Test

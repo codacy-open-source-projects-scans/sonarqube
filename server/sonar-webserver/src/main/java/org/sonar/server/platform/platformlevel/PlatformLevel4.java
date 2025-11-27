@@ -19,6 +19,8 @@
  */
 package org.sonar.server.platform.platformlevel;
 
+import io.sonarcloud.compliancereports.reports.MetadataLoader;
+import io.sonarcloud.compliancereports.reports.MetadataRules;
 import java.util.List;
 import org.sonar.alm.client.RatioBasedRateLimitChecker;
 import org.sonar.alm.client.TimeoutConfigurationImpl;
@@ -59,6 +61,7 @@ import org.sonar.core.metric.SoftwareQualitiesMetrics;
 import org.sonar.core.platform.PlatformEditionProvider;
 import org.sonar.core.platform.SpringComponentContainer;
 import org.sonar.core.scadata.DefaultScaDataSourceImpl;
+import org.sonar.db.report.IssueStatsByRuleKeyDaoImpl;
 import org.sonar.server.ai.code.assurance.AiCodeAssuranceEntitlement;
 import org.sonar.server.ai.code.assurance.NoOpAiCodeAssuranceVerifier;
 import org.sonar.server.almintegration.ws.AlmIntegrationsWSModule;
@@ -413,6 +416,11 @@ public class PlatformLevel4 extends PlatformLevel {
       LanguageWs.class,
       LanguageValidation.class,
       org.sonar.server.language.ws.ListAction.class,
+
+      // compliance reports
+      IssueStatsByRuleKeyDaoImpl.class,
+      MetadataLoader.class,
+      MetadataRules.class,
 
       // measure
       new MetricsWsModule(),

@@ -19,6 +19,7 @@ dependencies {
   api 'org.apache.commons:commons-lang3'
   api 'org.bouncycastle:bcprov-jdk18on'
   api 'org.elasticsearch.client:elasticsearch-rest-high-level-client'
+  api 'co.elastic.clients:elasticsearch-java'
   api 'org.slf4j:slf4j-api'
   api 'org.sonarsource.api.plugin:sonar-plugin-api'
   api project(':server:sonar-db-dao')
@@ -30,6 +31,7 @@ dependencies {
   api project(':sonar-ws')
 
   implementation project(':server:sonar-statemachine')
+  implementation "com.sonarsource.sonarcloud:compliance-reports:${complianceReportsVersion}"
 
   compileOnlyApi 'com.github.spotbugs:spotbugs-annotations'
 
@@ -59,6 +61,7 @@ dependencies {
   testImplementation project(':sonar-plugin-api-impl')
   testImplementation project(':sonar-testing-harness')
 
+  testFixturesApi "com.sonarsource.sonarcloud:compliance-reports:${complianceReportsVersion}"
   testFixturesApi 'junit:junit'
   testFixturesApi testFixtures(project(':server:sonar-db-dao'))
 
@@ -68,6 +71,7 @@ dependencies {
   testFixturesImplementation 'org.codelibs.elasticsearch.module:reindex'
   testFixturesImplementation 'org.elasticsearch:mocksocket'
   testFixturesImplementation 'org.junit.jupiter:junit-jupiter-api'
+
 
   testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine'
   testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
