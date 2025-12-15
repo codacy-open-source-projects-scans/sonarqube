@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2025 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -447,6 +447,10 @@ public class SensorContextTester implements SensorContext {
   public void addTelemetryProperty(String key, String value) {
     //No Need to check the source of the plugin in the tester
     sensorStorage.storeTelemetry(key, value);
+  }
+
+  public Map<String, String> getTelemetryProperties() {
+    return unmodifiableMap(sensorStorage.telemetryEntries);
   }
 
   @Override

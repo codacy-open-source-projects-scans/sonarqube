@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2025 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -29,23 +29,26 @@ class AnalysisMetricTest {
 
   @Test
   void getters() {
-    AnalysisMetric metric = new AnalysisMetric("memory", "100", "projectUuid", "analysisType");
+    AnalysisMetric metric = new AnalysisMetric("memory", "100", "projectUuid", "analysisType", "analysisUuid");
 
     assertThat(metric.getKey()).isEqualTo("memory");
     assertThat(metric.getValue()).isEqualTo("100");
     assertThat(metric.getProjectUuid()).isEqualTo("projectUuid");
     assertThat(metric.getAnalysisType()).isEqualTo("analysisType");
+    assertThat(metric.getAnalysisUuid()).isEqualTo("analysisUuid");
     assertThat(metric.getGranularity()).isEqualTo(Granularity.ADHOC);
     assertThat(metric.getType()).isEqualTo(TelemetryDataType.STRING);
   }
 
   @Test
   void setters() {
-    AnalysisMetric metric = new AnalysisMetric("memory", "100", "projectUuid", "analysisType");
+    AnalysisMetric metric = new AnalysisMetric("memory", "100", "projectUuid", "analysisType", "analysisUuid");
     metric.setProjectUuid("newProjectUuid");
     metric.setAnalysisType("newAnalysisType");
+    metric.setAnalysisUuid("newAnalysisUuid");
 
     assertThat(metric.getProjectUuid()).isEqualTo("newProjectUuid");
     assertThat(metric.getAnalysisType()).isEqualTo("newAnalysisType");
+    assertThat(metric.getAnalysisUuid()).isEqualTo("newAnalysisUuid");
   }
 }

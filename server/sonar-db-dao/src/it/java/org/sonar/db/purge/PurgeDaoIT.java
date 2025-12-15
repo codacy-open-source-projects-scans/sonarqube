@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2025 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -40,7 +40,7 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 import org.apache.commons.io.IOUtils;
-import org.apache.commons.lang.math.RandomUtils;
+import org.apache.commons.lang3.RandomUtils;
 import org.apache.commons.lang3.time.DateUtils;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
@@ -330,13 +330,13 @@ project.getProjectDto().getUuid()), PurgeListener.EMPTY, new PurgeProfiler());
     MetricDto metric2 = db.measures().insertMetric();
 
     db.measures().insertMeasure(srcFile,
-      m -> m.addValue(metric1.getKey(), RandomUtils.nextInt(50)).addValue(metric2.getKey(), RandomUtils.nextInt(50)));
+      m -> m.addValue(metric1.getKey(), RandomUtils.secure().randomInt(0, 50)).addValue(metric2.getKey(), RandomUtils.secure().randomInt(0, 50)));
     db.measures().insertMeasure(dir,
-      m -> m.addValue(metric1.getKey(), RandomUtils.nextInt(50)).addValue(metric2.getKey(), RandomUtils.nextInt(50)));
+      m -> m.addValue(metric1.getKey(), RandomUtils.secure().randomInt(0, 50)).addValue(metric2.getKey(), RandomUtils.secure().randomInt(0, 50)));
     db.measures().insertMeasure(mainBranch,
-      m -> m.addValue(metric1.getKey(), RandomUtils.nextInt(50)).addValue(metric2.getKey(), RandomUtils.nextInt(50)));
+      m -> m.addValue(metric1.getKey(), RandomUtils.secure().randomInt(0, 50)).addValue(metric2.getKey(), RandomUtils.secure().randomInt(0, 50)));
     db.measures().insertMeasure(enabledFile,
-      m -> m.addValue(metric1.getKey(), RandomUtils.nextInt(50)).addValue(metric2.getKey(), RandomUtils.nextInt(50)));
+      m -> m.addValue(metric1.getKey(), RandomUtils.secure().randomInt(0, 50)).addValue(metric2.getKey(), RandomUtils.secure().randomInt(0, 50)));
     assertThat(db.countRowsOfTable("measures")).isEqualTo(4);
 
     // back to present
@@ -1727,13 +1727,13 @@ project.getProjectDto().getKey());
 
     ComponentDto project1 = db.components().insertPublicProject().getMainBranchComponent();
     ComponentDto dir1 = db.components().insertComponent(newDirectory(project1, "path"));
-    db.measures().insertMeasure(project1, m -> m.addValue(metric.getKey(), RandomUtils.nextInt(50)));
-    db.measures().insertMeasure(dir1, m -> m.addValue(metric.getKey(), RandomUtils.nextInt(50)));
+    db.measures().insertMeasure(project1, m -> m.addValue(metric.getKey(), RandomUtils.secure().randomInt(0, 50)));
+    db.measures().insertMeasure(dir1, m -> m.addValue(metric.getKey(), RandomUtils.secure().randomInt(0, 50)));
 
     ComponentDto project2 = db.components().insertPublicProject().getMainBranchComponent();
     ComponentDto dir2 = db.components().insertComponent(newDirectory(project2, "path"));
-    db.measures().insertMeasure(project2, m -> m.addValue(metric.getKey(), RandomUtils.nextInt(50)));
-    db.measures().insertMeasure(dir2, m -> m.addValue(metric.getKey(), RandomUtils.nextInt(50)));
+    db.measures().insertMeasure(project2, m -> m.addValue(metric.getKey(), RandomUtils.secure().randomInt(0, 50)));
+    db.measures().insertMeasure(dir2, m -> m.addValue(metric.getKey(), RandomUtils.secure().randomInt(0, 50)));
 
     underTest.deleteProject(dbSession, project1.uuid(), project1.qualifier(), project1.name(), project1.getKey());
 
@@ -2077,27 +2077,50 @@ oldCreationDate));
     BranchDto branch1 = db.components().insertProjectBranch(project);
     BranchDto branch2 = db.components().insertProjectBranch(project);
 
-    db.executeInsert("issue_stats_by_rule_key",
-      "aggregation_type", "PROJECT",
-      "aggregation_id", branch1.getUuid(),
-      "rule_key", "rule1",
-      "issue_count", 1,
-      "rating", 2,
-      "hotspot_count", 3,
-      "hotspots_reviewed", 4);
-
-    db.executeInsert("issue_stats_by_rule_key",
-      "aggregation_type", "PROJECT",
-      "aggregation_id", branch2.getUuid(),
-      "rule_key", "rule1",
-      "issue_count", 1,
-      "rating", 2,
-      "hotspot_count", 3,
-      "hotspots_reviewed", 4);
+    insertIssueStats("PROJECT", branch1.getUuid());
+    insertIssueStats("PROJECT", branch2.getUuid());
 
     assertThat(db.countRowsOfTable(dbSession, "issue_stats_by_rule_key")).isEqualTo(2);
     underTest.deleteBranch(dbSession, branch1.getUuid());
     assertThat(db.countRowsOfTable(dbSession, "issue_stats_by_rule_key")).isEqualTo(1);
+  }
+
+  @Test
+  void deletePortfolio_purgeIssueStatsByRuleKey() {
+    ComponentDto portfolio = db.components().insertPublicPortfolio();
+    ComponentDto otherPortfolio = db.components().insertPublicPortfolio();
+
+    insertIssueStats("PORTFOLIO", portfolio.uuid());
+    insertIssueStats("PORTFOLIO", otherPortfolio.uuid());
+
+    assertThat(db.countRowsOfTable(dbSession, "issue_stats_by_rule_key")).isEqualTo(2);
+    underTest.deleteProject(dbSession, portfolio.uuid(), portfolio.qualifier(), portfolio.name(), portfolio.getKey());
+    assertThat(db.countRowsOfTable(dbSession, "issue_stats_by_rule_key")).isEqualTo(1);
+  }
+
+  @Test
+  void deleteApplication_purgeIssueStatsByRuleKey() {
+    ProjectData application = db.components().insertPublicApplication();
+    ProjectData otherApplication = db.components().insertPublicApplication();
+
+    insertIssueStats("APPLICATION", application.getProjectDto().getUuid());
+    insertIssueStats("APPLICATION", otherApplication.getProjectDto().getUuid());
+
+    assertThat(db.countRowsOfTable(dbSession, "issue_stats_by_rule_key")).isEqualTo(2);
+    underTest.deleteProject(dbSession, application.getProjectDto().getUuid(), "APP", application.getProjectDto().getName(), application.getProjectDto().getKey());
+    assertThat(db.countRowsOfTable(dbSession, "issue_stats_by_rule_key")).isEqualTo(1);
+  }
+
+  private void insertIssueStats(String aggregationType, String aggregationId) {
+    db.executeInsert("issue_stats_by_rule_key",
+      "aggregation_type", aggregationType,
+      "aggregation_id", aggregationId,
+      "rule_key", "rule1",
+      "issue_count", 1,
+      "rating", 2,
+      "mqr_rating", 3,
+      "hotspot_count", 3,
+      "hotspots_reviewed", 4);
   }
 
   @Test

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2025 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -24,8 +24,6 @@ import com.google.common.collect.Maps;
 import com.google.common.collect.Ordering;
 import io.sonarcloud.compliancereports.reports.MetadataLoader;
 import io.sonarcloud.compliancereports.reports.MetadataRules;
-import io.sonarcloud.compliancereports.reports.MetadataRules.ComplianceCategoryRules;
-import io.sonarcloud.compliancereports.reports.MetadataRules.RepositoryRuleKey;
 import io.sonarcloud.compliancereports.reports.ReportKey;
 import java.util.Arrays;
 import java.util.Collection;
@@ -303,10 +301,12 @@ public class SearchAction implements RulesWsAction {
       .setOffset(context.getOffset());
     if (context.getFacets().contains(RuleIndex.FACET_OLD_DEFAULT)) {
       searchOptions.addFacets(DEFAULT_FACETS);
-    } else if (context.getFacets().contains(FACET_COMPLIANCE_STANDARDS)) {
-      searchOptions.addComplianceFacets(metadataLoader.getAllReportsAsStrings());
     } else {
       searchOptions.addFacets(context.getFacets());
+      if (context.getFacets().contains(FACET_COMPLIANCE_STANDARDS)) {
+        searchOptions.addComplianceFacets(metadataLoader.getAllReportsAsStrings());
+        searchOptions.getFacets().remove(FACET_COMPLIANCE_STANDARDS);
+      }
     }
     return searchOptions;
   }
@@ -545,7 +545,7 @@ public class SearchAction implements RulesWsAction {
     @Nullable List<String> activeSeverities,
     @Nullable List<String> activeImpactSeverities,
     @Nullable Boolean prioritizedRule,
-    @Nullable Map<ReportKey, Collection<String>> complianceStandards
+    @Nullable Map<ReportKey, Set<String>> complianceStandards
   ) {
   }
 }

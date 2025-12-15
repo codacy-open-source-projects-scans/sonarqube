@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2025 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -32,6 +32,7 @@ public class DbVersion202505 implements DbVersion {
       .add(2025_05_000, "Add 'published_on' column to 'sca_vulnerability_issues' table", AddPublishedOnToScaVulnerabilityIssues.class)
       .add(2025_05_001, "Add 'from_sonarqube_update' column to 'issues' table", AddFromSonarQubeUpdateColumnToIssuesTable.class)
       .add(2025_05_002, "Add 'internal_tags' column to 'issues' table", AddInternalTagsToIssuesTable.class)
+      .add(2025_05_003, "Populate 'sonar.announcement.htmlMessage' from 'sonar.announcement.message'", PopulateAnnouncementHtmlMessageProperty.class)
     ;
   }
 }

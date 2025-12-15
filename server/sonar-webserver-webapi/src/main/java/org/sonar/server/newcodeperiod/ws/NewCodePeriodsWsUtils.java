@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2025 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -24,13 +24,13 @@ import org.sonar.core.documentation.DocumentationLinkGenerator;
 import static org.sonar.server.ws.WsUtils.createHtmlExternalLink;
 
 public class NewCodePeriodsWsUtils {
-  public static final String DOCUMENTATION_LINK = "/project-administration/setting-up-clean-as-you-code/#setting-a-new-code-definition";
+  public static final String DOCUMENTATION_LINK = "/project-administration/configuring-new-code-calculation#setting-specific-new-code-definition-for-project";
 
   private NewCodePeriodsWsUtils() {
     // do nothing
   }
 
-  public static String createNewCodePeriodHtmlLink(DocumentationLinkGenerator documentationLinkGenerator){
+  public static String createNewCodePeriodHtmlLink(DocumentationLinkGenerator documentationLinkGenerator) {
     return createHtmlExternalLink(documentationLinkGenerator.getDocumentationLink(DOCUMENTATION_LINK), "new code definition");
   }
 }

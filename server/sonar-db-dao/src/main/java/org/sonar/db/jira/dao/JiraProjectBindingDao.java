@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2025 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -61,8 +61,8 @@ public class JiraProjectBindingDao implements Dao {
     return Optional.ofNullable(getMapper(dbSession).selectBySonarProjectId(sonarProjectId));
   }
 
-  public void deleteBySonarProjectId(DbSession dbSession, String sonarProjectId) {
-    getMapper(dbSession).deleteBySonarProjectId(sonarProjectId);
+  public int deleteBySonarProjectId(DbSession dbSession, String sonarProjectId) {
+    return getMapper(dbSession).deleteBySonarProjectId(sonarProjectId);
   }
 
   public int countAll(DbSession dbSession) {

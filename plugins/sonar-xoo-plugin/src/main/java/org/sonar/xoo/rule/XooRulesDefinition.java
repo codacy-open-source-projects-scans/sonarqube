@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2025 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -357,6 +357,41 @@ public class XooRulesDefinition implements RulesDefinition {
 
     NewRule availableFeature = repo.createRule("AvailableFeature").setName("Creates issues when required features are available");
     addAllDescriptionSections(availableFeature, "Issue raised when a required feature is available");
+
+    NewRule wildcardRuleS2184 = repo.createRule(WildcardRuleKeySensor.RULE_KEY_S2184)
+      .setName("Wildcard security rule S2184")
+      .setType(RuleType.VULNERABILITY)
+      .setHtmlDescription("A rule to test compliance reports")
+      .setDebtRemediationFunction(hasTag.debtRemediationFunctions().linear("5min"));
+    addAllDescriptionSections(wildcardRuleS2184, "Issue raised for S2184 on each file");
+
+    NewRule wildcardRuleS1493 = repo.createRule(WildcardRuleKeySensor.RULE_KEY_S1493)
+      .setName("Wildcard security rule S1493")
+      .setType(RuleType.SECURITY_HOTSPOT)
+      .setHtmlDescription("A rule to test compliance reports")
+      .setDebtRemediationFunction(hasTag.debtRemediationFunctions().linear("5min"));
+    addAllDescriptionSections(wildcardRuleS1493, "Issue raised for S1493 on each file");
+
+    NewRule wildcardRuleS4693 = repo.createRule(WildcardRuleKeySensor.RULE_KEY_S4639)
+      .setName("Wildcard security rule S4693")
+      .setType(RuleType.VULNERABILITY)
+      .setHtmlDescription("A rule to test compliance reports\"")
+      .setDebtRemediationFunction(hasTag.debtRemediationFunctions().linear("5min"));
+    addAllDescriptionSections(wildcardRuleS4693, "Issue raised for S4639 on each file");
+
+    NewRule wildcardRuleS5144 = repo.createRule(WildcardRuleKeySensor.RULE_KEY_S5144)
+      .setName("Wildcard security rule S5144")
+      .setType(RuleType.SECURITY_HOTSPOT)
+      .setHtmlDescription("A rule to test compliance reports\"")
+      .setDebtRemediationFunction(hasTag.debtRemediationFunctions().linear("5min"));
+    addAllDescriptionSections(wildcardRuleS5144, "Issue raised for S5144 on each file");
+
+    NewRule wildcardRuleS8233 = repo.createRule(WildcardRuleKeySensor.RULE_KEY_S8233)
+      .setName("Wildcard security rule S8233")
+      .setType(RuleType.SECURITY_HOTSPOT)
+      .setHtmlDescription("A rule to test compliance reports\"")
+      .setDebtRemediationFunction(hasTag.debtRemediationFunctions().linear("5min"));
+    addAllDescriptionSections(wildcardRuleS8233, "Issue raised for S8233 on each file");
 
     repo.done();
   }

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2025 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -45,6 +45,7 @@ import org.sonar.xoo.rule.AnalysisErrorSensor;
 import org.sonar.xoo.rule.ChecksSensor;
 import org.sonar.xoo.rule.CreateIssueByInternalKeySensor;
 import org.sonar.xoo.rule.CustomMessageSensor;
+import org.sonar.xoo.rule.WildcardRuleKeySensor;
 import org.sonar.xoo.rule.HasTagSensor;
 import org.sonar.xoo.rule.InternalTagsIssueSensor;
 import org.sonar.xoo.rule.MarkAsUnchangedSensor;
@@ -196,6 +197,7 @@ public class XooPlugin implements Plugin {
       HotspotWithContextsSensor.class,
       HotspotWithSingleContextSensor.class,
       HotspotWithCodeVariantsSensor.class,
+      WildcardRuleKeySensor.class,
 
       ArchitectureSensor.class,
       InternalTagsIssueSensor.class,

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2025 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -30,7 +30,6 @@ import java.util.function.BiPredicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import javax.annotation.Nullable;
-import javax.annotation.concurrent.Immutable;
 import org.elasticsearch.index.query.BoolQueryBuilder;
 import org.elasticsearch.index.query.QueryBuilder;
 import org.sonar.server.es.searchrequest.TopAggregationDefinition.FilterScope;
@@ -86,7 +85,7 @@ public class RequestFiltersComputer {
     // use LinkedHashMap over MoreCollectors.uniqueIndex to preserve order and write UTs more easily
     Map<FilterNameAndScope, QueryBuilder> res = new LinkedHashMap<>();
     allFilters.internalStream()
-      .filter(e -> enabledStickyTopAggregationtedFieldNames.contains(e.getKey().getFilterScope()))
+      .filter(e -> enabledStickyTopAggregationtedFieldNames.contains(e.getKey().filterScope()))
       .forEach(e -> checkState(res.put(e.getKey(), e.getValue()) == null, "Duplicate: %s", e.getKey()));
     return res;
   }
@@ -149,11 +148,11 @@ public class RequestFiltersComputer {
     checkArgument(topAggregations.contains(topAggregation), "topAggregation must have been declared in constructor");
     return toBoolQuery(
       postFilters,
-      (e, v) -> !topAggregation.isSticky() || !topAggregation.getFilterScope().intersect(e.getFilterScope()));
+      (e, v) -> !topAggregation.isSticky() || !topAggregation.getFilterScope().intersect(e.filterScope()));
   }
 
   public Optional<BoolQueryBuilder> getPostFiltersExcluding(String filterNameToExclude) {
-    return toBoolQuery(postFilters, (e, v) -> !e.getFilterName().equals(filterNameToExclude));
+    return toBoolQuery(postFilters, (e, v) -> !e.filterName().equals(filterNameToExclude));
   }
 
   private static Optional<BoolQueryBuilder> toBoolQuery(Map<FilterNameAndScope, QueryBuilder> queryFilters,
@@ -226,23 +225,7 @@ public class RequestFiltersComputer {
    * <p>
    * This saves from using two internal maps.
    */
-  @Immutable
-  private static final class FilterNameAndScope {
-    private final String filterName;
-    private final FilterScope filterScope;
-
-    private FilterNameAndScope(String filterName, FilterScope filterScope) {
-      this.filterName = filterName;
-      this.filterScope = filterScope;
-    }
-
-    public String getFilterName() {
-      return filterName;
-    }
-
-    public FilterScope getFilterScope() {
-      return filterScope;
-    }
+  private record FilterNameAndScope(String filterName, FilterScope filterScope) {
 
     @Override
     public boolean equals(Object o) {

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2025 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -28,7 +28,8 @@ public enum MessageType {
   PROJECT_NCD_90(true, false),
   PROJECT_NCD_PAGE_90(true, false),
   BRANCH_NCD_90(true, false),
-  UNRESOLVED_FINDINGS_IN_AI_GENERATED_CODE(true, true);
+  UNRESOLVED_FINDINGS_IN_AI_GENERATED_CODE(true, true),
+  BITBUCKET_CLOUD_APP_DEPRECATION(true, false);
 
   private final boolean dismissible;
   private final boolean isWarning;

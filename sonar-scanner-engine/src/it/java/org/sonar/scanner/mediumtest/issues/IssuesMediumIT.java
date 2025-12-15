@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2025 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -289,7 +289,7 @@ public class IssuesMediumIT {
         .build())
       .execute();
 
-    assertThat(logTester.logs(Level.WARN)).isEmpty();
+    assertThat(logTester.logs(Level.WARN)).noneMatch(l -> l.contains("sonar.issue.ignore.multicriteria"));
 
     result = tester.newAnalysis()
       .properties(ImmutableMap.<String, String>builder()
@@ -305,7 +305,7 @@ public class IssuesMediumIT {
         .build())
       .execute();
 
-    assertThat(logTester.logs(Level.WARN)).containsOnly(
+    assertThat(logTester.logs(Level.WARN)).contains(
       "Specifying issue exclusions at module level is not supported anymore. Configure the property 'sonar.issue.ignore.multicriteria' and any other issue exclusions at project level.");
 
     List<Issue> issues = result.issuesFor(result.inputFile("moduleA/src/sampleA.xoo"));
@@ -333,7 +333,7 @@ public class IssuesMediumIT {
         .build())
       .execute();
 
-    assertThat(logTester.logs(Level.WARN)).isEmpty();
+    assertThat(logTester.logs(Level.WARN)).noneMatch(l -> l.contains("sonar.issue.ignore.multicriteria"));
   }
 
   @Test

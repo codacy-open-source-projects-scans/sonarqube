@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2025 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -25,8 +25,8 @@ import co.elastic.clients.elasticsearch._types.aggregations.StringTermsAggregate
 import co.elastic.clients.elasticsearch._types.aggregations.StringTermsBucket;
 import co.elastic.clients.util.NamedValue;
 import com.google.common.base.Joiner;
-import io.sonarcloud.compliancereports.reports.MetadataRules.ComplianceCategoryRules;
-import io.sonarcloud.compliancereports.reports.MetadataRules.RepositoryRuleKey;
+import io.sonarcloud.compliancereports.reports.ComplianceCategoryRules;
+import io.sonarcloud.compliancereports.reports.RepositoryRuleKey;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -438,19 +438,27 @@ public class RuleIndex {
     allFilters.put(FIELD_RULE_IMPACTS, nestedQuery(FIELD_ISSUE_IMPACTS, impactsFilter, ScoreMode.Avg));
   }
 
-  private static void addComplianceCategoriesFilter(Map<String, QueryBuilder> filters, @Nullable ComplianceCategoryRules rules) {
-    if (rules == null) {
+  private static void addComplianceCategoriesFilter(Map<String, QueryBuilder> filters,
+    @Nullable Collection<ComplianceCategoryRules> rulesCollection) {
+    if (rulesCollection == null) {
       return;
     }
 
     BoolQueryBuilder boolQueryBuilder = boolQuery();
-    if (!rules.ruleKeys().isEmpty()) {
-      boolQueryBuilder.should().add(QueryBuilders.termsQuery(FIELD_RULE_RULE_KEY, rules.ruleKeys()));
+
+    for (ComplianceCategoryRules rules : rulesCollection) {
+      BoolQueryBuilder standardBoolQuery = boolQuery();
+
+      if (!rules.allRuleKeys().isEmpty()) {
+        standardBoolQuery.should().add(QueryBuilders.termsQuery(FIELD_RULE_RULE_KEY, rules.allRuleKeys()));
+      }
+      if (!rules.allRepoRuleKeys().isEmpty()) {
+        Collection<String> repoRuleKeys = rules.allRepoRuleKeys().stream().map(RepositoryRuleKey::toString).toList();
+        standardBoolQuery.should().add(QueryBuilders.termsQuery(FIELD_RULE_KEY, repoRuleKeys));
+      }
+      boolQueryBuilder.must(standardBoolQuery);
     }
-    if (!rules.repoRuleKeys().isEmpty()) {
-      Collection<String> repoRuleKeys = rules.repoRuleKeys().stream().map(RepositoryRuleKey::toString).toList();
-      boolQueryBuilder.should().add(QueryBuilders.termsQuery(FIELD_RULE_KEY, repoRuleKeys));
-    }
+
 
     filters.put(COMPLIANCE_FILTER_FACET, boolQueryBuilder);
   }

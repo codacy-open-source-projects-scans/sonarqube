@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2025 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -27,5 +27,8 @@ public record BoundProjectCreateRestResponse(
   String projectId,
 
   @Schema(description = "The identifier of the binding between the created project and the DevOps platform project")
-  String bindingId) {
+  String bindingId,
+
+  @Schema(description = "True if a new project was created, false if an existing project was bound")
+  boolean newProjectCreated) {
 }

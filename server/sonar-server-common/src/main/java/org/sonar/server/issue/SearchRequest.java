@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2025 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -87,7 +87,7 @@ public class SearchRequest {
   private List<String> codeVariants;
   private String fixedInPullRequest;
   private List<String> linkedTicketStatus;
-  private Map<ReportKey, Collection<String>> categoriesByStandard;
+  private Map<ReportKey, Set<String>> categoriesByStandard;
 
   public SearchRequest() {
     // nothing to do here
@@ -641,11 +641,11 @@ public class SearchRequest {
   }
 
   @CheckForNull
-  public Map<ReportKey, Collection<String>> getCategoriesByStandard() {
+  public Map<ReportKey, Set<String>> getCategoriesByStandard() {
     return categoriesByStandard;
   }
 
-  public SearchRequest setCategoriesByStandard(@Nullable Map<ReportKey, Collection<String>> categoriesByStandard) {
+  public SearchRequest setCategoriesByStandard(@Nullable Map<ReportKey, Set<String>> categoriesByStandard) {
     this.categoriesByStandard = categoriesByStandard;
     return this;
   }

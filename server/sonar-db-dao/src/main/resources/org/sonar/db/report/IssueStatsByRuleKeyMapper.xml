@@ -7,42 +7,64 @@
     rule_key as ruleKey,
     issue_count as issueCount,
     rating as rating,
+    mqr_rating as mqrRating,
     hotspot_count as hotspotCount,
     hotspots_reviewed as hotspotsReviewed
   </sql>
 
-  <select id="selectByAggregationId" parameterType="String" resultType="io.sonarcloud.compliancereports.dao.IssueStats">
+  <select id="selectByAggregationId" parameterType="map" resultType="io.sonarcloud.compliancereports.dao.IssueStats">
     select
     <include refid="IssueStatsColumns"/>
     from issue_stats_by_rule_key
     where aggregation_id = #{aggregationId}
+      and aggregation_type = #{aggregationType}
   </select>
 
-  <insert id="insertIssueStatsForProject">
+  <select id="selectByAggregationIds" parameterType="map" resultType="io.sonarcloud.compliancereports.dao.IssueStats">
+    select
+    <include refid="IssueStatsColumns"/>
+    from issue_stats_by_rule_key
+    where aggregation_id IN
+    <foreach collection="aggregationIds" open="(" item="aggregationId" close=")" separator=",">
+      #{aggregationId}
+    </foreach>
+      and aggregation_type = #{aggregationType}
+  </select>
+
+  <insert id="insertIssueStats">
     insert into issue_stats_by_rule_key (
       aggregation_id,
       aggregation_type,
       rule_key,
       issue_count,
       rating,
+      mqr_rating,
       hotspot_count,
       hotspots_reviewed
     ) values (
       <foreach collection="list" item="item" separator="), (">
         #{aggregationId},
-        'PROJECT',
+        #{aggregationType},
         #{item.ruleKey},
         #{item.issueCount},
         #{item.rating},
+        #{item.mqrRating},
         #{item.hotspotCount},
         #{item.hotspotsReviewed}
       </foreach>
     )
   </insert>
 
-  <delete id="deleteAllIssueStatsForProject" parameterType="String">
+  <delete id="deleteAllIssueStats" parameterType="map">
     delete from issue_stats_by_rule_key
     where aggregation_id = #{aggregationId}
-      and aggregation_type = 'PROJECT'
+      and aggregation_type = #{aggregationType}
+  </delete>
+
+  <delete id="deleteIssueStatsForAggregationAndRuleKey" parameterType="map">
+    delete from issue_stats_by_rule_key
+    where aggregation_id = #{aggregationId}
+      and aggregation_type = #{aggregationType}
+      and rule_key = #{ruleKey}
   </delete>
 </mapper>

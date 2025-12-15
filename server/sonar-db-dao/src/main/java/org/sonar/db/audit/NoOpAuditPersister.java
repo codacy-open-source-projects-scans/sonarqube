@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2025 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -27,6 +27,8 @@ import org.sonar.db.audit.model.DevOpsPlatformSettingNewValue;
 import org.sonar.db.audit.model.AbstractEditorNewValue;
 import org.sonar.db.audit.model.DevOpsPermissionsMappingNewValue;
 import org.sonar.db.audit.model.GroupPermissionNewValue;
+import org.sonar.db.audit.model.JiraOrganizationBindingNewValue;
+import org.sonar.db.audit.model.JiraProjectBindingNewValue;
 import org.sonar.db.audit.model.LicenseNewValue;
 import org.sonar.db.audit.model.PermissionTemplateNewValue;
 import org.sonar.db.audit.model.PersonalAccessTokenNewValue;
@@ -329,6 +331,51 @@ public class NoOpAuditPersister implements AuditPersister {
 
   @Override
   public void componentKeyBranchUpdate(DbSession session, ComponentKeyNewValue componentKeyNewValue, String qualifier) {
+    // no op
+  }
+
+  @Override
+  public void validateDevOpsPlatformSettingSuccess(DbSession dbSession, DevOpsPlatformSettingNewValue newValue) {
+    // no op
+  }
+
+  @Override
+  public void validateDevOpsPlatformSettingFailure(DbSession dbSession, DevOpsPlatformSettingNewValue newValue) {
+    // no op
+  }
+
+  @Override
+  public void jiraOrganizationBindingAdd(DbSession dbSession, JiraOrganizationBindingNewValue newValue) {
+    // no op
+  }
+
+  @Override
+  public void jiraOrganizationBindingReauthorize(DbSession dbSession, JiraOrganizationBindingNewValue newValue) {
+    // no op
+  }
+
+  @Override
+  public void jiraOrganizationBindingUpdate(DbSession dbSession, JiraOrganizationBindingNewValue newValue) {
+    // no op
+  }
+
+  @Override
+  public void jiraOrganizationBindingDelete(DbSession dbSession, JiraOrganizationBindingNewValue newValue) {
+    // no op
+  }
+
+  @Override
+  public void jiraProjectBindingAdd(DbSession dbSession, JiraProjectBindingNewValue newValue) {
+    // no op
+  }
+
+  @Override
+  public void jiraProjectBindingUpdate(DbSession dbSession, JiraProjectBindingNewValue newValue) {
+    // no op
+  }
+
+  @Override
+  public void jiraProjectBindingDelete(DbSession dbSession, JiraProjectBindingNewValue newValue) {
     // no op
   }
 }

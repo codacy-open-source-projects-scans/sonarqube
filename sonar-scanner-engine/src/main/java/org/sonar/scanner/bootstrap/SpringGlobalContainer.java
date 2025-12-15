@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2025 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -90,6 +90,7 @@ public class SpringGlobalContainer extends SpringComponentContainer {
     DefaultAnalysisWarnings analysisWarnings = new DefaultAnalysisWarnings(System2.INSTANCE);
     LOG.debug("{} {}", edition.getLabel(), sqVersion);
     add(
+      JREDeprecationChecker.class,
       // plugins
       ScannerPluginRepository.class,
       PluginClassLoader.class,

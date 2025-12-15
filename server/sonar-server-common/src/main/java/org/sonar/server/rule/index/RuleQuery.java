@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2025 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -20,7 +20,7 @@
 package org.sonar.server.rule.index;
 
 import com.google.common.base.Preconditions;
-import io.sonarcloud.compliancereports.reports.MetadataRules.ComplianceCategoryRules;
+import io.sonarcloud.compliancereports.reports.ComplianceCategoryRules;
 import java.util.Collection;
 import javax.annotation.CheckForNull;
 import javax.annotation.Nullable;
@@ -64,7 +64,7 @@ public class RuleQuery {
   private Collection<String> activeImpactSeverities = null;
   private Collection<String> cleanCodeAttributesCategories = null;
   private Boolean prioritizedRule = null;
-  private ComplianceCategoryRules complianceCategoryRules = null;
+  private Collection<ComplianceCategoryRules> complianceCategoryRules = null;
 
   @CheckForNull
   public QProfileDto getQProfile() {
@@ -369,13 +369,13 @@ public class RuleQuery {
     return impactSeverities;
   }
 
-  public RuleQuery setComplianceCategoryRules(@Nullable ComplianceCategoryRules complianceCategoryRules) {
+  public RuleQuery setComplianceCategoryRules(@Nullable Collection<ComplianceCategoryRules> complianceCategoryRules) {
     this.complianceCategoryRules = complianceCategoryRules;
     return this;
   }
 
   @CheckForNull
-  public ComplianceCategoryRules getComplianceCategoryRules() {
+  public Collection<ComplianceCategoryRules> getComplianceCategoryRules() {
     return complianceCategoryRules;
   }
 

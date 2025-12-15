@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2025 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -22,5 +22,5 @@ package org.sonar.server.common.project;
 import org.sonar.db.alm.setting.ProjectAlmSettingDto;
 import org.sonar.db.project.ProjectDto;
 
-public record ImportedProject(ProjectDto projectDto, ProjectAlmSettingDto projectAlmSettingDto){
+public record ImportedProject(ProjectDto projectDto, ProjectAlmSettingDto projectAlmSettingDto, boolean newProjectCreated){
 }

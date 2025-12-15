@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2025 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,14 +19,16 @@
  */
 package org.sonar.server.hotspot.ws;
 
+import io.sonarcloud.compliancereports.dao.AggregationType;
+import io.sonarcloud.compliancereports.dao.IssueStats;
 import java.util.Objects;
 import javax.annotation.CheckForNull;
 import javax.annotation.Nullable;
+import org.sonar.api.rule.RuleKey;
 import org.sonar.api.server.ws.Change;
 import org.sonar.api.server.ws.Request;
 import org.sonar.api.server.ws.Response;
 import org.sonar.api.server.ws.WebService;
-import org.sonar.db.permission.ProjectPermission;
 import org.sonar.core.issue.DefaultIssue;
 import org.sonar.core.issue.IssueChangeContext;
 import org.sonar.core.util.Uuids;
@@ -34,6 +36,8 @@ import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
 import org.sonar.db.component.BranchDto;
 import org.sonar.db.issue.IssueDto;
+import org.sonar.db.permission.ProjectPermission;
+import org.sonar.db.report.IssueStatsByRuleKeyDaoImpl;
 import org.sonar.server.issue.IssueFieldsSetter;
 import org.sonar.server.issue.TransitionService;
 import org.sonar.server.issue.workflow.securityhotspot.SecurityHotspotWorkflowTransition;
@@ -42,6 +46,7 @@ import org.sonar.server.pushapi.hotspots.HotspotChangeEventService;
 import org.sonar.server.pushapi.hotspots.HotspotChangedEvent;
 
 import static com.google.common.base.Preconditions.checkArgument;
+import static io.sonarcloud.compliancereports.dao.AggregationType.PROJECT;
 import static org.apache.commons.lang3.StringUtils.trimToNull;
 import static org.sonar.api.issue.Issue.RESOLUTION_ACKNOWLEDGED;
 import static org.sonar.api.issue.Issue.RESOLUTION_FIXED;
@@ -49,6 +54,8 @@ import static org.sonar.api.issue.Issue.SECURITY_HOTSPOT_RESOLUTIONS;
 import static org.sonar.api.issue.Issue.STATUS_REVIEWED;
 import static org.sonar.api.issue.Issue.STATUS_TO_REVIEW;
 import static org.sonar.db.component.BranchType.BRANCH;
+import static org.sonar.db.component.BranchType.PULL_REQUEST;
+import static org.sonar.server.issue.workflow.securityhotspot.SecurityHotspotWorkflowTransition.RESET_AS_TO_REVIEW;
 
 public class ChangeStatusAction implements HotspotsWsAction {
 
@@ -63,15 +70,18 @@ public class ChangeStatusAction implements HotspotsWsAction {
   private final IssueFieldsSetter issueFieldsSetter;
   private final IssueUpdater issueUpdater;
   private final HotspotChangeEventService hotspotChangeEventService;
+  private final IssueStatsByRuleKeyDaoImpl issueStatsByRuleKeyDao;
 
   public ChangeStatusAction(DbClient dbClient, HotspotWsSupport hotspotWsSupport, TransitionService transitionService,
-    IssueFieldsSetter issueFieldsSetter, IssueUpdater issueUpdater, HotspotChangeEventService hotspotChangeEventService) {
+    IssueFieldsSetter issueFieldsSetter, IssueUpdater issueUpdater, HotspotChangeEventService hotspotChangeEventService,
+    IssueStatsByRuleKeyDaoImpl issueStatsByRuleKeyDao) {
     this.dbClient = dbClient;
     this.hotspotWsSupport = hotspotWsSupport;
     this.transitionService = transitionService;
     this.issueFieldsSetter = issueFieldsSetter;
     this.issueUpdater = issueUpdater;
     this.hotspotChangeEventService = hotspotChangeEventService;
+    this.issueStatsByRuleKeyDao = issueStatsByRuleKeyDao;
   }
 
   @Override
@@ -143,7 +153,7 @@ public class ChangeStatusAction implements HotspotsWsAction {
 
   private static SecurityHotspotWorkflowTransition toTransition(String newStatus, @Nullable String newResolution) {
     if (STATUS_TO_REVIEW.equals(newStatus)) {
-      return SecurityHotspotWorkflowTransition.RESET_AS_TO_REVIEW;
+      return RESET_AS_TO_REVIEW;
     }
 
     if (STATUS_REVIEWED.equals(newStatus) && RESOLUTION_FIXED.equals(newResolution)) {
@@ -167,8 +177,12 @@ public class ChangeStatusAction implements HotspotsWsAction {
       }
 
       issueUpdater.saveIssueAndPreloadSearchResponseData(session, issueDto, defaultIssue, context);
-
       BranchDto branch = issueUpdater.getBranch(session, defaultIssue);
+
+      if (!PULL_REQUEST.equals(branch.getBranchType())) {
+        updateIssueStatsByRuleKey(branch, defaultIssue.ruleKey(), transition.getKey());
+      }
+
       if (BRANCH.equals(branch.getBranchType())) {
         HotspotChangedEvent hotspotChangedEvent = buildEventData(defaultIssue, issueDto);
         hotspotChangeEventService.distributeHotspotChangedEvent(branch.getProjectUuid(), hotspotChangedEvent);
@@ -186,6 +200,26 @@ public class ChangeStatusAction implements HotspotsWsAction {
       .setAssignee(issueDto.getAssigneeLogin())
       .setFilePath(issueDto.getFilePath())
       .build();
+  }
+
+  private void updateIssueStatsByRuleKey(BranchDto branchDto, RuleKey ruleKey, String transitionKey) {
+    var issueStats = issueStatsByRuleKeyDao.getIssueStats(branchDto.getUuid(), AggregationType.PROJECT).stream()
+      .filter(i -> i.ruleKey().equals(ruleKey.toString()))
+      .findFirst()
+      .orElse(new IssueStats(ruleKey.toString(), 0, 1, 1, 0, 0));
+
+    var updatedIssueStats = updateIssueStatsWithTransition(issueStats, transitionKey);
+    if (updatedIssueStats.issueCount() != 0 || updatedIssueStats.hotspotCount() != 0 || updatedIssueStats.hotspotsReviewed() != 0) {
+      issueStatsByRuleKeyDao.upsert(branchDto.getUuid(), PROJECT, updatedIssueStats);
+    } else {
+      issueStatsByRuleKeyDao.deleteByAggregationAndRuleKey(branchDto.getUuid(), PROJECT, ruleKey.toString());
+    }
+  }
+
+  private static IssueStats updateIssueStatsWithTransition(IssueStats oldStats, String transitionKey) {
+    int adjustment = transitionKey.equals(RESET_AS_TO_REVIEW.getKey()) ? 1 : -1;
+    return new IssueStats(oldStats.ruleKey(), 0, oldStats.rating(), oldStats.mqrRating(), oldStats.hotspotCount() + adjustment,
+      oldStats.hotspotsReviewed() - adjustment);
   }
 
 }

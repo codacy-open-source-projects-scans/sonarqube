@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2025 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -124,7 +124,7 @@ class GithubProjectCreatorTest {
 
     when(gitHubSettings.getDevOpsPlatform()).thenReturn(GITHUB.getKey());
 
-    ProjectCreator projectCreator = new ProjectCreator(userSession, projectDefaultVisibility, componentUpdater);
+    ProjectCreator projectCreator = new ProjectCreator(dbClient, userSession, projectDefaultVisibility, componentUpdater);
     githubProjectCreator = new GithubProjectCreator(dbClient, devOpsProjectCreationContext, projectKeyGenerator, gitHubSettings, projectCreator, permissionService,
       permissionUpdater,
       managedProjectService, githubApplicationClient, githubPermissionConverter, authAppInstallationToken);

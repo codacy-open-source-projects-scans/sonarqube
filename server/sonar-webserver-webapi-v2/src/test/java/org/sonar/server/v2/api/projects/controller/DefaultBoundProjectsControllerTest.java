@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2025 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -122,10 +122,12 @@ class DefaultBoundProjectsControllerTest {
       DOP_PROJECT_ID,
       "NUMBER_OF_DAYS",
       "10",
-      true)))
+      true,
+      false)))
       .thenReturn(new ImportedProject(
         projectDto,
-        projectAlmSettingDto));
+        projectAlmSettingDto,
+        true));
 
     mockMvc.perform(
       post(BOUND_PROJECTS_ENDPOINT)

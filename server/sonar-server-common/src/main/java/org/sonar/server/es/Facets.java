@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2025 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -77,6 +77,10 @@ public class Facets {
     this.timeZone = timeZone;
   }
 
+  /**
+   * @deprecated Use the constructor that accepts co.elastic.clients.elasticsearch.core.SearchResponse instead.
+   * That constructor is based on the new Elasticsearch Java API Client (8.x).
+   */
   @Deprecated(since = "2025.6", forRemoval = true)
   public Facets(SearchResponse response, ZoneId timeZone) {
     this.facetsByName = new LinkedHashMap<>();

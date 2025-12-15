@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2025 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -42,12 +42,18 @@ public class DefaultBoundProjectsController implements BoundProjectsController {
   @Override
   public BoundProjectCreateRestResponse createBoundProject(BoundProjectCreateRestRequest request) {
     userSession.checkLoggedIn().checkPermission(PROVISION_PROJECTS);
-    ImportedProject importedProject = importProjectService.importProject(restRequestToServiceRequest(request));
+    ImportedProject importedProject = importProjectService.importProject(restRequestToServiceRequest(request, false));
     return toRestResponse(importedProject);
-
   }
 
-  private static ImportProjectRequest restRequestToServiceRequest(BoundProjectCreateRestRequest request) {
+  @Override
+  public BoundProjectCreateRestResponse createOrUpdateBoundProject(BoundProjectCreateRestRequest request) {
+    userSession.checkLoggedIn().checkPermission(PROVISION_PROJECTS);
+    ImportedProject importedProject = importProjectService.importProject(restRequestToServiceRequest(request, true));
+    return toRestResponse(importedProject);
+  }
+
+  private static ImportProjectRequest restRequestToServiceRequest(BoundProjectCreateRestRequest request, boolean allowExisting) {
     return new ImportProjectRequest(
       request.projectKey(),
       request.projectName(),
@@ -56,10 +62,14 @@ public class DefaultBoundProjectsController implements BoundProjectsController {
       request.projectIdentifier(),
       request.newCodeDefinitionType(),
       request.newCodeDefinitionValue(),
-      request.monorepo());
+      request.monorepo(),
+      allowExisting);
   }
 
   private static BoundProjectCreateRestResponse toRestResponse(ImportedProject importedProject) {
-    return new BoundProjectCreateRestResponse(importedProject.projectDto().getUuid(), importedProject.projectAlmSettingDto().getUuid());
+    return new BoundProjectCreateRestResponse(
+      importedProject.projectDto().getUuid(), 
+      importedProject.projectAlmSettingDto().getUuid(),
+      importedProject.newProjectCreated());
   }
 }

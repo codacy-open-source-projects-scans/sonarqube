@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2025 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -27,6 +27,8 @@ import org.sonar.db.audit.model.ComponentNewValue;
 import org.sonar.db.audit.model.DevOpsPlatformSettingNewValue;
 import org.sonar.db.audit.model.DevOpsPermissionsMappingNewValue;
 import org.sonar.db.audit.model.GroupPermissionNewValue;
+import org.sonar.db.audit.model.JiraOrganizationBindingNewValue;
+import org.sonar.db.audit.model.JiraProjectBindingNewValue;
 import org.sonar.db.audit.model.LicenseNewValue;
 import org.sonar.db.audit.model.PermissionTemplateNewValue;
 import org.sonar.db.audit.model.PersonalAccessTokenNewValue;
@@ -158,5 +160,23 @@ public interface AuditPersister {
   void componentKeyUpdate(DbSession session, ComponentKeyNewValue componentKeyNewValue, String qualifier);
 
   void componentKeyBranchUpdate(DbSession session, ComponentKeyNewValue componentKeyNewValue, String qualifier);
+
+  void validateDevOpsPlatformSettingSuccess(DbSession dbSession, DevOpsPlatformSettingNewValue newValue);
+
+  void validateDevOpsPlatformSettingFailure(DbSession dbSession, DevOpsPlatformSettingNewValue newValue);
+
+  void jiraOrganizationBindingAdd(DbSession dbSession, JiraOrganizationBindingNewValue newValue);
+
+  void jiraOrganizationBindingReauthorize(DbSession dbSession, JiraOrganizationBindingNewValue newValue);
+
+  void jiraOrganizationBindingUpdate(DbSession dbSession, JiraOrganizationBindingNewValue newValue);
+
+  void jiraOrganizationBindingDelete(DbSession dbSession, JiraOrganizationBindingNewValue newValue);
+
+  void jiraProjectBindingAdd(DbSession dbSession, JiraProjectBindingNewValue newValue);
+
+  void jiraProjectBindingUpdate(DbSession dbSession, JiraProjectBindingNewValue newValue);
+
+  void jiraProjectBindingDelete(DbSession dbSession, JiraProjectBindingNewValue newValue);
 
 }

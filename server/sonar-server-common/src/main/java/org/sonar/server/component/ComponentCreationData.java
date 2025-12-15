@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2025 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -26,5 +26,9 @@ import org.sonar.db.portfolio.PortfolioDto;
 import org.sonar.db.project.ProjectDto;
 
 public record ComponentCreationData(ComponentDto mainBranchComponent, @Nullable PortfolioDto portfolioDto, @Nullable BranchDto mainBranchDto,
-                                    @Nullable ProjectDto projectDto) {
+                                    @Nullable ProjectDto projectDto, boolean newProjectCreated) {
+  public ComponentCreationData(ComponentDto mainBranchComponent, @Nullable PortfolioDto portfolioDto,
+    @Nullable BranchDto mainBranchDto, @Nullable ProjectDto projectDto) {
+    this(mainBranchComponent, portfolioDto, mainBranchDto, projectDto, true);
+  }
 }

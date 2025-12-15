@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2025 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -117,7 +117,7 @@ public class ImportAzureProjectAction implements AlmIntegrationsWsAction {
 
   private static ImportProjectRequest toServiceRequest(AlmSettingDto almSettingDto, String projectIdentifier, String repositoryIdentifier, @Nullable String newCodeDefinitionType,
     @Nullable String newCodeDefinitionValue) {
-    return new ImportProjectRequest(null, null, almSettingDto.getUuid(), repositoryIdentifier, projectIdentifier, newCodeDefinitionType, newCodeDefinitionValue, false);
+    return new ImportProjectRequest(null, null, almSettingDto.getUuid(), repositoryIdentifier, projectIdentifier, newCodeDefinitionType, newCodeDefinitionValue, false, false);
   }
 
 }

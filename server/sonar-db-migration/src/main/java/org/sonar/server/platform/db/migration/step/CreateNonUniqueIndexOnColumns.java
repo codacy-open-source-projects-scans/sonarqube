@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2025 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -25,18 +25,16 @@ import org.sonar.db.Database;
 import org.sonar.db.DatabaseUtils;
 import org.sonar.server.platform.db.migration.sql.CreateIndexBuilder;
 
-public abstract class CreateIndexOnColumns extends DdlChange {
+public abstract class CreateNonUniqueIndexOnColumns extends DdlChange {
 
   private final String table;
   private final String indexPrefix;
   private final String[] columnNames;
-  private final boolean unique;
 
-  protected CreateIndexOnColumns(Database db, String table, String indexPrefix, boolean unique, String... columnNames) {
+  protected CreateNonUniqueIndexOnColumns(Database db, String table, String indexPrefix, String... columnNames) {
     super(db);
     this.table = table;
     this.indexPrefix = indexPrefix;
-    this.unique = unique;
     this.columnNames = columnNames;
   }
 
@@ -47,7 +45,7 @@ public abstract class CreateIndexOnColumns extends DdlChange {
         CreateIndexBuilder builder = new CreateIndexBuilder(getDialect())
           .setTable(table)
           .setName(newIndexName())
-          .setUnique(unique);
+          .setUnique(false);
         for (String columnName : columnNames) {
           builder.addColumn(columnName);
         }

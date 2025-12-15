@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2025 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -73,6 +73,11 @@ public interface IssueMapper {
   void scrollClosedByComponentUuid(@Param("componentUuid") String componentUuid, @Param("closeDateAfter") long closeDateAfter, ResultHandler<IssueWithoutRuleInfoDto> handler);
 
   Cursor<IndexedIssueDto> scrollIssuesForIndexation(@Nullable @Param("branchUuid") String branchUuid, @Nullable @Param("issueKeys") Collection<String> issueKeys);
+
+  Cursor<IssueStatsDto> scrollIssuesForIssueStats(@Param("branchUuid") String branchUuid);
+
+  AggregatedIssueStatsDto aggregateIssueStatsForBranchUuidAndRuleKey(@Param("branchUuid") String branchUuid,
+    @Param("ruleRepository") String repository, @Param("ruleKey") String rule);
 
   Collection<IssueGroupDto> selectIssueGroupsByComponent(@Param("component") ComponentDto component, @Param("leakPeriodBeginningDate") long leakPeriodBeginningDate);
 

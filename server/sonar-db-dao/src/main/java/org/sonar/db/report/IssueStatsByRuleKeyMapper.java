@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2025 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -25,9 +25,17 @@ import org.apache.ibatis.annotations.Param;
 
 public interface IssueStatsByRuleKeyMapper {
 
-  List<IssueStats> selectByAggregationId(String aggregationId);
+  List<IssueStats> selectByAggregationId(@Param("aggregationId") String aggregationId, @Param("aggregationType") String aggregationType);
 
-  void insertIssueStatsForProject(@Param("aggregationId") String aggregationId, @Param("list") List<IssueStats> list);
+  List<IssueStats> selectByAggregationIds(@Param("aggregationIds") List<String> aggregationIds, @Param("aggregationType") String aggregationType);
 
-  void deleteAllIssueStatsForProject(String aggregationId);
+  void insertIssueStats(@Param("aggregationId") String aggregationId,
+    @Param("aggregationType") String aggregationType,
+    @Param("list") List<IssueStats> list);
+
+  void deleteAllIssueStats(@Param("aggregationId") String aggregationId, @Param("aggregationType") String aggregationType);
+
+  void deleteIssueStatsForAggregationAndRuleKey(@Param("aggregationId") String aggregationId,
+    @Param("aggregationType") String aggregationType,
+    @Param("ruleKey") String ruleKey);
 }

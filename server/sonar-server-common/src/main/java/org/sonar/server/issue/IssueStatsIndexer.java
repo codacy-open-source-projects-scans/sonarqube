@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2025 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,98 +19,104 @@
  */
 package org.sonar.server.issue;
 
-import com.google.common.annotations.VisibleForTesting;
 import io.sonarcloud.compliancereports.dao.AggregationType;
+import io.sonarcloud.compliancereports.dao.IssueStats;
 import io.sonarcloud.compliancereports.ingestion.IssueFromAnalysis;
 import io.sonarcloud.compliancereports.ingestion.IssueIngestionService;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.sonar.api.batch.rule.Severity;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
-import org.sonar.db.rule.RuleDto;
+import org.sonar.db.component.BranchType;
+import org.sonar.db.entity.EntityDto;
+import org.sonar.db.issue.IssueStatsDto;
+import org.sonar.db.report.IssueStatsByRuleKeyDaoImpl;
 import org.sonar.server.es.AnalysisIndexer;
-import org.sonar.server.issue.index.IssueDoc;
-import org.sonar.server.issue.index.IssueIterator;
-import org.sonar.server.issue.index.IssueIteratorFactory;
 
 import static org.sonar.core.rule.RuleType.SECURITY_HOTSPOT;
 
 public class IssueStatsIndexer implements AnalysisIndexer {
   private static final Logger LOGGER = LoggerFactory.getLogger(IssueStatsIndexer.class);
 
-  private final IssueIteratorFactory issueIteratorFactory;
   private final DbClient dbClient;
   private final IssueIngestionService issueIngestionService;
 
-  public IssueStatsIndexer(IssueIteratorFactory issueIteratorFactory, DbClient dbClient, IssueIngestionService issueIngestionService) {
-    this.issueIteratorFactory = issueIteratorFactory;
+  public IssueStatsIndexer(DbClient dbClient, IssueIngestionService issueIngestionService) {
     this.dbClient = dbClient;
     this.issueIngestionService = issueIngestionService;
   }
 
   @Override
   public void indexOnAnalysis(String branchUuid) {
-    try (IssueIterator issues = issueIteratorFactory.createForBranch(branchUuid)) {
+    try (var dbSession = dbClient.openSession(false)) {
+      EntityDto entity = dbClient.entityDao().selectByUuid(dbSession, branchUuid)
+        .or(() -> dbClient.entityDao().selectByComponentUuid(dbSession, branchUuid))
+        .orElseThrow(() -> new IllegalStateException("Can't find entity for uuid " + branchUuid));
 
-      var issuesWithRuleUuids = getIssuesFromIssuesTable(issues);
+      if (entity.isProject()) {
+        if (isPullRequestBranch(branchUuid, dbSession)) {
+          return;
+        }
 
-      if (issuesWithRuleUuids.isEmpty()) {
-        return;
+        ingestForSingleBranch(dbSession, branchUuid);
+      } else {
+        ingestForPortfolioOrApp(dbSession, branchUuid, entity.isPortfolio() ? AggregationType.PORTFOLIO : AggregationType.APPLICATION);
       }
-      try (var dbSession = dbClient.openSession(false)) {
-        var issuesForIngestion = transformToRepositoryRuleIssuesDtos(issuesWithRuleUuids, dbSession);
-        issueIngestionService.ingest(branchUuid, AggregationType.PROJECT, issuesForIngestion);
-        dbSession.commit();
-      } catch (Exception e) {
-        LOGGER.warn("Error ingesting issues for compliance reports", e);
-      }
+    } catch (Exception e) {
+      LOGGER.warn("Error ingesting issues for compliance reports", e);
     }
   }
 
-  private static List<IssueWithRuleUuidDto> getIssuesFromIssuesTable(IssueIterator issues) {
-    List<IssueWithRuleUuidDto> issueWithRuleUuidDtos = new ArrayList<>();
-    while (issues.hasNext()) {
-      IssueDoc issue = issues.next();
-      issueWithRuleUuidDtos.add(getIssueWithRuleDto(issue));
+  private void ingestForPortfolioOrApp(DbSession dbSession, String portfolioOrAppUuid, AggregationType aggregationType) {
+    var projectBranchUuids = dbClient.componentDao().selectProjectBranchUuidsFromView(dbSession, portfolioOrAppUuid, portfolioOrAppUuid);
+    var dao = new IssueStatsByRuleKeyDaoImpl(dbClient);
+    Map<String, IssueStats> issueStatsByRuleKey = dao.loadAllIssueStatsForProjectBranches(projectBranchUuids).stream()
+      .collect(Collectors.toMap(IssueStats::ruleKey, Function.identity(), IssueStatsIndexer::mergeIssueStats));
+    dao.deleteAndInsertIssueStats(portfolioOrAppUuid, aggregationType, new ArrayList<>(issueStatsByRuleKey.values()));
+    dbSession.commit();
+  }
+
+  private static IssueStats mergeIssueStats(IssueStats a, IssueStats b) {
+    return new IssueStats(
+      a.ruleKey(),
+      a.issueCount() + b.issueCount(),
+      Math.max(a.rating(), b.rating()),
+      Math.max(a.mqrRating(), b.mqrRating()),
+      a.hotspotCount() + b.hotspotCount(),
+      a.hotspotsReviewed() + b.hotspotsReviewed()
+    );
+  }
+
+  private void ingestForSingleBranch(DbSession dbSession, String branchUuid) {
+    List<IssueFromAnalysis> issuesForIngestion = new ArrayList<>();
+
+    for (IssueStatsDto issue : dbClient.issueDao().scrollIssuesForIssueStats(dbSession, branchUuid)) {
+      issuesForIngestion.add(toIssueFromAnalysis(issue));
     }
-    return issueWithRuleUuidDtos;
+
+    issueIngestionService.ingest(branchUuid, AggregationType.PROJECT, issuesForIngestion);
+    dbSession.commit();
   }
 
-  @VisibleForTesting
-  List<IssueFromAnalysis> transformToRepositoryRuleIssuesDtos(List<IssueWithRuleUuidDto> issueWithRuleUuidDtos, DbSession dbSession) {
-    Set<String> ruleUuids = issueWithRuleUuidDtos.stream().map(IssueWithRuleUuidDto::ruleUuid).collect(Collectors.toSet());
-    Map<String, String> ruleUuidToFullRepositoryRuleKey = getRuleUuidToFullRepositoryRuleKey(dbSession, ruleUuids);
-    return issueWithRuleUuidDtos.stream()
-      .filter(dto -> ruleUuidToFullRepositoryRuleKey.containsKey(dto.ruleUuid()))
-      .map(issueWithRuleUuidDto -> new IssueFromAnalysis(ruleUuidToFullRepositoryRuleKey.get(issueWithRuleUuidDto.ruleUuid()),
-        issueWithRuleUuidDto.status(),
-        issueWithRuleUuidDto.isHotspot(),
-        issueWithRuleUuidDto.severity()))
-      .toList();
+  private static IssueFromAnalysis toIssueFromAnalysis(IssueStatsDto issue) {
+    String ruleKey = issue.getRepositoryKey() + ":" + issue.getRuleKey();
+    boolean isHotspot = SECURITY_HOTSPOT.getDbConstant() == issue.getIssueType();
+    // Adjust the 0-based (0-4) severity to 1-based (1-5) severity for the compliance module
+    int severity = Severity.valueOf(issue.getSeverity()).ordinal() + 1;
+
+    int mqrSeverity = issue.getMqrSeverity() == null ?
+      org.sonar.api.issue.impact.Severity.INFO.ordinal() + 1
+      : org.sonar.api.issue.impact.Severity.valueOf(issue.getMqrSeverity()).ordinal() + 1;
+    return new IssueFromAnalysis(ruleKey, issue.getStatus(), isHotspot, severity, mqrSeverity);
   }
 
-  private Map<String, String> getRuleUuidToFullRepositoryRuleKey(DbSession dbSession, Set<String> ruleUuids) {
-    return dbClient.ruleDao().selectByUuids(dbSession, ruleUuids).stream().collect(Collectors.toMap(
-      RuleDto::getUuid,
-      dto -> dto.getRepositoryKey() + ":" + dto.getRuleKey()
-    ));
-  }
-
-  private static IssueWithRuleUuidDto getIssueWithRuleDto(IssueDoc issue) {
-    String ruleUuid = issue.ruleUuid();
-    String status = issue.status();
-    boolean isHotspot = SECURITY_HOTSPOT.equals(issue.type());
-    int severity = Severity.valueOf(issue.severity()).ordinal();
-    return new IssueWithRuleUuidDto(ruleUuid, status, isHotspot, severity);
-  }
-
-  @VisibleForTesting
-  record IssueWithRuleUuidDto(String ruleUuid, String status, boolean isHotspot, int severity) {
+  private boolean isPullRequestBranch(String branchUuid, DbSession dbSession) {
+    return dbClient.branchDao().selectByUuid(dbSession, branchUuid).stream().anyMatch(b -> b.getBranchType() == BranchType.PULL_REQUEST);
   }
 }

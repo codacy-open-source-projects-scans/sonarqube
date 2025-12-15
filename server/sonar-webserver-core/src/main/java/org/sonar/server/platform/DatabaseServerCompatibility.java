@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2025 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -61,7 +61,7 @@ public class DatabaseServerCompatibility implements Startable {
       if (currentVersion.isPresent() && currentVersion.get() < DatabaseVersion.MIN_UPGRADE_VERSION) {
         throw MessageException.of(buildVersionTooOldMessage());
       }
-      String documentationLink = documentationLinkGenerator.getDocumentationLink("/server-upgrade-and-maintenance/upgrade/upgrade-the-server/roadmap");
+      String documentationLink = documentationLinkGenerator.getDocumentationLink("/server-upgrade-and-maintenance/upgrade/roadmap/");
       String msg = String.format("The database must be manually upgraded. Please backup the database and browse /setup. "
         + "For more information: %s", documentationLink);
       LoggerFactory.getLogger(DatabaseServerCompatibility.class).warn(msg);

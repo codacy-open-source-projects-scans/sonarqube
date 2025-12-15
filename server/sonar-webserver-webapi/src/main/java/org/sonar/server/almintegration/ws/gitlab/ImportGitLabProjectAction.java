@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2025 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -102,6 +102,6 @@ public class ImportGitLabProjectAction implements AlmIntegrationsWsAction {
 
   private static ImportProjectRequest toServiceRequest(AlmSettingDto almSettingDto, String gitlabProjectId, @Nullable String newCodeDefinitionType,
     @Nullable String newCodeDefinitionValue) {
-    return new ImportProjectRequest(null, null, almSettingDto.getUuid(), gitlabProjectId, null, newCodeDefinitionType, newCodeDefinitionValue, false);
+    return new ImportProjectRequest(null, null, almSettingDto.getUuid(), gitlabProjectId, null, newCodeDefinitionType, newCodeDefinitionValue, false, false);
   }
 }

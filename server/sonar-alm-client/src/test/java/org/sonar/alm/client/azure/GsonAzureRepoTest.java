@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2025 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -36,16 +36,16 @@ public class GsonAzureRepoTest {
       "repo_id",
       "repo_name",
       "repo_url",
+      "repo_web_url",
       new GsonAzureProject(),
-      actualFullBranchName
-    );
+      actualFullBranchName);
 
     assertThat(repo.getDefaultBranchName()).isEqualTo(expectedBranchName);
   }
 
   @DataProvider
   public static Object[][] data() {
-    return new Object[][]{
+    return new Object[][] {
       {"refs/heads/default_branch_name", "default_branch_name"},
       {"refs/HEADS/default_branch_name", "default_branch_name"},
       {"refs/heads/Default_branch_name", "Default_branch_name"},

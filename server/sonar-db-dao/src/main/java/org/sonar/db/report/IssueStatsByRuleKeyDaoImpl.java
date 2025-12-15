@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2025 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -26,6 +26,8 @@ import java.util.List;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
 
+import static org.sonar.db.DatabaseUtils.executeLargeInputs;
+
 public class IssueStatsByRuleKeyDaoImpl implements IssueStatsByRuleKeyDao {
 
   private final DbClient dbClient;
@@ -37,15 +39,39 @@ public class IssueStatsByRuleKeyDaoImpl implements IssueStatsByRuleKeyDao {
   @Override
   public List<IssueStats> getIssueStats(String uuid, AggregationType aggregationType) {
     try (DbSession dbSession = dbClient.openSession(false)) {
-      return mapper(dbSession).selectByAggregationId(uuid);
+      return mapper(dbSession).selectByAggregationId(uuid, aggregationType.toString());
+    }
+  }
+
+  public List<IssueStats> loadAllIssueStatsForProjectBranches(List<String> branchUuids) {
+    try (DbSession dbSession = dbClient.openSession(false)) {
+      return executeLargeInputs(branchUuids, input -> mapper(dbSession).selectByAggregationIds(input,
+        AggregationType.PROJECT.toString()));
     }
   }
 
   @Override
   public void deleteAndInsertIssueStats(String aggregationId, AggregationType aggregationType, List<IssueStats> list) {
     try (DbSession dbSession = dbClient.openSession(false)) {
-      mapper(dbSession).deleteAllIssueStatsForProject(aggregationId);
-      mapper(dbSession).insertIssueStatsForProject(aggregationId, list);
+      mapper(dbSession).deleteAllIssueStats(aggregationId, aggregationType.toString());
+      if (!list.isEmpty()) {
+        mapper(dbSession).insertIssueStats(aggregationId, aggregationType.toString(), list);
+      }
+      dbSession.commit();
+    }
+  }
+
+  public void deleteByAggregationAndRuleKey(String aggregationId, AggregationType aggregationType, String ruleKey) {
+    try (DbSession dbSession = dbClient.openSession(false)) {
+      mapper(dbSession).deleteIssueStatsForAggregationAndRuleKey(aggregationId, aggregationType.toString(), ruleKey);
+      dbSession.commit();
+    }
+  }
+
+  public void upsert(String aggregationId, AggregationType aggregationType, IssueStats issueStats) {
+    try (DbSession dbSession = dbClient.openSession(false)) {
+      mapper(dbSession).deleteIssueStatsForAggregationAndRuleKey(aggregationId, aggregationType.toString(), issueStats.ruleKey());
+      mapper(dbSession).insertIssueStats(aggregationId, aggregationType.toString(), List.of(issueStats));
       dbSession.commit();
     }
   }

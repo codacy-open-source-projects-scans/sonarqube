@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2025 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -20,18 +20,17 @@
 package org.sonar.server.platform.db.migration.version.v202506;
 
 import org.sonar.db.Database;
-import org.sonar.server.platform.db.migration.step.CreateIndexOnColumns;
+import org.sonar.server.platform.db.migration.step.CreateNonUniqueIndexOnColumns;
 
-public class AddResourceIndexForJiraWorkItemsResourcesTable extends CreateIndexOnColumns {
+public class AddResourceIndexForJiraWorkItemsResourcesTable extends CreateNonUniqueIndexOnColumns {
 
   private static final String TABLE_NAME = "jira_work_items_resources";
   private static final String INDEX_PREFIX = "ix";
   private static final String COLUMN_RESOURCE_ID = "resource_id";
   private static final String COLUMN_RESOURCE_TYPE = "resource_type";
-  private static final boolean UNIQUE = false;
 
   protected AddResourceIndexForJiraWorkItemsResourcesTable(Database db) {
-    super(db, TABLE_NAME, INDEX_PREFIX, UNIQUE, COLUMN_RESOURCE_ID, COLUMN_RESOURCE_TYPE);
+    super(db, TABLE_NAME, INDEX_PREFIX, COLUMN_RESOURCE_ID, COLUMN_RESOURCE_TYPE);
   }
 
 }

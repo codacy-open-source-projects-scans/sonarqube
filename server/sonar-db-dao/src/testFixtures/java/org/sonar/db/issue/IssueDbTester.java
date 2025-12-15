@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2025 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -178,6 +178,13 @@ public class IssueDbTester {
 
   public final IssueDto insertHotspot(RuleDto rule, ProjectData project, ComponentDto file, Consumer<IssueDto>... populators) {
     return insertHotspot(rule, project.getMainBranchComponent(), file, populators);
+  }
+
+  public final IssueDto insertHotspot(RuleDto rule, BranchDto branch, ComponentDto file, Consumer<IssueDto>... populators) {
+    IssueDto issue = newIssue(rule, branch, file)
+      .setStatus(Issue.STATUS_TO_REVIEW);
+    stream(populators).forEach(p -> p.accept(issue));
+    return insertHotspot(issue);
   }
 
   public final IssueDto insertHotspot(BranchDto branchDto, ComponentDto file, Consumer<IssueDto>... populators) {

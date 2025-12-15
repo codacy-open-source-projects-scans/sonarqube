@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2025 SonarSource SA
+ * Copyright (C) 2009-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -29,6 +29,7 @@ import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.PropertySource;
 import org.springframework.http.MediaType;
+import org.springframework.web.servlet.config.annotation.EnableWebMvc;
 
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.info.Info;
@@ -36,6 +37,7 @@ import io.swagger.v3.oas.models.info.Info;
 @Configuration
 @ComponentScan(basePackages = { "org.springdoc", "org.sonar.server.v2.common" })
 @PropertySource("classpath:springdoc.properties")
+@EnableWebMvc
 public class ServerWebConfig extends CommonWebConfig {
 
   @Bean
