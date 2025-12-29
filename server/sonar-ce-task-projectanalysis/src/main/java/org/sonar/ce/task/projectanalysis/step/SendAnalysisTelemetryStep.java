@@ -22,11 +22,18 @@ package org.sonar.ce.task.projectanalysis.step;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Supplier;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import org.sonar.api.config.Configuration;
+import org.sonar.api.measures.CoreMetrics;
 import org.sonar.api.platform.Server;
 import org.sonar.ce.common.scanner.ScannerReportReader;
 import org.sonar.ce.task.projectanalysis.analysis.AnalysisMetadataHolder;
+import org.sonar.ce.task.projectanalysis.component.TreeRootHolder;
+import org.sonar.ce.task.projectanalysis.measure.Measure;
+import org.sonar.ce.task.projectanalysis.measure.MeasureRepository;
+import org.sonar.ce.task.projectanalysis.metric.MetricRepository;
 import org.sonar.ce.task.step.ComputationStep;
 import org.sonar.ce.task.telemetry.StepsTelemetryHolder;
 import org.sonar.core.util.CloseableIterator;
@@ -39,11 +46,17 @@ import org.sonar.telemetry.core.schema.AnalysisMetric;
 import org.sonar.telemetry.core.schema.BaseMessage;
 import org.sonar.telemetry.core.schema.Metric;
 
+import static java.util.Locale.ENGLISH;
 import static org.sonar.process.ProcessProperties.Property.SONAR_TELEMETRY_ENABLE;
 
 public class SendAnalysisTelemetryStep implements ComputationStep {
 
   private static final int MAX_METRICS = 1000;
+
+  private static final Pattern EXTENSION_SANITIZE_PATTERN = Pattern.compile("[^a-zA-Z0-9_.]");
+
+  protected static final String ANALYZED_LINES_OF_CODE_METRIC_KEY = "analyzed_ncloc";
+  protected static final String ANALYZED_LINES_OF_CODE_NOT_SET_VALUE = "NOT_SET";
 
   private final TelemetryClient telemetryClient;
   private final ScannerReportReader scannerReportReader;
@@ -52,10 +65,13 @@ public class SendAnalysisTelemetryStep implements ComputationStep {
   private final Configuration config;
   private final AnalysisMetadataHolder analysisMetadataHolder;
   private final StepsTelemetryHolder stepsTelemetryHolder;
+  private final MetricRepository metricRepository;
+  private final MeasureRepository measureRepository;
+  private final TreeRootHolder treeRootHolder;
 
   public SendAnalysisTelemetryStep(TelemetryClient telemetryClient, ScannerReportReader scannerReportReader,
     UuidFactory uuidFactory, Server server, Configuration configuration, AnalysisMetadataHolder analysisMetadataHolder,
-    StepsTelemetryHolder stepsTelemetryHolder) {
+    StepsTelemetryHolder stepsTelemetryHolder, MetricRepository metricRepository, MeasureRepository measureRepository, TreeRootHolder treeRootHolder) {
     this.telemetryClient = telemetryClient;
     this.scannerReportReader = scannerReportReader;
     this.server = server;
@@ -63,6 +79,9 @@ public class SendAnalysisTelemetryStep implements ComputationStep {
     this.config = configuration;
     this.analysisMetadataHolder = analysisMetadataHolder;
     this.stepsTelemetryHolder = stepsTelemetryHolder;
+    this.metricRepository = metricRepository;
+    this.measureRepository = measureRepository;
+    this.treeRootHolder = treeRootHolder;
   }
 
   @Override
@@ -72,18 +91,31 @@ public class SendAnalysisTelemetryStep implements ComputationStep {
     }
 
     String projectUuid = analysisMetadataHolder.getProject().getUuid();
-    String analysisType = analysisMetadataHolder.isPullRequest() ? "pull_request" : "branch";
+    AnalysisMetric.AnalysisType analysisType = analysisMetadataHolder.isPullRequest() ? AnalysisMetric.AnalysisType.PULL_REQUEST : AnalysisMetric.AnalysisType.BRANCH;
     String analysisUuid = uuidFactory.create();
 
-    // it was agreed to limit the number of telemetry entries to 1000 per one analysis among scanner report metrics and step metrics
-    Set<Metric> scannerReportMetrics = getScannerReportMetrics(projectUuid, analysisType, analysisUuid);
-    Set<Metric> stepsStatisticsMetrics = getStepsTelemetryMetrics(projectUuid, analysisType, analysisUuid, MAX_METRICS - scannerReportMetrics.size(),
-      stepsTelemetryHolder.getTelemetryMetrics());
+    MetricsBuilder builder = new MetricsBuilder();
+    builder.addMetrics(() -> Set.of(getAnalyzedLinesOfCodeMetric(projectUuid, analysisType, analysisUuid)));
 
-    Set<Metric> metrics = new HashSet<>();
-    metrics.addAll(scannerReportMetrics);
-    metrics.addAll(stepsStatisticsMetrics);
-    sendMetrics(metrics);
+    if (analysisMetadataHolder.getBranch().isMain()) {
+      builder.addMetrics(() -> getNotAnalyzedIndexedFileCountMetrics(projectUuid, analysisType, analysisUuid));
+      builder.addMetrics(() -> getAnalyzedIndexedFileCountMetrics(projectUuid, analysisType, analysisUuid));
+    }
+
+    builder
+      .addMetrics(() -> getScannerReportMetrics(projectUuid, analysisType, analysisUuid))
+      .addMetrics(() -> getStepsTelemetryMetrics(projectUuid, analysisType, analysisUuid, stepsTelemetryHolder.getTelemetryMetrics()));
+
+    sendMetrics(builder.build());
+  }
+
+  private Metric getAnalyzedLinesOfCodeMetric(String projectUuid, AnalysisMetric.AnalysisType analysisType, String analysisUuid) {
+    String metricValue = measureRepository.getRawMeasure(treeRootHolder.getRoot(), metricRepository.getByKey(CoreMetrics.NCLOC_KEY))
+      .map(Measure::getIntValue)
+      .map(String::valueOf)
+      .orElse(ANALYZED_LINES_OF_CODE_NOT_SET_VALUE);
+
+    return new AnalysisMetric(ANALYZED_LINES_OF_CODE_METRIC_KEY, metricValue, projectUuid, analysisType, analysisUuid);
   }
 
   private void sendMetrics(Set<Metric> metrics) {
@@ -101,30 +133,94 @@ public class SendAnalysisTelemetryStep implements ComputationStep {
     telemetryClient.uploadMetricAsync(jsonString);
   }
 
-  private Set<Metric> getScannerReportMetrics(String projectUuid, String analysisType, String analysisUuid) {
+  private Set<Metric> getNotAnalyzedIndexedFileCountMetrics(String projectUuid, AnalysisMetric.AnalysisType analysisType, String analysisUuid) {
+    Set<Metric> metrics = new HashSet<>();
+    ScannerReport.Metadata metadata = scannerReportReader.readMetadata();
+
+    metadata.getNotAnalyzedIndexedFileCountPerTypeMap().forEach((extension, count) -> {
+      // The telemetry key does not support all characters
+      String key = String.format("indexed_files.%s.unanalyzed.total", sanitizeExtension(extension));
+      metrics.add(new AnalysisMetric(key, String.valueOf(count), projectUuid, analysisType, analysisUuid));
+    });
+
+    return metrics;
+  }
+
+  private Set<Metric> getAnalyzedIndexedFileCountMetrics(String projectUuid, AnalysisMetric.AnalysisType analysisType, String analysisUuid) {
+    Set<Metric> metrics = new HashSet<>();
+    ScannerReport.Metadata metadata = scannerReportReader.readMetadata();
+
+    metadata.getAnalyzedIndexedFileCountPerTypeMap().forEach((extension, count) -> {
+      // The telemetry key does not support all characters
+      String key = String.format("indexed_files.%s.analyzed.total", sanitizeExtension(extension));
+      metrics.add(new AnalysisMetric(key, String.valueOf(count), projectUuid, analysisType, analysisUuid));
+    });
+
+    return metrics;
+  }
+
+  private static String sanitizeExtension(String extension) {
+    return EXTENSION_SANITIZE_PATTERN.matcher(extension)
+      .replaceAll("_")
+      .toLowerCase(ENGLISH);
+  }
+
+  private Set<Metric> getScannerReportMetrics(String projectUuid, AnalysisMetric.AnalysisType analysisType, String analysisUuid) {
     Set<Metric> metrics = new HashSet<>();
     try (CloseableIterator<ScannerReport.TelemetryEntry> it = scannerReportReader.readTelemetryEntries()) {
-      int count = 0;
-      while (it.hasNext() && count < MAX_METRICS) {
+      while (it.hasNext()) {
         ScannerReport.TelemetryEntry telemetryEntry = it.next();
         metrics.add(new AnalysisMetric(telemetryEntry.getKey(), telemetryEntry.getValue(), projectUuid, analysisType, analysisUuid));
-        count++;
       }
     }
     return metrics;
   }
 
-  private static Set<Metric> getStepsTelemetryMetrics(String projectUuid, String analysisType, String analysisUuid, int maxMetrics, Map<String, Object> telemetryMetrics) {
+  private static Set<Metric> getStepsTelemetryMetrics(String projectUuid, AnalysisMetric.AnalysisType analysisType, String analysisUuid, Map<String, Object> telemetryMetrics) {
     return telemetryMetrics.entrySet().stream()
       .map(entry ->
         new AnalysisMetric(entry.getKey(), String.valueOf(entry.getValue()), projectUuid, analysisType, analysisUuid)
       )
-      .limit(maxMetrics)
       .collect(Collectors.toSet());
   }
 
   @Override
   public String getDescription() {
     return "This step pushes telemetry data from the Sonar analyzers to Telemetry V2 server in case telemetry is enabled.";
+  }
+
+  /**
+   * <p>it was agreed to limit the number of telemetry entries to 1000 per one analysis.</p>
+   * <p>The order of adding providers is important as earlier added providers have higher chance to have all their metrics included.</p>
+   * <p>This builder is responsible for</p>
+   * <ul>
+   *   <li> ensuring that no more than {@link #MAX_METRICS} are collected
+   *   <li> Collecting metrics from multiple providers </li>
+   *   <li> Taking partial metrics from providers when capacity is exhausted </li>
+   * </ul>
+   */
+  static class MetricsBuilder {
+    private final Set<Metric> metrics = new HashSet<>();
+    private int remainingCapacity = MAX_METRICS;
+
+    public MetricsBuilder addMetrics(Supplier<Set<Metric>> provider) {
+      if (remainingCapacity <= 0) {
+        return this;
+      }
+
+      Set<Metric> providedMetrics = provider.get();
+      int toAdd = Math.min(providedMetrics.size(), remainingCapacity);
+
+      metrics.addAll(providedMetrics.stream()
+        .limit(toAdd)
+        .collect(Collectors.toSet()));
+
+      remainingCapacity -= toAdd;
+      return this;
+    }
+
+    public Set<Metric> build() {
+      return metrics;
+    }
   }
 }
