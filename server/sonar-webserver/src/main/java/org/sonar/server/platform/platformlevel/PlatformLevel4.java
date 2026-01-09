@@ -207,6 +207,7 @@ import org.sonar.server.platform.db.migration.DatabaseMigrationPersister;
 import org.sonar.server.platform.db.migration.DatabaseMigrationTelemetry;
 import org.sonar.server.platform.telemetry.TelemetryFipsEnabledProvider;
 import org.sonar.server.platform.telemetry.TelemetryIpv6EnabledProvider;
+import org.sonar.server.platform.telemetry.TelemetryIssueCountsPerStatusProvider;
 import org.sonar.server.platform.telemetry.TelemetryMQRModePropertyProvider;
 import org.sonar.server.platform.telemetry.TelemetryNclocProvider;
 import org.sonar.server.platform.telemetry.TelemetryPortfolioSelectionModeProvider;
@@ -251,7 +252,10 @@ import org.sonar.server.pushapi.hotspots.HotspotChangeEventServiceImpl;
 import org.sonar.server.pushapi.issues.IssueChangeEventServiceImpl;
 import org.sonar.server.pushapi.qualityprofile.QualityProfileChangeEventServiceImpl;
 import org.sonar.server.qualitygate.QualityGateModule;
+import org.sonar.server.qualitygate.notification.EmailQGChangeEventListener;
+import org.sonar.server.qualitygate.notification.QGChangeEmailTemplate;
 import org.sonar.server.qualitygate.notification.QGChangeNotificationHandler;
+import org.sonar.server.qualitygate.notification.QualityGateConditionFormatter;
 import org.sonar.server.qualitygate.ws.QualityGateWsModule;
 import org.sonar.server.qualityprofile.QProfileBackuperImpl;
 import org.sonar.server.qualityprofile.QProfileComparison;
@@ -503,6 +507,8 @@ public class PlatformLevel4 extends PlatformLevel {
       ComponentFinder.class,
       QGChangeNotificationHandler.class,
       QGChangeNotificationHandler.newMetadata(),
+      QGChangeEmailTemplate.class,
+      QualityGateConditionFormatter.class,
       ComponentCleanerService.class,
       ComponentIndexDefinition.class,
       ComponentIndex.class,
@@ -702,6 +708,7 @@ public class PlatformLevel4 extends PlatformLevel {
       new WebhooksWsModule(),
 
       ProjectQGChangeEventListener.class,
+      EmailQGChangeEventListener.class,
 
       // Http Request ID
       new HttpRequestIdModule(),
@@ -719,6 +726,7 @@ public class PlatformLevel4 extends PlatformLevel {
       TelemetrySubportfolioSelectionModeProvider.class,
       TelemetryPortfolioSelectionModeProvider.class,
       TelemetryApplicationsCountProvider.class,
+      TelemetryIssueCountsPerStatusProvider.class,
 
       // Reports telemetry
       TelemetryApplicationSubscriptionsProvider.class,
@@ -784,4 +792,5 @@ public class PlatformLevel4 extends PlatformLevel {
     ServerExtensionInstaller extensionInstaller = parent.get(ServerExtensionInstaller.class);
     extensionInstaller.installExtensions(container);
   }
+
 }
