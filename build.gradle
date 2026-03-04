@@ -80,6 +80,9 @@ allprojects {
   }
 
   repositories {
+    // For local development: resolve artifacts from local Maven repository
+    mavenLocal()
+
     // The environment variables ARTIFACTORY_USERNAME and ARTIFACTORY_ACCESS_TOKEN are used on QA env (Jenkins)
     // On local box, please add artifactoryUsername and artifactoryPassword to ~/.gradle/gradle.properties
     def artifactoryUsername = System.env.'ARTIFACTORY_USERNAME' ?: (project.hasProperty('artifactoryUsername') ? project.getProperty('artifactoryUsername') : '')
@@ -305,13 +308,13 @@ subprojects {
       dependency 'com.sonarsource.cobol:sonar-cobol-plugin:5.11.0.10062'
       dependency 'com.sonarsource.cpp:sonar-cfamily-dependencies-plugin:6.78.0.96395'
       dependency 'com.sonarsource.cpp:sonar-cfamily-plugin:6.78.0.96395'
-      dependency 'com.sonarsource.dart:sonar-dart-plugin:1.3.1.4016'
-      dependency 'com.sonarsource.dbd:sonar-dbd-plugin:2.5.0.19957'
-      dependency 'com.sonarsource.dbd:sonar-dbd-java-frontend-plugin:2.5.0.19957'
-      dependency 'com.sonarsource.dbd:sonar-dbd-python-frontend-plugin:2.5.0.19957'
+      dependency 'com.sonarsource.dart:sonar-dart-plugin:1.4.0.4183'
+      dependency 'com.sonarsource.dbd:sonar-dbd-plugin:2.7.0.20531'
+      dependency 'com.sonarsource.dbd:sonar-dbd-java-frontend-plugin:2.7.0.20531'
+      dependency 'com.sonarsource.dbd:sonar-dbd-python-frontend-plugin:2.7.0.20531'
       dependency 'com.sonarsource.dotnet:sonar-csharp-enterprise-plugin:10.19.0.132793'
       dependency 'com.sonarsource.dotnet:sonar-vbnet-enterprise-plugin:10.19.0.132793'
-      dependency 'com.sonarsource.dre:sonar-dre-plugin:1.2.0.7172'
+      dependency 'com.sonarsource.dre:sonar-dre-plugin:1.3.0.8370'
       dependency 'com.sonarsource.go:sonar-go-enterprise-plugin:1.33.0.5387'
       dependency 'com.sonarsource.pli:sonar-pli-plugin:1.19.0.7056'
       dependency 'com.sonarsource.plsql:sonar-plsql-plugin:3.18.1.230'
@@ -325,7 +328,7 @@ subprojects {
       dependency 'com.sonarsource.security:sonar-security-plugin:11.15.0.42969'
       dependency 'com.sonarsource.security:sonar-security-python-frontend-plugin:11.15.0.42969'
       dependency 'com.sonarsource.security:sonar-security-vbnet-frontend-plugin:11.15.0.42969'
-      dependency 'com.sonarsource.slang:sonar-apex-plugin:1.23.0.1929'
+      dependency 'com.sonarsource.slang:sonar-apex-plugin:1.24.0.2040'
       dependency 'org.sonarsource.slang:sonar-ruby-plugin:1.22.0.1992'
       dependency 'org.sonarsource.slang:sonar-scala-plugin:1.21.0.1997'
       dependency 'com.sonarsource.swift:sonar-swift-plugin:5.0.1.12254'
@@ -335,8 +338,8 @@ subprojects {
       dependency 'org.sonarsource.flex:sonar-flex-plugin:2.16.0.6009'
       dependency 'org.sonarsource.go:sonar-go-plugin:1.33.0.5387'
       dependency 'org.sonarsource.html:sonar-html-plugin:3.24.0.7341'
-      dependency 'org.sonarsource.jacoco:sonar-jacoco-plugin:1.4.0.4946'
-      dependency 'org.sonarsource.java:sonar-java-plugin:8.24.0.42567'
+      dependency 'org.sonarsource.jacoco:sonar-jacoco-plugin:1.5.1.5340'
+      dependency 'org.sonarsource.java:sonar-java-plugin:8.25.0.42802'
       dependency 'org.sonarsource.java:sonar-java-symbolic-execution-plugin:8.16.3.1589'
       dependency 'org.sonarsource.javascript:sonar-javascript-plugin:11.8.0.37897'
       dependency 'org.sonarsource.php:sonar-php-plugin:3.54.0.15452'
@@ -347,13 +350,13 @@ subprojects {
       dependency 'org.sonarsource.kotlin:sonar-kotlin-plugin:3.4.0.8957'
       dependency "org.sonarsource.api.plugin:sonar-plugin-api:$pluginApiVersion"
       dependency "org.sonarsource.api.plugin:sonar-plugin-api-test-fixtures:$pluginApiVersion"
-      dependency "org.sonarsource.sonarqube:users-apis:$usersApiVersion"
+      dependency "org.sonarsource.sonarqube:users-api:$usersApiVersion"
       dependency 'org.sonarsource.xml:sonar-xml-plugin:2.16.0.7616'
       dependency 'org.sonarsource.iac:sonar-iac-plugin:2.6.1.19203'
       dependency 'com.sonarsource.iac:sonar-iac-enterprise-plugin:2.6.1.19203'
-      dependency 'org.sonarsource.text:sonar-text-plugin:2.40.0.10642'
-      dependency 'com.sonarsource.text:sonar-text-developer-plugin:2.40.0.10642'
-      dependency 'com.sonarsource.text:sonar-text-enterprise-plugin:2.40.0.10642'
+      dependency 'org.sonarsource.text:sonar-text-plugin:2.41.0.10709'
+      dependency 'com.sonarsource.text:sonar-text-developer-plugin:2.41.0.10709'
+      dependency 'com.sonarsource.text:sonar-text-enterprise-plugin:2.41.0.10709'
       dependency 'com.sonarsource.jcl:sonar-jcl-plugin:1.5.0.2979'
       dependency 'com.sonarsource.architecture:sonar-architecture-plugin:2.15.0.8694'
       dependency 'com.sonarsource.architecture:sonar-architecture-java-frontend-plugin:2.15.0.8694'
@@ -363,9 +366,13 @@ subprojects {
       dependency "org.sonarsource.sonarqube:webapp-assets:$webappVersion"
 
       // Shared libraries from sonarqube-unification
-      dependency 'org.sonarsource.sonarqube:sonar-db-commons:1.2.1.1077'
-      dependency 'org.sonarsource.sonarqube:sonar-db-commons-testfixtures:1.2.0.791'
-      dependency 'org.sonarsource.sonarqube:sonar-spring:26.1.0.118079'
+      dependencySet(group: 'org.sonarsource.sonarqube', version: '1.2.1.1077') {
+        entry 'sonar-db-commons'
+        entry 'sonar-db-commons-testfixtures'
+        entry 'sonar-spring'
+      }
+      dependency "org.sonarsource.sonarqube:organizations-api:$organizationsApiVersion"
+      dependency "org.sonarsource.sonarqube:organizations-server-app:$organizationsApiVersion"
 
       // please keep this list alphabetically ordered
       dependencySet(group: 'ch.qos.logback', version: '1.5.28') {
@@ -527,7 +534,12 @@ subprojects {
         entry 'spring-context'
         entry 'spring-webmvc'
       }
-      dependency "org.springframework.security:spring-security-saml2-service-provider:${springSecurityVersion}"
+      dependencySet(group: 'org.springframework.security', version: "${springSecurityVersion}") {
+        entry 'spring-security-config'
+        entry 'spring-security-core'
+        entry 'spring-security-web'
+        entry 'spring-security-saml2-service-provider'
+      }
       dependency 'org.mybatis:mybatis:3.5.19'
       dependencySet(group: 'org.slf4j', version: '2.0.17') {
         entry 'jcl-over-slf4j'
