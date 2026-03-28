@@ -243,7 +243,7 @@ subprojects {
 
   ext {
     protobufVersion = '4.33.5'
-    springSecurityVersion = '7.0.2'
+    springSecurityVersion = '7.0.4'
     elasticSearchClientVersion = '7.17.29' // Old REST High Level Client (to be removed)
     elasticSearchJavaClientVersion = '8.16.6' // New Java API Client
   }
@@ -312,8 +312,8 @@ subprojects {
       dependency 'com.sonarsource.dbd:sonar-dbd-plugin:2.7.0.20531'
       dependency 'com.sonarsource.dbd:sonar-dbd-java-frontend-plugin:2.7.0.20531'
       dependency 'com.sonarsource.dbd:sonar-dbd-python-frontend-plugin:2.7.0.20531'
-      dependency 'com.sonarsource.dotnet:sonar-csharp-enterprise-plugin:10.21.0.135717'
-      dependency 'com.sonarsource.dotnet:sonar-vbnet-enterprise-plugin:10.21.0.135717'
+      dependency 'com.sonarsource.dotnet:sonar-csharp-enterprise-plugin:10.22.0.136894'
+      dependency 'com.sonarsource.dotnet:sonar-vbnet-enterprise-plugin:10.22.0.136894'
       dependency 'com.sonarsource.dre:sonar-dre-plugin:1.4.0.9730'
       dependency 'com.sonarsource.go:sonar-go-enterprise-plugin:1.33.0.5387'
       dependency 'com.sonarsource.pli:sonar-pli-plugin:1.21.0.7212'
@@ -333,8 +333,8 @@ subprojects {
       dependency 'org.sonarsource.slang:sonar-scala-plugin:1.22.0.2217'
       dependency 'com.sonarsource.swift:sonar-swift-plugin:5.2.0.12490'
       dependency 'com.sonarsource.tsql:sonar-tsql-plugin:1.16.1.9133'
-      dependency 'org.sonarsource.dotnet:sonar-csharp-plugin:10.21.0.135717'
-      dependency 'org.sonarsource.dotnet:sonar-vbnet-plugin:10.21.0.135717'
+      dependency 'org.sonarsource.dotnet:sonar-csharp-plugin:10.22.0.136894'
+      dependency 'org.sonarsource.dotnet:sonar-vbnet-plugin:10.22.0.136894'
       dependency 'org.sonarsource.flex:sonar-flex-plugin:2.17.0.6043'
       dependency 'org.sonarsource.go:sonar-go-plugin:1.33.0.5387'
       dependency 'org.sonarsource.html:sonar-html-plugin:3.25.0.7473'
@@ -374,6 +374,8 @@ subprojects {
       }
       dependency "org.sonarsource.sonarqube:organizations-api:$organizationsApiVersion"
       dependency "org.sonarsource.sonarqube:organizations-server-app:$organizationsApiVersion"
+      // Keep in sync with sonar-sca's dependency management
+      dependency "org.sonarsource.sonarqube:sonar-feature-flags-api:$featureFlagsApiVersion"
 
       // please keep this list alphabetically ordered
       dependencySet(group: 'ch.qos.logback', version: '1.5.28') {
@@ -460,6 +462,7 @@ subprojects {
       dependency 'org.lz4:lz4-java:1.8.0'
       dependency 'org.littleshoot:littleproxy:1.1.2'
       dependency 'net.sf.trove4j:core:3.1.0'
+      dependency 'nl.jqno.equalsverifier:equalsverifier:3.17.3'
       dependency 'org.awaitility:awaitility:4.3.0'
       dependency 'org.apache.commons:commons-collections4:4.5.0'
       dependency 'org.apache.commons:commons-csv:1.14.1'
