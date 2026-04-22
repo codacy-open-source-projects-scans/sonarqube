@@ -17,17 +17,16 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-package org.sonar.server.platform.db.migration.version.v202604;
+package org.sonar.server.platform;
 
-import org.sonar.server.platform.db.migration.step.MigrationStepRegistry;
-import org.sonar.server.platform.db.migration.version.DbVersion;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import java.io.IOException;
 
-public class DbVersion202604 implements DbVersion {
-
-  @Override
-  public void addSteps(MigrationStepRegistry registry) {
-    registry
-      .add(2026_04_000, "Add epss_score, epss_percentile, known_exploited columns to 'sca_vulnerability_issues'", AddEpssColumnsToScaVulnerabilityIssues.class)
-      .add(2026_04_001, "Alter 'sca_analyses.failed_reason' column type to clob", AlterScaAnalysesFailedReasonColumnToClob.class);
-  }
+/**
+ * Handles MCP proxy requests. Implemented in enterprise editions only.
+ * Community edition does not provide an implementation — the proxy servlet is not registered.
+ */
+public interface McpRequestHandler {
+  void handle(HttpServletRequest request, HttpServletResponse response) throws IOException;
 }
