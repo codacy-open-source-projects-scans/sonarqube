@@ -21,12 +21,16 @@ package org.sonar.alm.client.gitlab;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import javax.annotation.Nullable;
+import okhttp3.Authenticator;
+import okhttp3.Interceptor;
+import okhttp3.OkHttpClient;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
 import okhttp3.mockwebserver.RecordedRequest;
@@ -44,6 +48,7 @@ import org.sonar.auth.gitlab.GsonGroup;
 import org.sonar.auth.gitlab.GsonMemberRole;
 import org.sonar.auth.gitlab.GsonProjectMember;
 import org.sonar.auth.gitlab.GsonUser;
+import org.sonarqube.ws.client.OkHttpClientBuilder;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
@@ -72,7 +77,7 @@ public class GitlabApplicationClientTest {
     gitlabUrl = urlWithEndingSlash.substring(0, urlWithEndingSlash.length() - 1);
 
     TimeoutConfiguration timeoutConfiguration = new ConstantTimeoutConfiguration(10_000);
-    underTest = new GitlabApplicationClient(gitlabPaginatedHttpClient, timeoutConfiguration);
+    underTest = new GitlabApplicationClient(gitlabPaginatedHttpClient, timeoutConfiguration, new OkHttpClientBuilder().build());
   }
 
   @After
@@ -141,14 +146,31 @@ public class GitlabApplicationClientTest {
             "path": "sonarqube-example-1",
             "path_with_namespace": "sonarsource/sonarqube/sonarqube-example-1",
             "visibility": "visibilityFromGitLab",
-            "web_url": "https://example.gitlab.com/sonarsource/sonarqube/sonarqube-example-1"
+            "web_url": "https://example.gitlab.com/sonarsource/sonarqube/sonarqube-example-1",
+            "default_branch": "main"
           }
         """);
     server.enqueue(response);
 
     assertThat(underTest.getProject(gitlabUrl, "pat", 12345L))
-      .extracting(Project::getId, Project::getName, Project::getVisibility)
-      .containsExactly(12345L, "SonarQube example 1", "visibilityFromGitLab");
+      .extracting(Project::getId, Project::getName, Project::getVisibility, Project::getDefaultBranch)
+      .containsExactly(12345L, "SonarQube example 1", "visibilityFromGitLab", "main");
+  }
+
+  @Test
+  public void get_project_whenNoDefaultBranch_returnsNull() {
+    MockResponse response = new MockResponse()
+      .setResponseCode(200)
+      .setBody("""
+        {
+            "id": 12345,
+            "name": "SonarQube example 1",
+            "visibility": "visibilityFromGitLab"
+          }
+        """);
+    server.enqueue(response);
+
+    assertThat(underTest.getProject(gitlabUrl, "pat", 12345L).getDefaultBranch()).isNull();
   }
 
   @Test
@@ -161,50 +183,6 @@ public class GitlabApplicationClientTest {
     assertThatThrownBy(() -> underTest.getProject(gitlabUrl, "pat", 12345L))
       .isInstanceOf(IllegalArgumentException.class)
       .hasMessage("Could not parse GitLab answer to retrieve a project. Got a non-json payload as result.");
-  }
-
-  @Test
-  public void get_branches() {
-    MockResponse response = new MockResponse()
-      .setResponseCode(200)
-      .setBody("""
-        [{
-            "name": "main",
-            "default": true
-        },{
-            "name": "other",
-            "default": false
-        }]""");
-    server.enqueue(response);
-
-    assertThat(underTest.getBranches(gitlabUrl, "pat", 12345L))
-      .extracting(GitLabBranch::getName, GitLabBranch::isDefault)
-      .containsExactly(
-        tuple("main", true),
-        tuple("other", false));
-  }
-
-  @Test
-  public void get_branches_fail_if_non_json_payload() {
-    MockResponse response = new MockResponse()
-      .setResponseCode(200)
-      .setBody("non json payload");
-    server.enqueue(response);
-
-    String instanceUrl = gitlabUrl;
-    assertThatThrownBy(() -> underTest.getBranches(instanceUrl, "pat", 12345L))
-      .isInstanceOf(IllegalArgumentException.class)
-      .hasMessage("Could not parse GitLab answer to retrieve project branches. Got a non-json payload as result.");
-  }
-
-  @Test
-  public void get_branches_fail_if_exception() throws IOException {
-    server.shutdown();
-
-    String instanceUrl = gitlabUrl;
-    assertThatThrownBy(() -> underTest.getBranches(instanceUrl, "pat", 12345L))
-      .isInstanceOf(IllegalStateException.class)
-      .hasMessageContaining("Failed to connect to");
   }
 
   @Test
@@ -261,7 +239,7 @@ public class GitlabApplicationClientTest {
 
     RecordedRequest projectGitlabRequest = server.takeRequest(10, TimeUnit.SECONDS);
     String gitlabUrlCall = projectGitlabRequest.getRequestUrl().toString();
-    assertThat(gitlabUrlCall).isEqualTo(server.url("") + "projects?archived=false&simple=true&membership=true&order_by=name&sort=asc&search=example&page=1&per_page=10");
+    assertThat(gitlabUrlCall).isEqualTo(server.url("") + "projects?archived=false&simple=true&membership=true&search=example&page=1&per_page=10");
     assertThat(projectGitlabRequest.getMethod()).isEqualTo("GET");
   }
 
@@ -298,7 +276,7 @@ public class GitlabApplicationClientTest {
 
     RecordedRequest projectGitlabRequest = server.takeRequest(10, TimeUnit.SECONDS);
     String gitlabUrlCall = projectGitlabRequest.getRequestUrl().toString();
-    assertThat(gitlabUrlCall).isEqualTo(server.url("") + "projects?archived=false&simple=true&membership=true&order_by=name&sort=asc&search=example&page=1&per_page=10");
+    assertThat(gitlabUrlCall).isEqualTo(server.url("") + "projects?archived=false&simple=true&membership=true&search=example&page=1&per_page=10");
     assertThat(projectGitlabRequest.getMethod()).isEqualTo("GET");
   }
 
@@ -336,7 +314,7 @@ public class GitlabApplicationClientTest {
 
     RecordedRequest projectGitlabRequest = server.takeRequest(10, TimeUnit.SECONDS);
     String gitlabUrlCall = projectGitlabRequest.getRequestUrl().toString();
-    assertThat(gitlabUrlCall).isEqualTo(server.url("") + "projects?archived=false&simple=true&membership=true&order_by=name&sort=asc&search=example&page=1&per_page=10");
+    assertThat(gitlabUrlCall).isEqualTo(server.url("") + "projects?archived=false&simple=true&membership=true&search=example&page=1&per_page=10");
     assertThat(projectGitlabRequest.getMethod()).isEqualTo("GET");
   }
 
@@ -357,12 +335,12 @@ public class GitlabApplicationClientTest {
     assertThat(projectList.getProjects()).isEmpty();
     assertThat(gitlabUrlCall).isEqualTo(
       server.url("")
-        + "projects?archived=false&simple=true&membership=true&order_by=name&sort=asc&search=%26page%3D%3Cscript%3Ealert%28%27nasty%27%29%3C%2Fscript%3E&page=1&per_page=10");
+        + "projects?archived=false&simple=true&membership=true&search=%26page%3D%3Cscript%3Ealert%28%27nasty%27%29%3C%2Fscript%3E&page=1&per_page=10");
     assertThat(projectGitlabRequest.getMethod()).isEqualTo("GET");
   }
 
   @Test
-  public void search_projects_projectName_param_null_should_pass_empty_string() throws InterruptedException {
+  public void search_projects_projectName_param_null_should_not_include_search_param() throws InterruptedException {
     MockResponse projects = new MockResponse()
       .setResponseCode(200)
       .setBody("[]");
@@ -377,7 +355,7 @@ public class GitlabApplicationClientTest {
     String gitlabUrlCall = projectGitlabRequest.getRequestUrl().toString();
     assertThat(projectList.getProjects()).isEmpty();
     assertThat(gitlabUrlCall).isEqualTo(
-      server.url("") + "projects?archived=false&simple=true&membership=true&order_by=name&sort=asc&search=&page=1&per_page=10");
+      server.url("") + "projects?archived=false&simple=true&membership=true&page=1&per_page=10");
     assertThat(projectGitlabRequest.getMethod()).isEqualTo("GET");
   }
 
@@ -407,6 +385,66 @@ public class GitlabApplicationClientTest {
     assertThat(gitlabUrlCall).isEqualTo(
       server.url("") + "projects/1234");
     assertThat(projectGitlabRequest.getMethod()).isEqualTo("GET");
+  }
+
+  @Test
+  public void create_project_access_token() throws InterruptedException {
+    MockResponse tokenResponse = new MockResponse()
+      .setResponseCode(201)
+      .setBody("""
+        {\
+          "id": 42,\
+          "name": "sonarqube-remediation-agent",\
+          "token": "glpat-abc123",\
+          "expires_at": "2026-08-06",\
+          "scopes": ["api", "write_repository"]\
+        }""");
+    server.enqueue(tokenResponse);
+
+    GitlabProjectAccessToken token = underTest.createProjectAccessToken(gitlabUrl, "pat", 1234L,
+      "sonarqube-remediation-agent", List.of("api", "write_repository"), java.time.LocalDate.of(2026, 8, 6));
+
+    RecordedRequest request = server.takeRequest(10, TimeUnit.SECONDS);
+
+    assertThat(token.getId()).isEqualTo(42L);
+    assertThat(token.getName()).isEqualTo("sonarqube-remediation-agent");
+    assertThat(token.getToken()).isEqualTo("glpat-abc123");
+    assertThat(token.getExpiresAt()).isEqualTo("2026-08-06");
+    assertThat(token.getScopes()).containsExactly("api", "write_repository");
+
+    assertThat(request.getRequestUrl()).hasToString(server.url("") + "projects/1234/access_tokens");
+    assertThat(request.getMethod()).isEqualTo("POST");
+    assertThat(request.getHeader("Private-Token")).isEqualTo("pat");
+    assertThat(request.getBody().readUtf8()).isEqualTo(
+      "{\"name\":\"sonarqube-remediation-agent\",\"scopes\":[\"api\",\"write_repository\"],\"expires_at\":\"2026-08-06\",\"access_level\":40}");
+  }
+
+  @Test
+  public void create_project_access_token_fails_when_response_is_not_json() {
+    MockResponse response = new MockResponse()
+      .setResponseCode(200)
+      .setBody("not json");
+    server.enqueue(response);
+
+    List<String> scopes = List.of("api", "write_repository");
+    LocalDate expiresAt = LocalDate.of(2026, 8, 6);
+    assertThatThrownBy(() -> underTest.createProjectAccessToken(gitlabUrl, "pat", 1234L, "sonarqube-remediation-agent", scopes, expiresAt))
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessageContaining("Could not parse GitLab answer when creating a project access token");
+  }
+
+  @Test
+  public void create_project_access_token_fails_when_insufficient_permissions() {
+    MockResponse response = new MockResponse()
+      .setResponseCode(403)
+      .setBody("{\"message\":\"403 Forbidden\"}");
+    server.enqueue(response);
+
+    List<String> scopes = List.of("api", "write_repository");
+    LocalDate expiresAt = LocalDate.of(2026, 8, 6);
+    assertThatThrownBy(() -> underTest.createProjectAccessToken(gitlabUrl, "pat", 1234L, "sonarqube-remediation-agent", scopes, expiresAt))
+      .isInstanceOf(GitlabServerException.class)
+      .hasMessageContaining("Forbidden");
   }
 
   @Test
@@ -476,6 +514,42 @@ public class GitlabApplicationClientTest {
   }
 
   @Test
+  public void throws_when_get_projects_returns_403_forbidden_without_insufficient_scope() {
+    MockResponse projects = new MockResponse()
+      .setResponseCode(403)
+      .setBody("{\"message\":\"403 Forbidden\"}");
+    server.enqueue(projects);
+
+    assertThatThrownBy(() -> underTest.searchProjects(gitlabUrl, "pat", "example", 1, 2))
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage("Forbidden access to GitLab. Verify your token's permissions and IP restrictions.");
+  }
+
+  @Test
+  public void throws_when_get_projects_returns_403_with_insufficient_scope() {
+    MockResponse projects = new MockResponse()
+      .setResponseCode(403)
+      .setBody("{\"error\":\"insufficient_scope\"}");
+    server.enqueue(projects);
+
+    assertThatThrownBy(() -> underTest.searchProjects(gitlabUrl, "pat", "example", 1, 2))
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage("Your GitLab token has insufficient scope");
+  }
+
+  @Test
+  public void throws_when_get_projects_returns_429_too_many_requests() {
+    MockResponse projects = new MockResponse()
+      .setResponseCode(429)
+      .setBody("{\"message\":\"429 Too Many Requests\"}");
+    server.enqueue(projects);
+
+    assertThatThrownBy(() -> underTest.searchProjects(gitlabUrl, "pat", "example", 1, 2))
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage("GitLab API rate limit exceeded. Try again later.");
+  }
+
+  @Test
   public void fail_check_read_permission_with_unexpected_io_exception_with_detailed_log() throws IOException {
     server.shutdown();
 
@@ -497,6 +571,69 @@ public class GitlabApplicationClientTest {
       .hasMessage("Could not validate GitLab token. Got an unexpected answer.");
     assertThat(logTester.logs(Level.INFO).get(0))
       .contains("Gitlab API call to [" + server.url("user") + "] " +
+        "failed with error message : [Failed to connect to ")
+      .contains(server.getHostName());
+  }
+
+  @Test
+  public void checkToken_whenTokenBelongsToBotUser_returnsGsonUserWithBotTrue() {
+    MockResponse response = new MockResponse()
+      .setResponseCode(200)
+      .setBody("{\"id\":42,\"username\":\"project_123_bot_4ffca233d8298ea1\",\"bot\":true}");
+    server.enqueue(response);
+
+    GsonUser user = underTest.checkToken(gitlabUrl, "token");
+
+    assertThat(user.isBot()).isTrue();
+    assertThat(user.getUsername()).isEqualTo("project_123_bot_4ffca233d8298ea1");
+  }
+
+  @Test
+  public void checkToken_whenTokenBelongsToHumanUser_returnsGsonUserWithBotFalse() {
+    MockResponse response = new MockResponse()
+      .setResponseCode(200)
+      .setBody("{\"id\":42,\"username\":\"jane-doe\"}");
+    server.enqueue(response);
+
+    GsonUser user = underTest.checkToken(gitlabUrl, "token");
+
+    assertThat(user.isBot()).isFalse();
+    assertThat(user.getUsername()).isEqualTo("jane-doe");
+  }
+
+  @Test
+  public void getPersonalAccessTokenInfo_whenTokenHasApiScope_returnsScopes() {
+    MockResponse response = new MockResponse()
+      .setResponseCode(200)
+      .setBody("{\"id\":1,\"scopes\":[\"api\"]}");
+    server.enqueue(response);
+
+    GsonPersonalAccessTokenInfo tokenInfo = underTest.getPersonalAccessTokenInfo(gitlabUrl, "token");
+
+    assertThat(tokenInfo.getScopes()).containsExactly("api");
+  }
+
+  @Test
+  public void getPersonalAccessTokenInfo_whenTokenHasOnlyReadApiScope_returnsScopesWithoutApi() {
+    MockResponse response = new MockResponse()
+      .setResponseCode(200)
+      .setBody("{\"id\":2,\"scopes\":[\"read_api\"]}");
+    server.enqueue(response);
+
+    GsonPersonalAccessTokenInfo tokenInfo = underTest.getPersonalAccessTokenInfo(gitlabUrl, "token");
+
+    assertThat(tokenInfo.getScopes()).containsExactly("read_api");
+  }
+
+  @Test
+  public void fail_check_personal_access_token_info_with_unexpected_io_exception_with_detailed_log() throws IOException {
+    server.shutdown();
+
+    assertThatThrownBy(() -> underTest.getPersonalAccessTokenInfo(gitlabUrl, "token"))
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage("Could not validate GitLab token scopes. Got an unexpected answer.");
+    assertThat(logTester.logs(Level.INFO).get(0))
+      .contains("Gitlab API call to [" + server.url("/personal_access_tokens/self") + "] " +
         "failed with error message : [Failed to connect to ")
       .contains(server.getHostName());
   }
@@ -528,20 +665,6 @@ public class GitlabApplicationClientTest {
   }
 
   @Test
-  public void fail_get_branches_with_unexpected_io_exception_with_detailed_log() throws IOException {
-    server.shutdown();
-
-    assertThatThrownBy(() -> underTest.getBranches(gitlabUrl, "token", 0L))
-      .isInstanceOf(IllegalStateException.class)
-      .hasMessageContaining("Failed to connect to ")
-      .hasMessageContaining(server.getHostName());
-    assertThat(logTester.logs(Level.INFO).get(0))
-      .contains("Gitlab API call to [" + server.url("/projects/0/repository/branches") + "] " +
-        "failed with error message : [Failed to connect to ")
-      .contains(server.getHostName());
-  }
-
-  @Test
   public void fail_search_projects_with_unexpected_io_exception_with_detailed_log() throws IOException {
     server.shutdown();
 
@@ -550,7 +673,7 @@ public class GitlabApplicationClientTest {
       .hasMessageContaining("Failed to connect to");
     assertThat(logTester.logs(Level.INFO).get(0))
       .contains(
-        "Gitlab API call to [" + server.url("/projects?archived=false&simple=true&membership=true&order_by=name&sort=asc&search=&page=1&per_page=1")
+        "Gitlab API call to [" + server.url("/projects?archived=false&simple=true&membership=true&page=1&per_page=1")
           + "] " +
           "failed with error message : [Failed to connect to ")
       .contains( server.getHostName());
@@ -715,6 +838,29 @@ public class GitlabApplicationClientTest {
 
   private static String getResponseContent(String path) throws IOException {
     return IOUtils.toString(GitlabApplicationClientTest.class.getResourceAsStream(path), StandardCharsets.UTF_8);
+  }
+
+  @Test
+  public void constructor_derives_client_from_injected_okHttpClient_preserving_proxy_config() {
+    Authenticator proxyAuthenticator = mock(Authenticator.class);
+    Interceptor interceptor = chain -> chain.proceed(chain.request());
+    OkHttpClient sharedClient = new OkHttpClient.Builder()
+      .proxyAuthenticator(proxyAuthenticator)
+      .addNetworkInterceptor(interceptor)
+      .build();
+
+    TimeoutConfiguration timeoutConfiguration = new ConstantTimeoutConfiguration(5_000);
+    GitlabApplicationClient client = new GitlabApplicationClient(gitlabPaginatedHttpClient, timeoutConfiguration, sharedClient);
+
+    assertThat(client.client.proxyAuthenticator()).isSameAs(proxyAuthenticator);
+    assertThat(client.client.networkInterceptors()).contains(interceptor);
+    assertThat(client.client.connectTimeoutMillis()).isEqualTo(5_000);
+    assertThat(client.client.readTimeoutMillis()).isEqualTo(5_000);
+    assertThat(client.client.followRedirects()).isFalse();
+    assertThat(client.client.followSslRedirects()).isFalse();
+
+    assertThat(sharedClient.proxyAuthenticator()).isSameAs(proxyAuthenticator);
+    assertThat(sharedClient.connectTimeoutMillis()).isNotEqualTo(5_000);
   }
 
 }

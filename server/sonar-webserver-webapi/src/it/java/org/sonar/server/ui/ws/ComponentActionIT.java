@@ -96,6 +96,8 @@ import static org.sonar.test.JsonAssert.assertJson;
 
 public class ComponentActionIT {
 
+  private static final long NOW = 1_704_067_200_000L;
+
   @Rule
   public final DbTester db = DbTester.create(System2.INSTANCE);
   @Rule
@@ -210,8 +212,8 @@ public class ComponentActionIT {
     propertyDbTester.insertProperty(new PropertyDto().setKey("favourite").setEntityUuid(subportfolio.uuid()).setUserUuid(user.getUuid()),
       subportfolio.getKey(), subportfolio.name(), subportfolio.qualifier(), user.getLogin());
 
-    userSession.logIn(user).addProjectPermission(ProjectPermission.USER, portfolio)
-      .addProjectPermission(ProjectPermission.USER, subportfolio);
+    userSession.logIn(user).addPortfolioPermission(ProjectPermission.USER, portfolio)
+      .addPortfolioPermission(ProjectPermission.USER, subportfolio);
     init();
 
     String json = ws.newRequest()
@@ -238,7 +240,7 @@ public class ComponentActionIT {
     propertyDbTester.insertProperty(new PropertyDto().setKey("favourite").setEntityUuid(portfolio.uuid()).setUserUuid(user.getUuid()),
       subportfolio.getKey(), portfolio.name(), portfolio.qualifier(), user.getLogin());
 
-    userSession.logIn(user).addProjectPermission(ProjectPermission.USER, portfolio);
+    userSession.logIn(user).addPortfolioPermission(ProjectPermission.USER, portfolio);
     init();
 
     String json = ws.newRequest()
@@ -308,8 +310,9 @@ public class ComponentActionIT {
   @Test
   public void return_component_info_when_file_on_master() {
     db.qualityGates().createDefaultQualityGate();
-    ComponentDto main = componentDbTester.insertPrivateProject(p -> p.setName("Sample").setKey("sample")).getMainBranchComponent();
-    userSession.addProjectPermission(ProjectPermission.USER, main);
+    ProjectData projectData = componentDbTester.insertPrivateProject(p -> p.setName("Sample").setKey("sample"));
+    ComponentDto main = projectData.getMainBranchComponent();
+    userSession.addProjectPermission(ProjectPermission.USER, projectData.getProjectDto()).registerBranches(projectData.getMainBranchDto());
     init();
 
     ComponentDto dirDto = componentDbTester.insertComponent(newDirectory(main, "src"));
@@ -372,8 +375,8 @@ public class ComponentActionIT {
     QProfileDto qp1 = db.qualityProfiles().insert(t -> t.setKee("qp1").setName("Sonar Way Java").setLanguage("java"));
     QProfileDto qp2 = db.qualityProfiles().insert(t -> t.setKee("qp2").setName("Sonar Way Xoo").setLanguage("xoo"));
     addQualityProfiles(project.getMainBranchComponent(),
-      new QualityProfile(qp1.getKee(), qp1.getName(), qp1.getLanguage(), new Date()),
-      new QualityProfile(qp2.getKee(), qp2.getName(), qp2.getLanguage(), new Date()));
+      new QualityProfile(qp1.getKee(), qp1.getName(), qp1.getLanguage(), new Date(NOW)),
+      new QualityProfile(qp2.getKee(), qp2.getName(), qp2.getLanguage(), new Date(NOW)));
     userSession.addProjectPermission(ProjectPermission.USER, project.getProjectDto())
       .registerBranches(project.getMainBranchDto());
     init();
@@ -384,6 +387,28 @@ public class ComponentActionIT {
     db.commit();
 
     executeAndVerify(project.projectKey(), "return_deleted_quality_profiles.json");
+  }
+
+  @Test
+  public void return_display_name_of_built_in_sonar_way_quality_profile_only() {
+    ProjectData project = insertProject();
+    QProfileDto builtIn = db.qualityProfiles().insert(t -> t.setKee("qp1").setName("Sonar way").setLanguage("java").setIsBuiltIn(true));
+    QProfileDto custom = db.qualityProfiles().insert(t -> t.setKee("qp2").setName("Sonar way").setLanguage("xoo").setIsBuiltIn(false));
+    addQualityProfiles(project.getMainBranchComponent(),
+      new QualityProfile(builtIn.getKee(), builtIn.getName(), builtIn.getLanguage(), new Date(NOW)),
+      new QualityProfile(custom.getKee(), custom.getName(), custom.getLanguage(), new Date(NOW)));
+    userSession.addProjectPermission(ProjectPermission.USER, project.getProjectDto())
+      .registerBranches(project.getMainBranchDto());
+    init();
+
+    assertJson(execute(project.projectKey())).isSimilarTo("""
+      {
+        "qualityProfiles": [
+          {"key": "qp1", "name": "Sonar way comprehensive", "language": "java", "deleted": false},
+          {"key": "qp2", "name": "Sonar way", "language": "xoo", "deleted": false}
+        ]
+      }
+      """);
   }
 
   @Test
@@ -432,9 +457,10 @@ public class ComponentActionIT {
 
   @Test
   public void return_default_quality_gate() {
-    ComponentDto project = db.components().insertPrivateProject().getMainBranchComponent();
+    ProjectData projectData = db.components().insertPrivateProject();
+    ComponentDto project = projectData.getMainBranchComponent();
     db.qualityGates().createDefaultQualityGate(qg -> qg.setName("Sonar way"));
-    userSession.addProjectPermission(ProjectPermission.USER, project);
+    userSession.addProjectPermission(ProjectPermission.USER, projectData.getProjectDto()).registerBranches(projectData.getMainBranchDto());
     init();
 
     executeAndVerify(project.getKey(), "return_default_quality_gate.json");
@@ -710,6 +736,49 @@ public class ComponentActionIT {
   }
 
   @Test
+  public void canAdminArchitecture_is_true_if_user_has_architecture_admin_permission_on_project() {
+    ProjectData project = insertProject();
+    userSession.logIn()
+      .addProjectPermission(ProjectPermission.USER, project.getProjectDto())
+      .addProjectPermission(ProjectPermission.ADMIN, project.getProjectDto())
+      .addProjectPermission(ProjectPermission.ARCHITECTURE_ADMIN, project.getProjectDto())
+      .registerBranches(project.getMainBranchDto());
+    init();
+
+    assertJson(execute(project.projectKey())).isSimilarTo("{\"configuration\": {\"canAdminArchitecture\": true}}");
+  }
+
+  @Test
+  public void canAdminArchitecture_is_false_if_user_does_not_have_architecture_admin_permission_on_project() {
+    ProjectData project = insertProject();
+    userSession.logIn()
+      .addProjectPermission(ProjectPermission.USER, project.getProjectDto())
+      .addProjectPermission(ProjectPermission.ADMIN, project.getProjectDto())
+      .registerBranches(project.getMainBranchDto());
+    init();
+
+    assertJson(execute(project.projectKey())).isSimilarTo("{\"configuration\": {\"canAdminArchitecture\": false}}");
+  }
+
+  @Test
+  public void configuration_is_returned_for_user_with_only_architecture_admin_permission_and_not_project_admin() {
+    ProjectData project = insertProject();
+    userSession.logIn()
+      .addProjectPermission(ProjectPermission.USER, project.getProjectDto())
+      .addProjectPermission(ProjectPermission.ARCHITECTURE_ADMIN, project.getProjectDto())
+      .registerBranches(project.getMainBranchDto());
+    init();
+
+    assertJson(execute(project.projectKey())).isSimilarTo("""
+      {
+        "configuration": {
+          "showSettings": false,
+          "canAdminArchitecture": true
+        }
+      }""");
+  }
+
+  @Test
   public void fail_on_missing_parameters() {
     insertProject();
     init();
@@ -879,7 +948,7 @@ public class ComponentActionIT {
   }
 
   private static QualityProfile createQProfile(String qpKey, String qpName, String languageKey) {
-    return new QualityProfile(qpKey, qpName, languageKey, new Date());
+    return new QualityProfile(qpKey, qpName, languageKey, new Date(NOW));
   }
 
   private static String qualityProfilesToJson(QualityProfile... qps) {

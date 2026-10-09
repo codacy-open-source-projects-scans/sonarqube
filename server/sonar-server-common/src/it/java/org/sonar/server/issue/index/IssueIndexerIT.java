@@ -30,7 +30,7 @@ import java.util.Set;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
 import org.assertj.core.api.Assertions;
-import org.elasticsearch.search.SearchHit;
+import co.elastic.clients.elasticsearch.core.search.Hit;
 import org.junit.Rule;
 import org.junit.Test;
 import org.mockito.MockedStatic;
@@ -59,6 +59,7 @@ import org.sonar.server.es.Indexers;
 import org.sonar.server.es.Indexers.EntityEvent;
 import org.sonar.server.es.IndexingResult;
 import org.sonar.server.es.StartupIndexer;
+import org.sonar.server.permission.index.AuthorizationDoc;
 import org.sonar.server.permission.index.AuthorizationScope;
 import org.sonar.server.permission.index.IndexPermissions;
 import org.sonar.server.security.SecurityStandards;
@@ -83,7 +84,10 @@ import static org.sonar.server.issue.index.IssueIndexDefinition.SUB_FIELD_SOFTWA
 import static org.sonar.server.issue.index.IssueIndexDefinition.TYPE_ISSUE;
 import static org.sonar.server.permission.index.IndexAuthorizationConstants.TYPE_AUTHORIZATION;
 import static org.sonar.server.security.SecurityStandards.SANS_TOP_25_POROUS_DEFENSES;
+import org.junit.experimental.categories.Category;
+import org.sonar.test.tags.ElasticsearchTest;
 
+@Category(ElasticsearchTest.class)
 public class IssueIndexerIT {
 
   @Rule
@@ -129,7 +133,7 @@ public class IssueIndexerIT {
       .toList();
 
 
-    try (MockedStatic<DatabaseUtils> dbUtils = Mockito.mockStatic(DatabaseUtils.class)) {
+    try (MockedStatic<DatabaseUtils> dbUtils = Mockito.mockStatic(DatabaseUtils.class, Mockito.CALLS_REAL_METHODS)) {
       dbUtils.when(() -> DatabaseUtils.toUniqueAndSortedPartitions(Mockito.any())).thenAnswer(invocation -> {
         Collection<String> input = invocation.getArgument(0);
         return Iterables.partition(List.copyOf(input), 10);
@@ -138,6 +142,8 @@ public class IssueIndexerIT {
       assertThatCode(() -> underTest.commitAndIndexIssues(db.getSession(), issuesToIndex))
         .doesNotThrowAnyException();
     }
+
+    assertThatIndexHasSize(200);
   }
 
   @Test
@@ -276,7 +282,7 @@ public class IssueIndexerIT {
     underTest.indexOnAnalysis(projectData.getMainBranchComponent().uuid());
 
     assertThat(es.getDocuments(TYPE_ISSUE))
-      .extracting(SearchHit::getId)
+      .extracting(Hit::id)
       .containsExactlyInAnyOrder(issue.getKey(), "orphan");
   }
 
@@ -397,8 +403,12 @@ public class IssueIndexerIT {
 
   @Test
   public void commitAndIndexIssues_removes_issue_from_index_if_it_does_not_exist_in_db() {
-    IssueDto issue1 = new IssueDto().setKee("I1").setProjectUuid("B1");
-    addIssueToIndex("B1", issue1.getProjectUuid(), issue1.getKey());
+    BranchDto branch = db.components().insertPrivateProject().getMainBranchDto();
+    assertThat(branch.getProjectUuid()).isNotEqualTo(branch.getUuid());
+
+    // issue1 is indexed, routed on the project entity, but does not exist in db
+    IssueDto issue1 = new IssueDto().setKee("I1").setProjectUuid(branch.getUuid());
+    addIssueToIndex(branch.getProjectUuid(), branch.getUuid(), issue1.getKey());
     IssueDto issue2 = db.issues().insert();
 
     underTest.commitAndIndexIssues(db.getSession(), asList(issue1, issue2));
@@ -407,6 +417,31 @@ public class IssueIndexerIT {
     assertThatIndexHasOnly(issue2);
     assertThatDbHasOnly(issue2);
     assertThatEsQueueTableHasSize(0);
+  }
+
+  @Test
+  public void enqueueForIndexing_routes_issue_on_project_uuid_and_not_on_branch_uuid() {
+    ProjectData projectData = db.components().insertPrivateProject();
+    ProjectDto project = projectData.getProjectDto();
+    BranchDto branch = db.components().insertProjectBranch(project);
+    IssueDto issue = new IssueDto().setKee("I1").setProjectUuid(branch.getUuid());
+
+    Collection<EsQueueDto> items = underTest.enqueueForIndexing(db.getSession(), singletonList(issue));
+
+    assertThat(items)
+      .extracting(EsQueueDto::getDocId, EsQueueDto::getDocRouting)
+      .containsExactly(tuple("I1", AuthorizationDoc.idOf(project.getUuid())));
+  }
+
+  @Test
+  public void enqueueForIndexing_skips_issue_if_branch_does_not_exist() {
+    IssueDto issue = new IssueDto().setKee("I1").setProjectUuid("unknown-branch");
+
+    Collection<EsQueueDto> items = underTest.enqueueForIndexing(db.getSession(), singletonList(issue));
+
+    assertThat(items).isEmpty();
+    assertThat(logTester.logs(Level.WARN))
+      .contains("Branch unknown-branch of issue I1 does not exist, the issue is not indexed");
   }
 
   @Test
@@ -728,7 +763,7 @@ public class IssueIndexerIT {
 
   private void assertThatIndexHasOnly(IssueDto... expectedIssues) {
     assertThat(es.getDocuments(TYPE_ISSUE))
-      .extracting(SearchHit::getId)
+      .extracting(Hit::id)
       .containsExactlyInAnyOrder(Arrays.stream(expectedIssues).map(IssueDto::getKey).toArray(String[]::new));
   }
 

@@ -19,7 +19,6 @@
  */
 package org.sonar.db.property;
 
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import java.util.Collections;
 import java.util.List;
@@ -440,21 +439,21 @@ class InternalPropertiesDaoIT {
     underTest.save(dbSession, "key3", VALUE_SIZE_4001);
     Set<String> keys = ImmutableSet.of(A_KEY, "key2", "key3", "non_existent_key");
     List<InternalPropertyDto> allInternalPropertyDtos =
-      dbSession.getMapper(InternalPropertiesMapper.class).selectAsText(ImmutableList.copyOf(keys));
-    List<InternalPropertyDto> clobPropertyDtos = dbSession.getMapper(InternalPropertiesMapper.class).selectAsClob(ImmutableList.of("key3"));
+      dbSession.getMapper(InternalPropertiesMapper.class).selectAsText(List.copyOf(keys));
+    List<InternalPropertyDto> clobPropertyDtos = dbSession.getMapper(InternalPropertiesMapper.class).selectAsClob(List.of("key3"));
 
     InternalPropertiesMapper mapperMock = mock(InternalPropertiesMapper.class);
     DbSession dbSessionMock = mock(DbSession.class);
     when(dbSessionMock.getMapper(InternalPropertiesMapper.class)).thenReturn(mapperMock);
-    when(mapperMock.selectAsText(ImmutableList.copyOf(keys)))
+    when(mapperMock.selectAsText(List.copyOf(keys)))
       .thenReturn(allInternalPropertyDtos);
-    when(mapperMock.selectAsClob(ImmutableList.of("key3")))
+    when(mapperMock.selectAsClob(List.of("key3")))
       .thenReturn(clobPropertyDtos);
 
     underTest.selectByKeys(dbSessionMock, keys);
 
-    verify(mapperMock).selectAsText(ImmutableList.copyOf(keys));
-    verify(mapperMock).selectAsClob(ImmutableList.of("key3"));
+    verify(mapperMock).selectAsText(List.copyOf(keys));
+    verify(mapperMock).selectAsClob(List.of("key3"));
     verifyNoMoreInteractions(mapperMock);
   }
 
@@ -504,8 +503,8 @@ class InternalPropertiesDaoIT {
     InternalPropertiesMapper mapperMock = mock(InternalPropertiesMapper.class);
     DbSession dbSessionMock = mock(DbSession.class);
     when(dbSessionMock.getMapper(InternalPropertiesMapper.class)).thenReturn(mapperMock);
-    when(mapperMock.selectAsText(ImmutableList.of(propertyKey)))
-      .thenReturn(ImmutableList.of());
+    when(mapperMock.selectAsText(List.of(propertyKey)))
+      .thenReturn(List.of());
     doThrow(RuntimeException.class).when(mapperMock).insertAsText(eq(propertyKey), anyString(), anyLong());
 
     assertThat(underTest.tryLock(dbSessionMock, name, 60)).isFalse();
@@ -531,12 +530,25 @@ class InternalPropertiesDaoIT {
     InternalPropertyDto dto = new InternalPropertyDto();
     dto.setKey(propertyKey);
     dto.setValue(String.valueOf(oldTimestamp - 1));
-    when(mapperMock.selectAsText(ImmutableList.of(propertyKey)))
-      .thenReturn(ImmutableList.of(dto));
+    when(mapperMock.selectAsText(List.of(propertyKey)))
+      .thenReturn(List.of(dto));
 
     assertThat(underTest.tryLock(dbSessionMock, name, lockDurationSeconds)).isFalse();
 
     assertThat(underTest.selectByKey(dbSession, propertyKey)).contains(String.valueOf(oldTimestamp));
+  }
+
+  @Test
+  void raiseTextIfGreater_rewrites_clob_backed_unparseable_row_as_text() {
+    underTest.save(dbSession, A_KEY, VALUE_SIZE_4001);
+    dbSession.commit();
+    assertThatInternalProperty(A_KEY).hasClobValue(VALUE_SIZE_4001);
+
+    assertThat(underTest.raiseTextIfGreater(dbSession, A_KEY, 8L)).isEqualTo(8L);
+    dbSession.commit();
+
+    assertThat(underTest.selectByKey(dbSession, A_KEY)).contains("8");
+    assertThatInternalProperty(A_KEY).hasTextValue("8");
   }
 
   @Test
@@ -566,6 +578,13 @@ class InternalPropertiesDaoIT {
 
   private static String propertyKeyOf(String lockName) {
     return "lock." + lockName;
+  }
+
+  private static InternalPropertyDto textDto(String value) {
+    InternalPropertyDto dto = new InternalPropertyDto();
+    dto.setKey(A_KEY);
+    dto.setValue(value);
+    return dto;
   }
 
   private void expectKeyNullOrEmptyIAE(ThrowingCallable callback) {

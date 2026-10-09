@@ -21,6 +21,7 @@ package org.sonar.core.metric;
 
 import java.util.Map;
 import java.util.Set;
+import org.sonar.api.measures.Metric;
 
 /**
  * Normally SCA metrics are only available when using Enterprise Edition or up
@@ -43,6 +44,8 @@ public class ScaMetrics {
 
   // These must be kept in sync with SCA metrics!
   // There's currently no way to do this in an automated fashion.
+  public static final String DOMAIN_DEPENDENCY_RISKS = "DependencyRisks";
+
   private static final String SCA_SEVERITY_PREFIX = "sca_severity";
   private static final String SCA_COUNT_PREFIX = "sca_count";
   private static final String SCA_RATING_PREFIX = "sca_rating";
@@ -52,6 +55,7 @@ public class ScaMetrics {
   private static final String SCA_METRIC_ISSUE_TYPE_VULNERABILITY = "vulnerability";
   private static final String SCA_METRIC_ISSUE_TYPE_LICENSING = "licensing";
   private static final String SCA_METRIC_ISSUE_TYPE_MALWARE = "malware";
+  private static final String SCA_METRIC_ISSUE_TYPE_ANY_SECURITY = "any_security";
 
   private static final String BASE_KEY_FORMAT = "%s_%s";
   private static final String NEW_KEY_FORMAT = "new_" + BASE_KEY_FORMAT;
@@ -60,45 +64,95 @@ public class ScaMetrics {
   public static final String NEW_SCA_RATING_VULNERABILITY_KEY = String.format(NEW_KEY_FORMAT, SCA_RATING_PREFIX, SCA_METRIC_ISSUE_TYPE_VULNERABILITY);
   public static final String NEW_SCA_RATING_LICENSING_KEY = String.format(NEW_KEY_FORMAT, SCA_RATING_PREFIX, SCA_METRIC_ISSUE_TYPE_LICENSING);
   public static final String NEW_SCA_RATING_MALWARE_KEY = String.format(NEW_KEY_FORMAT, SCA_RATING_PREFIX, SCA_METRIC_ISSUE_TYPE_MALWARE);
+  public static final String NEW_SCA_RATING_ANY_SECURITY_KEY = String.format(NEW_KEY_FORMAT, SCA_RATING_PREFIX, SCA_METRIC_ISSUE_TYPE_ANY_SECURITY);
 
   public static final String NEW_SCA_SEVERITY_ANY_ISSUE_KEY = String.format(NEW_KEY_FORMAT, SCA_SEVERITY_PREFIX, SCA_METRIC_ISSUE_TYPE_ANY_ISSUE);
   public static final String NEW_SCA_SEVERITY_VULNERABILITY_KEY = String.format(NEW_KEY_FORMAT, SCA_SEVERITY_PREFIX, SCA_METRIC_ISSUE_TYPE_VULNERABILITY);
   public static final String NEW_SCA_SEVERITY_LICENSING_KEY = String.format(NEW_KEY_FORMAT, SCA_SEVERITY_PREFIX, SCA_METRIC_ISSUE_TYPE_LICENSING);
   public static final String NEW_SCA_SEVERITY_MALWARE_KEY = String.format(NEW_KEY_FORMAT, SCA_SEVERITY_PREFIX, SCA_METRIC_ISSUE_TYPE_MALWARE);
+  public static final String NEW_SCA_SEVERITY_ANY_SECURITY_KEY = String.format(NEW_KEY_FORMAT, SCA_SEVERITY_PREFIX, SCA_METRIC_ISSUE_TYPE_ANY_SECURITY);
 
   public static final String NEW_SCA_COUNT_ANY_ISSUE_KEY = String.format(NEW_KEY_FORMAT, SCA_COUNT_PREFIX, SCA_METRIC_ISSUE_TYPE_ANY_ISSUE);
+  public static final String NEW_SCA_COUNT_VULNERABILITY_KEY = String.format(NEW_KEY_FORMAT, SCA_COUNT_PREFIX, SCA_METRIC_ISSUE_TYPE_VULNERABILITY);
+  public static final String NEW_SCA_COUNT_LICENSING_KEY = String.format(NEW_KEY_FORMAT, SCA_COUNT_PREFIX, SCA_METRIC_ISSUE_TYPE_LICENSING);
+  public static final String NEW_SCA_COUNT_MALWARE_KEY = String.format(NEW_KEY_FORMAT, SCA_COUNT_PREFIX, SCA_METRIC_ISSUE_TYPE_MALWARE);
+  public static final String NEW_SCA_COUNT_ANY_SECURITY_KEY = String.format(NEW_KEY_FORMAT, SCA_COUNT_PREFIX, SCA_METRIC_ISSUE_TYPE_ANY_SECURITY);
 
   public static final String SCA_RATING_ANY_ISSUE_KEY = String.format(BASE_KEY_FORMAT, SCA_RATING_PREFIX, SCA_METRIC_ISSUE_TYPE_ANY_ISSUE);
   public static final String SCA_RATING_VULNERABILITY_KEY = String.format(BASE_KEY_FORMAT, SCA_RATING_PREFIX, SCA_METRIC_ISSUE_TYPE_VULNERABILITY);
   public static final String SCA_RATING_LICENSING_KEY = String.format(BASE_KEY_FORMAT, SCA_RATING_PREFIX, SCA_METRIC_ISSUE_TYPE_LICENSING);
   public static final String SCA_RATING_MALWARE_KEY = String.format(BASE_KEY_FORMAT, SCA_RATING_PREFIX, SCA_METRIC_ISSUE_TYPE_MALWARE);
+  public static final String SCA_RATING_ANY_SECURITY_KEY = String.format(BASE_KEY_FORMAT, SCA_RATING_PREFIX, SCA_METRIC_ISSUE_TYPE_ANY_SECURITY);
 
   public static final String SCA_SEVERITY_ANY_ISSUE_KEY = String.format(BASE_KEY_FORMAT, SCA_SEVERITY_PREFIX, SCA_METRIC_ISSUE_TYPE_ANY_ISSUE);
   public static final String SCA_SEVERITY_VULNERABILITY_KEY = String.format(BASE_KEY_FORMAT, SCA_SEVERITY_PREFIX, SCA_METRIC_ISSUE_TYPE_VULNERABILITY);
   public static final String SCA_SEVERITY_LICENSING_KEY = String.format(BASE_KEY_FORMAT, SCA_SEVERITY_PREFIX, SCA_METRIC_ISSUE_TYPE_LICENSING);
   public static final String SCA_SEVERITY_MALWARE_KEY = String.format(BASE_KEY_FORMAT, SCA_SEVERITY_PREFIX, SCA_METRIC_ISSUE_TYPE_MALWARE);
+  public static final String SCA_SEVERITY_ANY_SECURITY_KEY = String.format(BASE_KEY_FORMAT, SCA_SEVERITY_PREFIX, SCA_METRIC_ISSUE_TYPE_ANY_SECURITY);
 
   public static final String SCA_COUNT_ANY_ISSUE_KEY = String.format(BASE_KEY_FORMAT, SCA_COUNT_PREFIX, SCA_METRIC_ISSUE_TYPE_ANY_ISSUE);
+  public static final String SCA_COUNT_VULNERABILITY_KEY = String.format(BASE_KEY_FORMAT, SCA_COUNT_PREFIX, SCA_METRIC_ISSUE_TYPE_VULNERABILITY);
+  public static final String SCA_COUNT_LICENSING_KEY = String.format(BASE_KEY_FORMAT, SCA_COUNT_PREFIX, SCA_METRIC_ISSUE_TYPE_LICENSING);
+  public static final String SCA_COUNT_MALWARE_KEY = String.format(BASE_KEY_FORMAT, SCA_COUNT_PREFIX, SCA_METRIC_ISSUE_TYPE_MALWARE);
+  public static final String SCA_COUNT_ANY_SECURITY_KEY = String.format(BASE_KEY_FORMAT, SCA_COUNT_PREFIX, SCA_METRIC_ISSUE_TYPE_ANY_SECURITY);
+
+  // Must be kept in sync with com.sonar.sca.metrics.ScaMetrics.INDEXED_RATING_KEYS
+  public static final Set<String> INDEXED_RATING_KEYS = Set.of(
+    SCA_RATING_ANY_ISSUE_KEY,
+    NEW_SCA_RATING_ANY_ISSUE_KEY);
+
+  // Must be kept in sync with com.sonar.sca.metrics.ScaMetrics.buildRatingThresholdMetric
+  public static final Metric<Integer> SCA_RATING_ANY_ISSUE = new Metric.Builder(
+    SCA_RATING_ANY_ISSUE_KEY, "Dependency risk rating", Metric.ValueType.RATING)
+    .setDescription("Dependency risk rating")
+    .setDirection(Metric.DIRECTION_WORST)
+    .setDomain(DOMAIN_DEPENDENCY_RISKS)
+    .setBestValue(1.0)
+    .setWorstValue(5.0)
+    .setOptimizedBestValue(true)
+    .create();
+
+  public static final Metric<Integer> NEW_SCA_RATING_ANY_ISSUE = new Metric.Builder(
+    NEW_SCA_RATING_ANY_ISSUE_KEY, "Dependency risk rating on new code", Metric.ValueType.RATING)
+    .setDescription("Dependency risk rating on new code")
+    .setDirection(Metric.DIRECTION_WORST)
+    .setDomain(DOMAIN_DEPENDENCY_RISKS)
+    .setBestValue(1.0)
+    .setWorstValue(5.0)
+    .setOptimizedBestValue(true)
+    .create();
 
   public static final Set<String> SCA_METRICS_KEYS = Set.of(
     NEW_SCA_RATING_ANY_ISSUE_KEY,
     NEW_SCA_RATING_VULNERABILITY_KEY,
     NEW_SCA_RATING_LICENSING_KEY,
     NEW_SCA_RATING_MALWARE_KEY,
+    NEW_SCA_RATING_ANY_SECURITY_KEY,
     NEW_SCA_SEVERITY_ANY_ISSUE_KEY,
     NEW_SCA_SEVERITY_VULNERABILITY_KEY,
     NEW_SCA_SEVERITY_LICENSING_KEY,
     NEW_SCA_SEVERITY_MALWARE_KEY,
+    NEW_SCA_SEVERITY_ANY_SECURITY_KEY,
     NEW_SCA_COUNT_ANY_ISSUE_KEY,
+    NEW_SCA_COUNT_VULNERABILITY_KEY,
+    NEW_SCA_COUNT_LICENSING_KEY,
+    NEW_SCA_COUNT_MALWARE_KEY,
+    NEW_SCA_COUNT_ANY_SECURITY_KEY,
     SCA_RATING_ANY_ISSUE_KEY,
     SCA_RATING_VULNERABILITY_KEY,
     SCA_RATING_LICENSING_KEY,
     SCA_RATING_MALWARE_KEY,
+    SCA_RATING_ANY_SECURITY_KEY,
     SCA_SEVERITY_ANY_ISSUE_KEY,
     SCA_SEVERITY_VULNERABILITY_KEY,
     SCA_SEVERITY_LICENSING_KEY,
     SCA_SEVERITY_MALWARE_KEY,
-    SCA_COUNT_ANY_ISSUE_KEY);
+    SCA_SEVERITY_ANY_SECURITY_KEY,
+    SCA_COUNT_ANY_ISSUE_KEY,
+    SCA_COUNT_VULNERABILITY_KEY,
+    SCA_COUNT_LICENSING_KEY,
+    SCA_COUNT_MALWARE_KEY,
+    SCA_COUNT_ANY_SECURITY_KEY);
 
   private ScaMetrics() {
     // constants only

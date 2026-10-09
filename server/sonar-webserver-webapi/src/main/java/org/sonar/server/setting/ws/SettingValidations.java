@@ -40,6 +40,7 @@ import org.sonar.api.PropertyType;
 import org.sonar.api.config.PropertyDefinition;
 import org.sonar.api.config.PropertyDefinitions;
 import org.sonar.core.config.CorePropertyDefinitions;
+import org.sonar.core.config.PurgeConstants;
 import org.sonar.core.i18n.I18n;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
@@ -76,7 +77,7 @@ public class SettingValidations {
 
   public void validateScope(SettingData data) {
     PropertyDefinition definition = definitions.get(data.key);
-    checkRequest(data.entity != null || definition == null || definition.global() || isGlobal(definition),
+    checkRequest(data.entity != null || definition == null || definition.global(),
       "Setting '%s' cannot be global", data.key);
   }
 
@@ -117,6 +118,24 @@ public class SettingValidations {
     }
   }
 
+  public void validateAuditPurgeBatchSize(SettingData data) {
+    if (!PurgeConstants.AUDIT_PURGE_BATCH_SIZE.equals(data.key)) {
+      return;
+    }
+
+    data.values.stream().findFirst().ifPresent(value -> {
+      int parsedValue;
+      try {
+        parsedValue = Integer.parseInt(value);
+      } catch (NumberFormatException e) {
+        return;
+      }
+      checkRequest(parsedValue >= PurgeConstants.MIN_AUDIT_PURGE_BATCH_SIZE && parsedValue <= PurgeConstants.MAX_AUDIT_PURGE_BATCH_SIZE,
+        "Setting '%s' must be between %s and %s", PurgeConstants.AUDIT_PURGE_BATCH_SIZE,
+        PurgeConstants.MIN_AUDIT_PURGE_BATCH_SIZE, PurgeConstants.MAX_AUDIT_PURGE_BATCH_SIZE);
+    });
+  }
+
   private static boolean checkComponentQualifier(SettingData data, @Nullable PropertyDefinition definition) {
     EntityDto entity = data.entity;
     if (entity == null) {
@@ -126,10 +145,6 @@ public class SettingValidations {
       return SUPPORTED_QUALIFIERS.contains(entity.getQualifier());
     }
     return definition.qualifiers().contains(entity.getQualifier());
-  }
-
-  private static boolean isGlobal(PropertyDefinition definition) {
-    return !definition.global() && definition.qualifiers().isEmpty();
   }
 
   public static class SettingData {

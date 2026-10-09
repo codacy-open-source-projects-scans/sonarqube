@@ -19,11 +19,13 @@
  */
 package org.sonar.alm.client.github;
 
+import java.util.List;
 import javax.annotation.Nullable;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import org.sonar.auth.github.GithubAppConfiguration;
+import org.sonar.auth.github.GithubAppPermissions;
 import org.sonar.api.config.internal.Encryption;
 import org.sonar.api.config.internal.Settings;
 import org.sonar.db.alm.setting.ALM;
@@ -32,7 +34,9 @@ import org.sonar.db.alm.setting.AlmSettingDto;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -61,9 +65,54 @@ public class GithubGlobalSettingsValidatorTest {
 
     ArgumentCaptor<GithubAppConfiguration> configurationArgumentCaptor = ArgumentCaptor.forClass(GithubAppConfiguration.class);
     verify(appClient).checkApiEndpoint(configurationArgumentCaptor.capture());
-    verify(appClient).checkAppPermissions(configurationArgumentCaptor.capture());
+    verify(appClient).checkAppPermissions(configurationArgumentCaptor.capture(), eq(GithubAppPermissions.REQUIRED_PERMISSIONS));
     assertThat(configuration.getId()).isEqualTo(configurationArgumentCaptor.getAllValues().get(0).getId());
     assertThat(configuration.getId()).isEqualTo(configurationArgumentCaptor.getAllValues().get(1).getId());
+  }
+
+  @Test
+  public void github_global_settings_validation_withExplicitPermissions_checksThatMapInsteadOfTheDefault() {
+    AlmSettingDto almSettingDto = createNewGithubDto("clientId", "clientSecret", EXAMPLE_APP_ID, EXAMPLE_PRIVATE_KEY);
+
+    when(encryption.isEncrypted(any())).thenReturn(false);
+
+    underTest.validate(almSettingDto, GithubAppPermissions.TOKEN_MINTING_PERMISSIONS);
+
+    verify(appClient).checkAppPermissions(any(), eq(GithubAppPermissions.TOKEN_MINTING_PERMISSIONS));
+  }
+
+  @Test
+  public void validateApiEndpoint_checksTheEndpointButNoPermission() {
+    // The remediation check runs its own, narrower permission comparison against this configuration, so the app-level
+    // check must not also run here.
+    AlmSettingDto almSettingDto = createNewGithubDto("clientId", "clientSecret", EXAMPLE_APP_ID, EXAMPLE_PRIVATE_KEY);
+    when(encryption.isEncrypted(any())).thenReturn(false);
+
+    GithubAppConfiguration configuration = underTest.validateApiEndpoint(almSettingDto);
+
+    assertThat(configuration.getId()).isEqualTo(123L);
+    assertThat(configuration.getPrivateKey()).isEqualTo(EXAMPLE_PRIVATE_KEY);
+    verify(appClient).checkApiEndpoint(any());
+    verify(appClient, never()).checkAppPermissions(any(), any());
+  }
+
+  @Test
+  public void validateApiEndpoint_decryptsThePrivateKey() {
+    String encryptedKey = "encrypted-key";
+    AlmSettingDto almSettingDto = createNewGithubDto("clientId", "clientSecret", EXAMPLE_APP_ID, encryptedKey);
+    when(encryption.isEncrypted(encryptedKey)).thenReturn(true);
+    when(encryption.decrypt(encryptedKey)).thenReturn("decrypted-key");
+
+    assertThat(underTest.validateApiEndpoint(almSettingDto).getPrivateKey()).isEqualTo("decrypted-key");
+  }
+
+  @Test
+  public void validateApiEndpoint_whenConfigurationIsIncomplete_throws() {
+    AlmSettingDto almSettingDto = createNewGithubDto(null, "clientSecret", EXAMPLE_APP_ID, EXAMPLE_PRIVATE_KEY);
+
+    assertThatThrownBy(() -> underTest.validateApiEndpoint(almSettingDto))
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage("Missing Client Id");
   }
 
   @Test
@@ -79,7 +128,7 @@ public class GithubGlobalSettingsValidatorTest {
 
     ArgumentCaptor<GithubAppConfiguration> configurationArgumentCaptor = ArgumentCaptor.forClass(GithubAppConfiguration.class);
     verify(appClient).checkApiEndpoint(configurationArgumentCaptor.capture());
-    verify(appClient).checkAppPermissions(configurationArgumentCaptor.capture());
+    verify(appClient).checkAppPermissions(configurationArgumentCaptor.capture(), eq(GithubAppPermissions.REQUIRED_PERMISSIONS));
     assertThat(configuration.getId()).isEqualTo(configurationArgumentCaptor.getAllValues().get(0).getId());
     assertThat(decryptedKey).isEqualTo(configurationArgumentCaptor.getAllValues().get(0).getPrivateKey());
     assertThat(configuration.getId()).isEqualTo(configurationArgumentCaptor.getAllValues().get(1).getId());
@@ -122,6 +171,20 @@ public class GithubGlobalSettingsValidatorTest {
       .isInstanceOf(IllegalArgumentException.class)
       .hasMessage("Missing Client Secret");
 
+  }
+
+  @Test
+  public void findMissingPermissions_delegatesToClientAndReturnsResult() {
+    AlmSettingDto almSettingDto = createNewGithubDto("clientId", "clientSecret", EXAMPLE_APP_ID, EXAMPLE_PRIVATE_KEY);
+
+    when(encryption.isEncrypted(any())).thenReturn(false);
+    when(appClient.findMissingAppPermissions(any(), eq(GithubAppPermissions.TOKEN_MINTING_PERMISSIONS))).thenReturn(List.of("contents"));
+
+    List<String> missingPermissions = underTest.findMissingPermissions(almSettingDto, GithubAppPermissions.TOKEN_MINTING_PERMISSIONS);
+
+    assertThat(missingPermissions).containsExactly("contents");
+    verify(appClient).checkApiEndpoint(any());
+    verify(appClient).findMissingAppPermissions(any(), eq(GithubAppPermissions.TOKEN_MINTING_PERMISSIONS));
   }
 
   private AlmSettingDto createNewGithubDto(@Nullable String clientId, @Nullable String clientSecret,

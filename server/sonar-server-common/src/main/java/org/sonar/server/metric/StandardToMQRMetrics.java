@@ -34,25 +34,31 @@ import static org.sonar.api.measures.CoreMetrics.INFO_VIOLATIONS_KEY;
 import static org.sonar.api.measures.CoreMetrics.MAJOR_VIOLATIONS_KEY;
 import static org.sonar.api.measures.CoreMetrics.MINOR_VIOLATIONS_KEY;
 import static org.sonar.api.measures.CoreMetrics.NEW_BLOCKER_VIOLATIONS_KEY;
+import static org.sonar.api.measures.CoreMetrics.NEW_BUGS_SEVERITY_KEY;
 import static org.sonar.api.measures.CoreMetrics.NEW_CODE_SMELLS_KEY;
+import static org.sonar.api.measures.CoreMetrics.NEW_CODE_SMELLS_SEVERITY_KEY;
 import static org.sonar.api.measures.CoreMetrics.NEW_CRITICAL_VIOLATIONS_KEY;
 import static org.sonar.api.measures.CoreMetrics.NEW_INFO_VIOLATIONS_KEY;
+import static org.sonar.api.measures.CoreMetrics.NEW_MAINTAINABILITY_ISSUE_SEVERITY_KEY;
 import static org.sonar.api.measures.CoreMetrics.NEW_MAJOR_VIOLATIONS_KEY;
 import static org.sonar.api.measures.CoreMetrics.NEW_MINOR_VIOLATIONS_KEY;
+import static org.sonar.api.measures.CoreMetrics.NEW_RELIABILITY_ISSUE_SEVERITY_KEY;
+import static org.sonar.api.measures.CoreMetrics.NEW_SECURITY_ISSUE_SEVERITY_KEY;
+import static org.sonar.api.measures.CoreMetrics.NEW_SOFTWARE_QUALITY_MAINTAINABILITY_ISSUES_KEY;
+import static org.sonar.api.measures.CoreMetrics.NEW_VULNERABILITIES_SEVERITY_KEY;
+import static org.sonar.api.measures.CoreMetrics.SOFTWARE_QUALITY_MAINTAINABILITY_ISSUES_KEY;
 import static org.sonar.api.measures.CoreMetrics.SQALE_RATING_KEY;
 import static org.sonar.core.metric.SoftwareQualitiesMetrics.EFFORT_TO_REACH_SOFTWARE_QUALITY_MAINTAINABILITY_RATING_A_KEY;
 import static org.sonar.core.metric.SoftwareQualitiesMetrics.NEW_SOFTWARE_QUALITY_BLOCKER_ISSUES_KEY;
 import static org.sonar.core.metric.SoftwareQualitiesMetrics.NEW_SOFTWARE_QUALITY_HIGH_ISSUES_KEY;
 import static org.sonar.core.metric.SoftwareQualitiesMetrics.NEW_SOFTWARE_QUALITY_INFO_ISSUES_KEY;
 import static org.sonar.core.metric.SoftwareQualitiesMetrics.NEW_SOFTWARE_QUALITY_LOW_ISSUES_KEY;
-import static org.sonar.core.metric.SoftwareQualitiesMetrics.NEW_SOFTWARE_QUALITY_MAINTAINABILITY_ISSUES_KEY;
 import static org.sonar.core.metric.SoftwareQualitiesMetrics.NEW_SOFTWARE_QUALITY_MAINTAINABILITY_RATING_KEY;
 import static org.sonar.core.metric.SoftwareQualitiesMetrics.NEW_SOFTWARE_QUALITY_MEDIUM_ISSUES_KEY;
 import static org.sonar.core.metric.SoftwareQualitiesMetrics.SOFTWARE_QUALITY_BLOCKER_ISSUES_KEY;
 import static org.sonar.core.metric.SoftwareQualitiesMetrics.SOFTWARE_QUALITY_HIGH_ISSUES_KEY;
 import static org.sonar.core.metric.SoftwareQualitiesMetrics.SOFTWARE_QUALITY_INFO_ISSUES_KEY;
 import static org.sonar.core.metric.SoftwareQualitiesMetrics.SOFTWARE_QUALITY_LOW_ISSUES_KEY;
-import static org.sonar.core.metric.SoftwareQualitiesMetrics.SOFTWARE_QUALITY_MAINTAINABILITY_ISSUES_KEY;
 import static org.sonar.core.metric.SoftwareQualitiesMetrics.SOFTWARE_QUALITY_MAINTAINABILITY_RATING_KEY;
 import static org.sonar.core.metric.SoftwareQualitiesMetrics.SOFTWARE_QUALITY_MEDIUM_ISSUES_KEY;
 
@@ -96,16 +102,21 @@ public class StandardToMQRMetrics {
     STANDARD_TO_MQR_MODE_METRICS.put(CoreMetrics.NEW_SECURITY_RATING_KEY, SoftwareQualitiesMetrics.NEW_SOFTWARE_QUALITY_SECURITY_RATING_KEY);
     STANDARD_TO_MQR_MODE_METRICS.put(CoreMetrics.SECURITY_REMEDIATION_EFFORT_KEY, SoftwareQualitiesMetrics.SOFTWARE_QUALITY_SECURITY_REMEDIATION_EFFORT_KEY);
     STANDARD_TO_MQR_MODE_METRICS.put(CoreMetrics.NEW_SECURITY_REMEDIATION_EFFORT_KEY, SoftwareQualitiesMetrics.NEW_SOFTWARE_QUALITY_SECURITY_REMEDIATION_EFFORT_KEY);
-    STANDARD_TO_MQR_MODE_METRICS.put(CoreMetrics.VULNERABILITIES_KEY, SoftwareQualitiesMetrics.SOFTWARE_QUALITY_SECURITY_ISSUES_KEY);
-    STANDARD_TO_MQR_MODE_METRICS.put(CoreMetrics.NEW_VULNERABILITIES_KEY, SoftwareQualitiesMetrics.NEW_SOFTWARE_QUALITY_SECURITY_ISSUES_KEY);
+    STANDARD_TO_MQR_MODE_METRICS.put(CoreMetrics.VULNERABILITIES_KEY, CoreMetrics.SOFTWARE_QUALITY_SECURITY_ISSUES_KEY);
+    STANDARD_TO_MQR_MODE_METRICS.put(CoreMetrics.NEW_VULNERABILITIES_KEY, CoreMetrics.NEW_SOFTWARE_QUALITY_SECURITY_ISSUES_KEY);
+
+    // Severity metrics (Standard ↔ MQR)
+    STANDARD_TO_MQR_MODE_METRICS.put(NEW_BUGS_SEVERITY_KEY, NEW_RELIABILITY_ISSUE_SEVERITY_KEY);
+    STANDARD_TO_MQR_MODE_METRICS.put(NEW_VULNERABILITIES_SEVERITY_KEY, NEW_SECURITY_ISSUE_SEVERITY_KEY);
+    STANDARD_TO_MQR_MODE_METRICS.put(NEW_CODE_SMELLS_SEVERITY_KEY, NEW_MAINTAINABILITY_ISSUE_SEVERITY_KEY);
 
     // Reliability related metrics
     STANDARD_TO_MQR_MODE_METRICS.put(CoreMetrics.RELIABILITY_RATING_KEY, SoftwareQualitiesMetrics.SOFTWARE_QUALITY_RELIABILITY_RATING_KEY);
     STANDARD_TO_MQR_MODE_METRICS.put(CoreMetrics.NEW_RELIABILITY_RATING_KEY, SoftwareQualitiesMetrics.NEW_SOFTWARE_QUALITY_RELIABILITY_RATING_KEY);
     STANDARD_TO_MQR_MODE_METRICS.put(CoreMetrics.RELIABILITY_REMEDIATION_EFFORT_KEY, SoftwareQualitiesMetrics.SOFTWARE_QUALITY_RELIABILITY_REMEDIATION_EFFORT_KEY);
     STANDARD_TO_MQR_MODE_METRICS.put(CoreMetrics.NEW_RELIABILITY_REMEDIATION_EFFORT_KEY, SoftwareQualitiesMetrics.NEW_SOFTWARE_QUALITY_RELIABILITY_REMEDIATION_EFFORT_KEY);
-    STANDARD_TO_MQR_MODE_METRICS.put(CoreMetrics.BUGS_KEY, SoftwareQualitiesMetrics.SOFTWARE_QUALITY_RELIABILITY_ISSUES_KEY);
-    STANDARD_TO_MQR_MODE_METRICS.put(CoreMetrics.NEW_BUGS_KEY, SoftwareQualitiesMetrics.NEW_SOFTWARE_QUALITY_RELIABILITY_ISSUES_KEY);
+    STANDARD_TO_MQR_MODE_METRICS.put(CoreMetrics.BUGS_KEY, CoreMetrics.SOFTWARE_QUALITY_RELIABILITY_ISSUES_KEY);
+    STANDARD_TO_MQR_MODE_METRICS.put(CoreMetrics.NEW_BUGS_KEY, CoreMetrics.NEW_SOFTWARE_QUALITY_RELIABILITY_ISSUES_KEY);
 
     MQR_TO_STANDARD_MODE_METRICS = STANDARD_TO_MQR_MODE_METRICS.inverse();
   }

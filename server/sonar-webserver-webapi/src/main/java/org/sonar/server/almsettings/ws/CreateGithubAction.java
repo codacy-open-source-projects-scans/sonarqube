@@ -25,10 +25,9 @@ import org.sonar.api.server.ws.Response;
 import org.sonar.api.server.ws.WebService;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
-import org.sonar.db.alm.setting.AlmSettingDto;
+import org.sonar.server.common.almsettings.telemetry.DevOpsConfigurationTelemetry;
 import org.sonar.server.user.UserSession;
 
-import static org.apache.commons.lang3.Strings.CS;
 import static org.sonar.db.alm.setting.ALM.GITHUB;
 
 public class CreateGithubAction implements AlmSettingsWsAction {
@@ -44,12 +43,14 @@ public class CreateGithubAction implements AlmSettingsWsAction {
   private final DbClient dbClient;
   private final UserSession userSession;
   private final AlmSettingsSupport almSettingsSupport;
+  private final DevOpsConfigurationTelemetry devOpsConfigurationTelemetry;
 
   public CreateGithubAction(DbClient dbClient, UserSession userSession,
-    AlmSettingsSupport almSettingsSupport) {
+    AlmSettingsSupport almSettingsSupport, DevOpsConfigurationTelemetry devOpsConfigurationTelemetry) {
     this.dbClient = dbClient;
     this.userSession = userSession;
     this.almSettingsSupport = almSettingsSupport;
+    this.devOpsConfigurationTelemetry = devOpsConfigurationTelemetry;
   }
 
   @Override
@@ -95,32 +96,27 @@ public class CreateGithubAction implements AlmSettingsWsAction {
   @Override
   public void handle(Request request, Response response) {
     userSession.checkIsSystemAdministrator();
-    tryDoHandle(request);
+    doHandle(request);
     response.noContent();
   }
 
-  private void tryDoHandle(Request request) {
-    try (DbSession dbSession = dbClient.openSession(false)) {
-      doHandle(request, dbSession);
-    }
-  }
+  private void doHandle(Request request) {
+    AlmSettingsSupport.NewGithubSetting setting = new AlmSettingsSupport.NewGithubSetting(
+      request.mandatoryParam(PARAM_KEY),
+      request.mandatoryParam(PARAM_URL),
+      request.mandatoryParam(PARAM_APP_ID),
+      request.mandatoryParam(PARAM_PRIVATE_KEY),
+      request.mandatoryParam(PARAM_CLIENT_ID),
+      request.mandatoryParam(PARAM_CLIENT_SECRET),
+      request.getParam(PARAM_WEBHOOK_SECRET).emptyAsNull().or(() -> null));
 
-  private void doHandle(Request request, DbSession dbSession) {
-    almSettingsSupport.checkAlmMultipleFeatureEnabled(GITHUB);
-    String key = request.mandatoryParam(PARAM_KEY);
-    almSettingsSupport.checkAlmSettingDoesNotAlreadyExist(dbSession, key);
-
-    dbClient.almSettingDao().insert(dbSession, new AlmSettingDto()
-      .setAlm(GITHUB)
-      .setKey(key)
-      .setUrl(CS.removeEnd(request.mandatoryParam(PARAM_URL), "/"))
-      .setAppId(request.mandatoryParam(PARAM_APP_ID))
-      .setPrivateKey(request.mandatoryParam(PARAM_PRIVATE_KEY))
-      .setClientId(request.mandatoryParam(PARAM_CLIENT_ID))
-      .setClientSecret(request.mandatoryParam(PARAM_CLIENT_SECRET))
-      .setWebhookSecret(request.getParam(PARAM_WEBHOOK_SECRET).emptyAsNull().or(() -> null)));
-
-    dbSession.commit();
+    almSettingsSupport.withAlmSettingCreationLock(() -> {
+      try (DbSession dbSession = dbClient.openSession(false)) {
+        almSettingsSupport.createGithubSetting(dbSession, setting);
+        dbSession.commit();
+      }
+    });
+    devOpsConfigurationTelemetry.sendManualDevOpsConfig(GITHUB);
   }
 
 }

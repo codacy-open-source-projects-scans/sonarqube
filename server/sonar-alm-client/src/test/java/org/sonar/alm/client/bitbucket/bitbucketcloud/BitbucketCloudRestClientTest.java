@@ -38,9 +38,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.Arguments;
-import org.junit.jupiter.params.provider.MethodSource;
 import org.slf4j.event.Level;
 import org.sonar.api.testfixtures.log.LogTesterJUnit5;
 import org.sonarqube.ws.client.OkHttpClientBuilder;
@@ -78,8 +75,8 @@ class BitbucketCloudRestClientTest {
     underTest = new BitbucketCloudRestClient(new OkHttpClientBuilder().build(), serverURL, serverURL);
   }
 
-  private static String encodeCredentials(String password) {
-    byte[] bytes = ("username" + ":" + password).getBytes(StandardCharsets.UTF_8);
+  private static String encodeApiTokenCredentials(String apiToken) {
+    byte[] bytes = ("email@example.com" + ":" + apiToken).getBytes(StandardCharsets.UTF_8);
     return Base64.getEncoder().encodeToString(bytes);
   }
 
@@ -118,7 +115,7 @@ class BitbucketCloudRestClientTest {
           ]
         }"""));
 
-    RepositoryList repositoryList = underTest.searchRepos("user:apppwd", "", null, 1, 100);
+    RepositoryList repositoryList = underTest.searchRepos(encodeApiTokenCredentials("ATATvalidtoken123"), "", null, 1, 100);
     assertThat(repositoryList.getNext()).isNull();
     assertThat(repositoryList.getValues())
       .hasSize(2)
@@ -146,11 +143,16 @@ class BitbucketCloudRestClientTest {
                 "key": "HOY",
                 "uuid": "BANANA-PROJECT-UUID",
                 "name": "hoy"
+              },
+              "links": {
+                "html": {
+                  "href": "https://bitbucket.org/workspace/banana"
+                }
               }
             }\
         """));
 
-    Repository repository = underTest.getRepo("user:apppwd", "workspace", "rep");
+    Repository repository = underTest.getRepo(encodeApiTokenCredentials("ATATvalidtoken123"), "workspace", "rep");
     assertThat(repository.getUuid()).isEqualTo("BANANA-UUID");
     assertThat(repository.getName()).isEqualTo("banana");
     assertThat(repository.getSlug()).isEqualTo("banana");
@@ -160,6 +162,7 @@ class BitbucketCloudRestClientTest {
     assertThat(repository.getMainBranch())
       .extracting(MainBranch::getType, MainBranch::getName)
       .contains("branch", "develop");
+    assertThat(repository.getHtmlHref()).isEqualTo("https://bitbucket.org/workspace/banana");
   }
 
   @Test
@@ -172,7 +175,7 @@ class BitbucketCloudRestClientTest {
       .setHeader("Content-Type", "application/json;charset=UTF-8")
       .setBody(new Gson().toJson(repos)));
 
-    RepositoryList repositoryList = underTest.searchRepos("user:apppwd", "", null, 1, 100);
+    RepositoryList repositoryList = underTest.searchRepos(encodeApiTokenCredentials("ATATvalidtoken123"), "", null, 1, 100);
     assertThat(repositoryList.getNext()).isNull();
     assertThat(repositoryList.getPage()).isOne();
     assertThat(repositoryList.getPagelen()).isEqualTo(100);
@@ -185,6 +188,40 @@ class BitbucketCloudRestClientTest {
         tuple("REPO-UUID-ONE", "repoName", "repo-slug",
           "PROJECT-UUID-ONE", "projectKey", "projectName",
           "branch", "develop"));
+  }
+
+  @Test
+  void searchReposWithAccessToken_authenticatesWithBearerAndReturnsSize() throws Exception {
+    Project project = new Project("PROJECT-UUID-ONE", "projectKey", "projectName");
+    MainBranch mainBranch = new MainBranch("branch", "develop");
+    Repository repository = new Repository("REPO-UUID-ONE", "repo-slug", "repoName", project, mainBranch);
+    RepositoryList repos = new RepositoryList(null, List.of(repository), 1, 1, 42);
+    server.enqueue(new MockResponse()
+      .setHeader("Content-Type", "application/json;charset=UTF-8")
+      .setBody(new Gson().toJson(repos)));
+
+    RepositoryList repositoryList = underTest.searchReposWithAccessToken("some-access-token", "workspace", null, 1, 1);
+
+    assertThat(repositoryList.getSize()).isEqualTo(42);
+    assertThat(repositoryList.getValues())
+      .extracting(Repository::getUuid, Repository::getSlug)
+      .containsExactly(tuple("REPO-UUID-ONE", "repo-slug"));
+
+    RecordedRequest request = server.takeRequest();
+    assertThat(request.getPath()).startsWith("/2.0/repositories/workspace");
+    assertThat(request.getHeader("Authorization")).isEqualTo("Bearer some-access-token");
+  }
+
+  @Test
+  void searchReposWithAccessToken_withError_throwsBitbucketCloudException() {
+    String response = """
+      {"type": "error", "error": {"message": "Access forbidden"}}
+      """;
+    server.enqueue(new MockResponse().setBody(response).setResponseCode(403).setHeader("Content-Type", JSON_MEDIA_TYPE));
+
+    assertThatExceptionOfType(BitbucketCloudRestClient.BitbucketCloudException.class)
+      .isThrownBy(() -> underTest.searchReposWithAccessToken("some-access-token", "workspace", null, 1, 1))
+      .withMessage("Error returned by Bitbucket Cloud: Access forbidden [HTTP 403]");
   }
 
   @Test
@@ -290,7 +327,7 @@ class BitbucketCloudRestClientTest {
   }
 
   @Test
-  void validate_app_password_success() throws Exception {
+  void validate_api_token_success() throws Exception {
     String reposResponse = """
       {"pagelen": 10,
       "values": [],
@@ -301,45 +338,25 @@ class BitbucketCloudRestClientTest {
     server.enqueue(new MockResponse().setBody(reposResponse));
     server.enqueue(new MockResponse().setBody("OK"));
 
-    underTest.validateAppPassword(encodeCredentials("ATATvalidtoken123"), "workspace");
+    String encodedApiTokenCredentials = encodeApiTokenCredentials("ATATvalidtoken123");
+    underTest.validateApiToken(encodedApiTokenCredentials, "workspace");
 
     RecordedRequest request = server.takeRequest();
     assertThat(request.getPath()).isEqualTo("/2.0/repositories/workspace");
-    assertThat(request.getHeader("Authorization")).isNotNull();
+    assertThat(request.getHeader("Authorization")).isEqualTo("Basic " + encodedApiTokenCredentials);
   }
 
   @Test
-  void validate_app_password_with_invalid_credentials() {
+  void validate_api_token_with_invalid_credentials() {
     String response = "{\"type\": \"error\", \"error\": {\"message\": \"Invalid credentials.\"}}";
     server.enqueue(new MockResponse().setBody(response).setResponseCode(401).setHeader("Content-Type", JSON_MEDIA_TYPE));
 
-    String encodedCredentials = encodeCredentials("ATATinvalidtoken");
+    String encodedApiTokenCredentials = encodeApiTokenCredentials("ATATinvalidtoken");
     assertThatExceptionOfType(IllegalArgumentException.class)
-      .isThrownBy(() -> underTest.validateAppPassword(encodedCredentials, "workspace"))
+      .isThrownBy(() -> underTest.validateApiToken(encodedApiTokenCredentials, "workspace"))
       .withMessage("Error returned by Bitbucket Cloud: Invalid credentials. [HTTP 401]");
     assertThat(logTester.logs(Level.INFO)).containsExactly(String.format(BBC_FAIL_WITH_RESPONSE, serverURL + "2.0/repositories/workspace", "401", response));
   }
-
-  @Test
-  void validate_app_password_fails_with_old_app_password_prefix() {
-    // ATBB prefix - no longer supported
-    String encodedCredentials = encodeCredentials("ATBBsome_large_string_12345");
-
-    assertThatExceptionOfType(IllegalArgumentException.class)
-      .isThrownBy(() -> underTest.validateAppPassword(encodedCredentials, "workspace"))
-      .withMessage("Bitbucket App Passwords are no longer supported. Please update your configuration to use API tokens");
-  }
-
-  @Test
-  void validate_app_password_fails_with_no_valid_prefix() {
-    // No valid prefix
-    String encodedCredentials = encodeCredentials("invalid-app-password");
-
-    assertThatExceptionOfType(IllegalArgumentException.class)
-      .isThrownBy(() -> underTest.validateAppPassword(encodedCredentials, "workspace"))
-      .withMessage("Bitbucket App Passwords are no longer supported. Please update your configuration to use API tokens");
-  }
-
 
   @Test
   void nullErrorBodyIsSupported() throws IOException {
@@ -406,53 +423,15 @@ class BitbucketCloudRestClientTest {
     assertThat(logTester.logs(Level.INFO)).containsExactly(String.format(BBC_FAIL_WITH_ERROR, serverURL, "SSL verification failed"));
   }
 
-  @ParameterizedTest
-  @MethodSource("appPasswordDeprecationScenarios")
-  void operations_with_errors_and_app_password_show_deprecation_message(String operation, int httpCode, String credential, String errorMessage) {
+  @Test
+  void getRepo_with_error_throws_illegal_state_exception_with_http_code() {
+    String errorMessage = "Access forbidden";
     String response = String.format("{\"type\": \"error\", \"error\": {\"message\": \"%s\"}}", errorMessage);
-    server.enqueue(new MockResponse().setBody(response).setResponseCode(httpCode).setHeader("Content-Type", JSON_MEDIA_TYPE));
+    server.enqueue(new MockResponse().setBody(response).setResponseCode(403).setHeader("Content-Type", JSON_MEDIA_TYPE));
 
-    String encodedCredentials = encodeCredentials(credential);
-    
-    if ("getRepo".equals(operation)) {
-      assertThatExceptionOfType(IllegalArgumentException.class)
-        .isThrownBy(() -> underTest.getRepo(encodedCredentials, "workspace", "repo"))
-        .withMessageContaining(String.format("Error returned by Bitbucket Cloud: %s [HTTP %d]", errorMessage, httpCode))
-        .withMessageContaining(" - Note: Bitbucket App Passwords are deprecated and may cause authentication failures. Consider updating to API tokens using the SonarQube UI.");
-    } else if ("searchRepos".equals(operation)) {
-      assertThatExceptionOfType(IllegalArgumentException.class)
-        .isThrownBy(() -> underTest.searchRepos(encodedCredentials, "workspace", "repo", 1, 100))
-        .withMessageContaining(String.format("Error returned by Bitbucket Cloud: %s [HTTP %d]", errorMessage, httpCode))
-        .withMessageContaining(" - Note: Bitbucket App Passwords are deprecated and may cause authentication failures. Consider updating to API tokens using the SonarQube UI.");
-    }
-  }
-
-  @ParameterizedTest
-  @MethodSource("validTokenScenarios")
-  void getRepo_with_errors_and_valid_token_does_not_show_deprecation_message(int httpCode, String credential, String errorMessage) {
-    String response = String.format("{\"type\": \"error\", \"error\": {\"message\": \"%s\"}}", errorMessage);
-    server.enqueue(new MockResponse().setBody(response).setResponseCode(httpCode).setHeader("Content-Type", JSON_MEDIA_TYPE));
-
-    String encodedCredentials = encodeCredentials(credential);
+    String encodedApiTokenCredentials = encodeApiTokenCredentials("ATATvalid_api_token");
     assertThatExceptionOfType(IllegalStateException.class)
-      .isThrownBy(() -> underTest.getRepo(encodedCredentials, "workspace", "repo"))
-      .withMessage(String.format("Error returned by Bitbucket Cloud: %s [HTTP %d]", errorMessage, httpCode))
-      .withMessageNotContaining("App Passwords");
-  }
-
-  private static java.util.stream.Stream<Arguments> appPasswordDeprecationScenarios() {
-    return java.util.stream.Stream.of(
-      Arguments.of("getRepo", 403, "old-app-password", "Access forbidden"),
-      Arguments.of("getRepo", 404, "simple-password", "Repository not found"),
-      Arguments.of("getRepo", 401, "old-app-password", "Authentication failed"),
-      Arguments.of("searchRepos", 403, "legacy-password", "Access forbidden")
-    );
-  }
-
-  private static java.util.stream.Stream<Arguments> validTokenScenarios() {
-    return java.util.stream.Stream.of(
-      Arguments.of(403, "ATATvalid_api_token", "Access forbidden"),
-      Arguments.of(404, "ATCTvalid_access_token", "Repository not found")
-    );
+      .isThrownBy(() -> underTest.getRepo(encodedApiTokenCredentials, "workspace", "repo"))
+      .withMessage("Error returned by Bitbucket Cloud: Access forbidden [HTTP 403]");
   }
 }

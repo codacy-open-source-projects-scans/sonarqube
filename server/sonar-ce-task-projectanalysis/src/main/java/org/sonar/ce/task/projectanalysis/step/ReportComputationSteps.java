@@ -121,6 +121,7 @@ public class ReportComputationSteps extends AbstractComputationSteps {
     EnableAnalysisStep.class,
     PersistPullRequestFixedIssueStep.class,
     PersistScaStep.class,
+    RecordHistoryStep.class,
 
     UpdateQualityProfilesLastUsedDateStep.class,
     PurgeDatastoresStep.class,
@@ -137,7 +138,8 @@ public class ReportComputationSteps extends AbstractComputationSteps {
     PublishTaskResultStep.class,
     TriggerViewRefreshStep.class,
 
-    // send analysis and steps statistics telemetry
+    // send analysis, steps and issue statistics telemetry
+    SendIssueTelemetryStep.class,
     SendAnalysisTelemetryStep.class);
 
   public ReportComputationSteps(TaskContainer taskContainer) {

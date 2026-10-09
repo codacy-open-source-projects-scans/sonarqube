@@ -129,6 +129,7 @@ public class ProtobufIssueDiskCache implements DiskCache<DefaultIssue> {
     defaultIssue.setCreationDate(new Date(next.getCreationDate()));
     defaultIssue.setUpdateDate(next.hasUpdateDate() ? new Date(next.getUpdateDate()) : null);
     defaultIssue.setCloseDate(next.hasCloseDate() ? new Date(next.getCloseDate()) : null);
+    defaultIssue.setDetectionDate(next.hasDetectionDate() ? new Date(next.getDetectionDate()) : null);
     defaultIssue.setCurrentChangeWithoutAddChange(next.hasCurrentChanges() ? toDefaultIssueChanges(next.getCurrentChanges()) : null);
     defaultIssue.setNew(next.getIsNew());
     defaultIssue.setIsOnChangedLine(next.getIsOnChangedLine());
@@ -142,6 +143,7 @@ public class ProtobufIssueDiskCache implements DiskCache<DefaultIssue> {
     defaultIssue.setQuickFixAvailable(next.getQuickFixAvailable());
     defaultIssue.setPrioritizedRule(next.getIsPrioritizedRule());
     defaultIssue.setFromSonarQubeUpdate(next.getIsFromSonarqubeUpdate());
+    defaultIssue.setDeferralDate(next.hasDeferralDate() ? next.getDeferralDate() : null);
     defaultIssue.setIsNoLongerNewCodeReferenceIssue(next.getIsNoLongerNewCodeReferenceIssue());
     defaultIssue.setCleanCodeAttribute(next.hasCleanCodeAttribute() ? CleanCodeAttribute.valueOf(next.getCleanCodeAttribute()) : null);
     if (next.hasAnticipatedTransitionUuid()) {
@@ -192,11 +194,13 @@ public class ProtobufIssueDiskCache implements DiskCache<DefaultIssue> {
     builder.setCreationDate(defaultIssue.creationDate().getTime());
     ofNullable(defaultIssue.updateDate()).map(Date::getTime).ifPresent(builder::setUpdateDate);
     ofNullable(defaultIssue.closeDate()).map(Date::getTime).ifPresent(builder::setCloseDate);
+    ofNullable(defaultIssue.detectionDate()).map(Date::getTime).ifPresent(builder::setDetectionDate);
     ofNullable(defaultIssue.currentChange()).ifPresent(c -> builder.setCurrentChanges(toProtoIssueChanges(c)));
     builder.setIsNew(defaultIssue.isNew());
     builder.setIsOnChangedLine(defaultIssue.isOnChangedLine());
     builder.setIsPrioritizedRule(defaultIssue.isPrioritizedRule());
     builder.setIsFromSonarqubeUpdate(defaultIssue.isFromSonarQubeUpdate());
+    ofNullable(defaultIssue.deferralDate()).ifPresent(builder::setDeferralDate);
     builder.setIsNewCodeReferenceIssue(defaultIssue.isNewCodeReferenceIssue());
     builder.setIsCopied(defaultIssue.isCopied());
     builder.setBeingClosed(defaultIssue.isBeingClosed());

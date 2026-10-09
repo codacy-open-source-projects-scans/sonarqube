@@ -19,9 +19,9 @@
  */
 package org.sonar.server.common.almsettings.gitlab;
 
-import java.util.List;
 import java.util.Optional;
 import java.util.stream.Stream;
+import javax.annotation.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -32,7 +32,6 @@ import org.mockito.Answers;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.sonar.alm.client.gitlab.GitLabBranch;
 import org.sonar.alm.client.gitlab.GitlabApplicationClient;
 import org.sonar.alm.client.gitlab.Project;
 import org.sonar.db.DbClient;
@@ -56,6 +55,7 @@ class GitlabDevOpsProjectCreationContextServiceTest {
 
   private static final AlmSettingDto ALM_SETTING_DTO = mock();
   private static final long GITLAB_PROJECT_ID = 123L;
+  private static final long FETCHED_PROJECT_ID = 456L;
 
   private static final DevOpsProjectDescriptor DEV_OPS_PROJECT_DESCRIPTOR = new DevOpsProjectDescriptor(ALM.GITHUB, "project-key", String.valueOf(GITLAB_PROJECT_ID), null);
   private static final String GITLAB_COM = "https://gitlab.com";
@@ -129,14 +129,26 @@ class GitlabDevOpsProjectCreationContextServiceTest {
   void create_whenProjectFoundOnGitLab_createCorrectDevOpsProject(String gitlabVisibility, boolean isPublic) {
     AlmPatDto almPatDto = mockPatExistence();
 
-    Project project = mockGitlabProjectAndBranches(gitlabVisibility, almPatDto);
+    Project project = mockGitlabProject(gitlabVisibility, almPatDto, DEFAULT_BRANCH_NAME);
 
     DevOpsProjectCreationContext devOpsProjectCreationContext = gitlabDevOpsProjectService.create(ALM_SETTING_DTO, DEV_OPS_PROJECT_DESCRIPTOR);
     assertThat(devOpsProjectCreationContext.name()).isEqualTo(project.getName());
     assertThat(devOpsProjectCreationContext.fullName()).isEqualTo(project.getPathWithNamespace());
-    assertThat(devOpsProjectCreationContext.devOpsPlatformIdentifier()).isEqualTo(String.valueOf(project.getId()));
+    assertThat(devOpsProjectCreationContext.devOpsPlatformIdentifier()).isEqualTo(String.valueOf(GITLAB_PROJECT_ID));
+    assertThat(devOpsProjectCreationContext.url()).isEqualTo(project.getWebUrl());
+    assertThat(devOpsProjectCreationContext.repoId()).isEqualTo(String.valueOf(FETCHED_PROJECT_ID));
     assertThat(devOpsProjectCreationContext.isPublic()).isEqualTo(isPublic);
     assertThat(devOpsProjectCreationContext.defaultBranchName()).isEqualTo(DEFAULT_BRANCH_NAME);
+  }
+
+  @Test
+  void create_whenGitlabProjectHasNoDefaultBranch_leavesDefaultBranchNameNull() {
+    AlmPatDto almPatDto = mockPatExistence();
+    mockGitlabProject("private", almPatDto, null);
+
+    DevOpsProjectCreationContext devOpsProjectCreationContext = gitlabDevOpsProjectService.create(ALM_SETTING_DTO, DEV_OPS_PROJECT_DESCRIPTOR);
+
+    assertThat(devOpsProjectCreationContext.defaultBranchName()).isNull();
   }
 
   private AlmPatDto mockPatExistence() {
@@ -148,19 +160,14 @@ class GitlabDevOpsProjectCreationContextServiceTest {
     return almPatDto;
   }
 
-  private Project mockGitlabProjectAndBranches(String gitlabVisibility, AlmPatDto almPatDto) {
+  private Project mockGitlabProject(String gitlabVisibility, AlmPatDto almPatDto, @Nullable String defaultBranchName) {
     Project project = mock(Project.class);
-    when(project.getId()).thenReturn(GITLAB_PROJECT_ID);
+    when(project.getId()).thenReturn(FETCHED_PROJECT_ID);
     when(project.getName()).thenReturn("project-name");
     when(project.getPathWithNamespace()).thenReturn("project-path");
     when(project.getVisibility()).thenReturn(gitlabVisibility);
+    when(project.getDefaultBranch()).thenReturn(defaultBranchName);
     when(gitlabApplicationClient.getProject(GITLAB_COM, almPatDto.getPersonalAccessToken(), GITLAB_PROJECT_ID)).thenReturn(project);
-
-    GitLabBranch gitLabBranch = mock();
-    GitLabBranch defaultGitlabBranch = mock();
-    when(defaultGitlabBranch.getName()).thenReturn(DEFAULT_BRANCH_NAME);
-    when(defaultGitlabBranch.isDefault()).thenReturn(true);
-    when(gitlabApplicationClient.getBranches(GITLAB_COM, almPatDto.getPersonalAccessToken(), GITLAB_PROJECT_ID)).thenReturn(List.of(gitLabBranch, defaultGitlabBranch));
     return project;
   }
 

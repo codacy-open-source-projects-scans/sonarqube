@@ -31,6 +31,8 @@ import org.sonar.db.ce.CeScannerContextDao;
 import org.sonar.db.ce.CeTaskCharacteristicDao;
 import org.sonar.db.ce.CeTaskInputDao;
 import org.sonar.db.ce.CeTaskMessageDao;
+import org.sonar.db.adminalert.AdminAlertStatusDao;
+import org.sonar.db.agent.AgentJobDao;
 import org.sonar.db.component.AnalysisPropertiesDao;
 import org.sonar.db.component.ApplicationProjectsDao;
 import org.sonar.db.component.BranchDao;
@@ -60,6 +62,7 @@ import org.sonar.db.measure.ProjectMeasureDao;
 import org.sonar.db.metric.MetricDao;
 import org.sonar.db.migrationlog.MigrationLogDao;
 import org.sonar.db.newcodeperiod.NewCodePeriodDao;
+import org.sonar.db.notification.NotificationGroupSubscriptionsDao;
 import org.sonar.db.notification.NotificationQueueDao;
 import org.sonar.db.permission.AuthorizationDao;
 import org.sonar.db.permission.GroupPermissionDao;
@@ -122,6 +125,8 @@ public class DaoModule extends Module {
     // for readability and easier merge, keep list ordered alphabetically
     // =====================================================================
     ActiveRuleDao.class,
+    AdminAlertStatusDao.class,
+    AgentJobDao.class,
     AnalysisPropertiesDao.class,
     AnticipatedTransitionDao.class,
     AuthorizationDao.class,
@@ -169,6 +174,7 @@ public class DaoModule extends Module {
     MetricDao.class,
     MigrationLogDao.class,
     NewCodePeriodDao.class,
+    NotificationGroupSubscriptionsDao.class,
     NotificationQueueDao.class,
     PermissionTemplateCharacteristicDao.class,
     PermissionTemplateDao.class,

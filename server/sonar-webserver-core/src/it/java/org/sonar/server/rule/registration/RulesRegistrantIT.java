@@ -28,10 +28,11 @@ import java.util.Set;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
-import org.elasticsearch.common.util.set.Sets;
+import com.google.common.collect.Sets;
 import org.jetbrains.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -124,6 +125,7 @@ import static org.sonar.db.rule.RuleDescriptionSectionDto.builder;
 import static org.sonar.db.rule.RuleDescriptionSectionDto.createDefaultRuleDescriptionSection;
 import static org.sonar.server.qualityprofile.ActiveRuleChange.Type.DEACTIVATED;
 
+@Tag("elasticsearch")
 class RulesRegistrantIT {
 
   private static final String FAKE_PLUGIN_KEY = "unittest";
@@ -889,6 +891,21 @@ class RulesRegistrantIT {
 
     RuleDto reloaded = dbClient.ruleDao().selectByKey(db.getSession(), rule.getKey()).get();
     assertThat(reloaded.getStatus()).isEqualTo(READY);
+  }
+
+  @Test
+  void do_not_remove_hunter_agent_rule_on_startup() {
+    RuleDto rule = db.rules().insert(r -> r.setRepositoryKey("hunter-agent")
+      .setStatus(READY)
+      .setIsExternal(true)
+      .setIsAdHoc(true));
+
+    executeWithPluginRules(); // no plugin ever declares a hunter-agent repository
+
+    RuleDto reloaded = dbClient.ruleDao().selectByKey(db.getSession(), rule.getKey()).get();
+    assertThat(reloaded.getStatus()).isEqualTo(READY);
+    assertThat(ruleIndex.searchV2(new RuleQuery().setIncludeExternal(true), new SearchOptions()).getUuids())
+      .doesNotContain(rule.getUuid());
   }
 
   @Test

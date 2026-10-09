@@ -32,20 +32,36 @@ import static org.sonar.process.ProcessProperties.Property.CE_GRACEFUL_STOP_TIME
  * Immutable implementation of {@link CeConfiguration} initialized at startup from {@link Configuration}.
  */
 public class CeConfigurationImpl implements CeConfiguration {
+  /**
+   * Internal tuning knob, not exposed as a documented/UI setting (same status as {@code sonar.ce.gracefulStopTimeOutInMs}).
+   * Lets QA/IT tooling shorten the idle-worker backoff below {@link #DEFAULT_QUEUE_POLLING_DELAY}; production
+   * behaviour is unchanged unless explicitly set.
+   */
+  public static final String PROPERTY_QUEUE_POLLING_DELAY = "sonar.ce.queuePollingDelay";
+
+  /**
+   * Internal tuning knob, not exposed as a documented/UI setting (same status as {@link #PROPERTY_QUEUE_POLLING_DELAY}).
+   * Lets QA/IT tooling shorten the CE cleaning job's delay below {@link #DEFAULT_CLEAN_TASKS_DELAY}; production
+   * behaviour is unchanged unless explicitly set.
+   */
+  public static final String PROPERTY_CLEAN_TASKS_DELAY = "sonar.ce.cleanTasksDelay";
+
   private static final int DEFAULT_WORKER_THREAD_COUNT = 1;
   private static final int MAX_WORKER_THREAD_COUNT = 10;
   private static final int DEFAULT_WORKER_COUNT = 1;
   // 2 seconds
   private static final long DEFAULT_QUEUE_POLLING_DELAY = 2 * 1000L;
-  // 0 minute
-  private static final long CANCEL_WORN_OUTS_INITIAL_DELAY = 0;
+  // 0 seconds
+  private static final long DEFAULT_CLEAN_TASKS_INITIAL_DELAY = 0;
   // 2 minutes
-  private static final long CANCEL_WORN_OUTS_DELAY = 2;
+  private static final long DEFAULT_CLEAN_TASKS_DELAY = 2 * 60L;
 
   @CheckForNull
   private final WorkerCountProvider workerCountProvider;
   private final int workerThreadCount;
   private final long gracefulStopTimeoutInMs;
+  private final long queuePollingDelay;
+  private final long cleanTasksDelay;
   private int workerCount;
 
   @Autowired(required = false)
@@ -58,6 +74,10 @@ public class CeConfigurationImpl implements CeConfiguration {
     this.workerCountProvider = workerCountProvider;
     this.gracefulStopTimeoutInMs = configuration.getLong(CE_GRACEFUL_STOP_TIMEOUT.getKey())
       .orElse(Long.parseLong(CE_GRACEFUL_STOP_TIMEOUT.getDefaultValue()));
+    this.queuePollingDelay = configuration.getLong(PROPERTY_QUEUE_POLLING_DELAY)
+      .orElse(DEFAULT_QUEUE_POLLING_DELAY);
+    this.cleanTasksDelay = configuration.getLong(PROPERTY_CLEAN_TASKS_DELAY)
+      .orElse(DEFAULT_CLEAN_TASKS_DELAY);
     if (workerCountProvider == null) {
       this.workerCount = DEFAULT_WORKER_COUNT;
       this.workerThreadCount = DEFAULT_WORKER_THREAD_COUNT;
@@ -96,17 +116,17 @@ public class CeConfigurationImpl implements CeConfiguration {
 
   @Override
   public long getQueuePollingDelay() {
-    return DEFAULT_QUEUE_POLLING_DELAY;
+    return queuePollingDelay;
   }
 
   @Override
   public long getCleanTasksInitialDelay() {
-    return CANCEL_WORN_OUTS_INITIAL_DELAY;
+    return DEFAULT_CLEAN_TASKS_INITIAL_DELAY;
   }
 
   @Override
   public long getCleanTasksDelay() {
-    return CANCEL_WORN_OUTS_DELAY;
+    return cleanTasksDelay;
   }
 
   @Override

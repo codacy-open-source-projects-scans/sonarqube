@@ -104,14 +104,14 @@ public class EsInstallation {
 
   private static List<File> buildOutdatedSearchDirs(Props props) {
     String dataPath = props.nonNullValue(PATH_DATA.getKey());
-    return Stream.of("es", "es5", "es6", "es7")
+    return Stream.of("es", "es5", "es6", "es7", "es8")
       .map(t -> new File(dataPath, t))
       .toList();
   }
 
   private static File buildDataDir(Props props) {
     String dataPath = props.nonNullValue(PATH_DATA.getKey());
-    return new File(dataPath, "es8");
+    return new File(dataPath, "es9");
   }
 
   private static File buildLogPath(Props props) {
@@ -123,7 +123,7 @@ public class EsInstallation {
     // The keystore file needs write access, so we must place config in the data directory instead
     // See: https://github.com/elastic/elasticsearch/pull/126852
     String dataPath = props.nonNullValue(PATH_DATA.getKey());
-    return new File(new File(dataPath, "es8"), "config");
+    return new File(new File(dataPath, "es9"), "config");
   }
 
   public File getHomeDirectory() {

@@ -46,6 +46,9 @@ import org.sonar.db.qualityprofile.QProfileDto;
 import org.sonar.db.user.UserDto;
 import org.sonar.server.component.ComponentFinder;
 import org.sonar.server.language.LanguageParamUtils;
+import org.sonar.server.qualityprofile.QualityProfileDisplayNames;
+import org.sonar.server.qualityprofile.builtin.sonarwayvariants.SonarWayCoreProfileDefinition;
+import org.sonar.server.qualityprofile.builtin.sonarwayvariants.SonarWayExtendedProfileDefinition;
 import org.sonar.server.user.UserSession;
 import org.sonarqube.ws.Qualityprofiles.SearchWsResponse;
 import org.sonarqube.ws.Qualityprofiles.SearchWsResponse.QualityProfile;
@@ -67,9 +70,19 @@ import static org.sonarqube.ws.client.qualityprofile.QualityProfileWsParameters.
 import static org.sonarqube.ws.client.qualityprofile.QualityProfileWsParameters.PARAM_QUALITY_PROFILE;
 
 public class SearchAction implements QProfileWsAction {
+  /**
+   * Fixed display order for the "Sonar way" family, shown before any other profile for a given language.
+   * Everything else falls back to alphabetical order by display name (see {@link #Q_PROFILE_COMPARATOR}).
+   */
+  private static final List<String> PINNED_DISPLAY_NAME_ORDER = List.of(
+    SonarWayCoreProfileDefinition.NAME,
+    SonarWayExtendedProfileDefinition.NAME,
+    QualityProfileDisplayNames.toDisplayName(QualityProfileDisplayNames.SONAR_WAY_INTERNAL_NAME, true));
+
   private static final Comparator<QProfileDto> Q_PROFILE_COMPARATOR = Comparator
     .comparing(QProfileDto::getLanguage)
-    .thenComparing(QProfileDto::getName);
+    .thenComparing(SearchAction::pinnedDisplayNameRank)
+    .thenComparing(p -> QualityProfileDisplayNames.toDisplayName(p.getName(), p.isBuiltIn()));
 
   private final UserSession userSession;
   private final Languages languages;
@@ -197,8 +210,18 @@ public class SearchAction implements QProfileWsAction {
     return p -> languages.get(p.getLanguage()) != null;
   }
 
+  private static int pinnedDisplayNameRank(QProfileDto profile) {
+    if (!profile.isBuiltIn()) {
+      // a custom profile must never be pinned, even if it happens to be named e.g. "Sonar way core"
+      return PINNED_DISPLAY_NAME_ORDER.size();
+    }
+    int index = PINNED_DISPLAY_NAME_ORDER.indexOf(QualityProfileDisplayNames.toDisplayName(profile.getName(), true));
+    return index == -1 ? PINNED_DISPLAY_NAME_ORDER.size() : index;
+  }
+
   private static Predicate<QProfileDto> byName(SearchRequest request) {
-    return p -> request.getQualityProfile() == null || Objects.equals(p.getName(), request.getQualityProfile());
+    String internalName = QualityProfileDisplayNames.toInternalName(request.getQualityProfile());
+    return p -> internalName == null || Objects.equals(p.getName(), internalName);
   }
 
   private static Predicate<QProfileDto> byLanguage(SearchRequest request) {
@@ -240,7 +263,7 @@ public class SearchAction implements QProfileWsAction {
 
       String profileKey = profile.getKee();
       profileBuilder.setKey(profileKey);
-      ofNullable(profile.getName()).ifPresent(profileBuilder::setName);
+      ofNullable(QualityProfileDisplayNames.toDisplayName(profile.getName(), profile.isBuiltIn())).ifPresent(profileBuilder::setName);
       ofNullable(profile.getRulesUpdatedAt()).ifPresent(profileBuilder::setRulesUpdatedAt);
       ofNullable(profile.getLastUsed()).ifPresent(last -> profileBuilder.setLastUsed(formatDateTime(last)));
       ofNullable(profile.getUserUpdatedAt()).ifPresent(userUpdatedAt -> profileBuilder.setUserUpdatedAt(formatDateTime(userUpdatedAt)));
@@ -289,7 +312,7 @@ public class SearchAction implements QProfileWsAction {
     profileBuilder.setParentKey(parentKey);
     QProfileDto parent = profilesByKey.get(parentKey);
     if (parent != null && parent.getName() != null) {
-      profileBuilder.setParentName(parent.getName());
+      profileBuilder.setParentName(Objects.requireNonNull(QualityProfileDisplayNames.toDisplayName(parent.getName(), parent.isBuiltIn())));
     }
   }
 

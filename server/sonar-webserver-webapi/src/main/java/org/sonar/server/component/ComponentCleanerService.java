@@ -20,6 +20,7 @@
 package org.sonar.server.component;
 
 import java.util.List;
+import javax.annotation.Nullable;
 import org.sonar.api.server.ServerSide;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
@@ -30,6 +31,10 @@ import org.sonar.db.project.ProjectDto;
 import org.sonar.server.es.Indexers;
 import org.sonar.server.es.Indexers.BranchEvent;
 import org.sonar.server.es.Indexers.EntityEvent;
+import org.sonarsource.history.model.EntityType;
+import org.sonarsource.history.server.db.repository.IssueCountHistoryRepository;
+import org.sonarsource.history.server.db.repository.IssueTtrHistoryRepository;
+import org.sonarsource.history.server.db.repository.MeasureHistoryRepository;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static java.util.Collections.singletonList;
@@ -55,6 +60,7 @@ public class ComponentCleanerService {
     if (branch.isMain()) {
       throw new IllegalArgumentException("Only non-main branches can be deleted");
     }
+
     dbClient.purgeDao().deleteBranch(dbSession, branch.getUuid());
     updateProjectNcloc(dbSession, branch.getProjectUuid());
     indexers.commitAndIndexBranches(dbSession, singletonList(branch), BranchEvent.DELETION);

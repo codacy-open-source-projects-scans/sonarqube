@@ -19,7 +19,8 @@
  */
 package org.sonar.server.platform.monitoring;
 
-import org.elasticsearch.ElasticsearchException;
+import co.elastic.clients.elasticsearch._types.ElasticsearchException;
+import co.elastic.clients.elasticsearch._types.ErrorResponse;
 import org.junit.Rule;
 import org.junit.Test;
 import org.sonar.process.systeminfo.protobuf.ProtobufSystemInfo;
@@ -31,7 +32,10 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.sonar.process.systeminfo.SystemInfoUtils.attribute;
 import static org.sonar.server.platform.monitoring.SystemInfoTesting.assertThatAttributeIs;
+import org.junit.experimental.categories.Category;
+import org.sonar.test.tags.ElasticsearchTest;
 
+@Category(ElasticsearchTest.class)
 public class EsIndexesSectionTest {
 
   @Rule
@@ -78,7 +82,8 @@ public class EsIndexesSectionTest {
   public void attributes_displays_cause_message_when_cause_is_ElasticSearchException_when_client_fails() {
     EsClient esClientMock = mock(EsClient.class);
     EsIndexesSection underTest = new EsIndexesSection(esClientMock);
-    when(esClientMock.indicesStats()).thenThrow(new RuntimeException("RuntimeException with ES cause", new ElasticsearchException("some cause message")));
+    ErrorResponse errorResponse = ErrorResponse.of(r -> r.status(500).error(e -> e.type("some_error").reason("some cause message")));
+    when(esClientMock.indicesStats()).thenThrow(new RuntimeException("RuntimeException with ES cause", new ElasticsearchException("/_stats", errorResponse)));
 
     ProtobufSystemInfo.Section section = underTest.toProtobuf();
     assertThatAttributeIs(section, "Error", "some cause message");

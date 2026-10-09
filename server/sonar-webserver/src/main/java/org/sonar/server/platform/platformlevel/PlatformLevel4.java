@@ -50,9 +50,14 @@ import org.sonar.auth.ldap.LdapModule;
 import org.sonar.auth.saml.SamlModule;
 import org.sonar.ce.task.projectanalysis.notification.ReportAnalysisFailureNotificationModule;
 import org.sonar.ce.task.projectanalysis.taskprocessor.AuditPurgeTaskProcessor;
+import org.sonar.ce.task.projectanalysis.taskprocessor.HistoryPurgeTaskProcessor;
 import org.sonar.ce.task.projectanalysis.taskprocessor.IssueSyncTaskProcessor;
 import org.sonar.ce.task.projectanalysis.taskprocessor.ReportTaskProcessor;
 import org.sonar.ce.task.projectexport.taskprocessor.ProjectExportTaskProcessor;
+import org.sonar.ce.task.purgehistory.HistoryPurgeExecutorServiceImpl;
+import org.sonar.ce.task.purgehistory.HistoryPurgeInitializer;
+import org.sonar.ce.task.purgehistory.HistoryPurgePropertyChangeHandler;
+import org.sonar.ce.task.purgehistory.HistoryPurgeSchedulerImpl;
 import org.sonar.core.extension.CoreExtensionsInstaller;
 import org.sonar.core.language.LanguagesProvider;
 import org.sonar.core.metric.SoftwareQualitiesMetrics;
@@ -68,6 +73,7 @@ import org.sonar.server.almintegration.ws.ImportHelper;
 import org.sonar.server.almintegration.ws.github.GithubProvisioningWs;
 import org.sonar.server.almsettings.MultipleAlmFeature;
 import org.sonar.server.almsettings.ws.AlmSettingsWsModule;
+import org.sonar.server.almsettings.ws.ProjectBindingsServiceServerImpl;
 import org.sonar.server.authentication.AuthenticationModule;
 import org.sonar.server.authentication.DefaultAdminCredentialsVerifierImpl;
 import org.sonar.server.authentication.DefaultAdminCredentialsVerifierNotificationHandler;
@@ -84,16 +90,25 @@ import org.sonar.server.ce.projectdump.ProjectExportWsModule;
 import org.sonar.server.ce.ws.CeWsModule;
 import org.sonar.server.common.almintegration.ProjectKeyGenerator;
 import org.sonar.server.common.almsettings.DelegatingDevOpsProjectCreatorFactory;
+import org.sonar.server.common.almsettings.DelegatingScmAccessTokenProvider;
 import org.sonar.server.common.almsettings.azuredevops.AzureDevOpsProjectCreatorFactory;
+import org.sonar.server.common.almsettings.azuredevops.AzureDevOpsScmAccessTokenProvider;
 import org.sonar.server.common.almsettings.bitbucketcloud.BitbucketCloudProjectCreatorFactory;
 import org.sonar.server.common.almsettings.bitbucketserver.BitbucketServerProjectCreatorFactory;
 import org.sonar.server.common.almsettings.github.GithubDevOpsProjectCreationContextService;
+import org.sonar.server.common.almsettings.github.GithubInstallationTokenProviderImpl;
 import org.sonar.server.common.almsettings.github.GithubProjectCreatorFactory;
+import org.sonar.server.common.almsettings.github.GithubScmAccessTokenProviderAdapter;
 import org.sonar.server.common.almsettings.gitlab.GitlabDevOpsProjectCreationContextService;
 import org.sonar.server.common.almsettings.gitlab.GitlabProjectCreatorFactory;
+import org.sonar.server.common.almsettings.gitlab.GitlabScmAccessTokenProvider;
+import org.sonar.server.common.almsettings.permission.DopPermissionValidationService;
+import org.sonar.server.common.almsettings.permission.GithubRemediationPermissionChecker;
+import org.sonar.server.common.almsettings.telemetry.DevOpsConfigurationTelemetry;
 import org.sonar.server.common.component.ComponentUpdater;
 import org.sonar.server.common.github.config.GithubConfigurationService;
 import org.sonar.server.common.gitlab.config.GitlabConfigurationService;
+import org.sonar.server.common.graphql.GraphQlClient;
 import org.sonar.server.common.group.service.GroupMembershipService;
 import org.sonar.server.common.group.service.GroupService;
 import org.sonar.server.common.newcodeperiod.NewCodeDefinitionResolver;
@@ -130,6 +145,7 @@ import org.sonar.server.es.RecoveryIndexer;
 import org.sonar.server.es.metadata.EsDbCompatibilityImpl;
 import org.sonar.server.es.metadata.MetadataIndexDefinition;
 import org.sonar.server.es.metadata.MetadataIndexImpl;
+import org.sonar.server.events.EventsWebComponents;
 import org.sonar.server.extension.CoreExtensionBootstraper;
 import org.sonar.server.extension.CoreExtensionStopper;
 import org.sonar.server.favorite.FavoriteModule;
@@ -137,12 +153,17 @@ import org.sonar.server.favorite.ws.FavoriteWsModule;
 import org.sonar.server.feature.JiraSonarQubeFeature;
 import org.sonar.server.feature.ws.FeatureWsModule;
 import org.sonar.server.health.NodeHealthModule;
+import org.sonar.server.history.IssueCountHistoryExecutorImpl;
+import org.sonar.server.history.IssueCountHistoryQGChangeEventListener;
+import org.sonarsource.history.server.service.MeasuresHistoryRecordingService;
+import org.sonarsource.history.server.service.ProjectMeasureHistoryMetricKeyProvider;
 import org.sonar.server.hotspot.ws.HotspotsWsModule;
 import org.sonar.server.issue.AddTagsAction;
 import org.sonar.server.issue.AssignAction;
 import org.sonar.server.issue.CommentAction;
 import org.sonar.server.issue.FromSonarQubeUpdateFeature;
 import org.sonar.server.issue.IssueChangePostProcessorImpl;
+import org.sonar.server.issue.IssueStatsIndexer;
 import org.sonar.server.issue.PrioritizedRulesFeature;
 import org.sonar.server.issue.RemoveTagsAction;
 import org.sonar.server.issue.SetSeverityAction;
@@ -153,6 +174,7 @@ import org.sonar.server.issue.index.AsyncIssueIndexingImpl;
 import org.sonar.server.issue.index.IssueIndexDefinition;
 import org.sonar.server.issue.index.IssueIndexMonitoringScheduler;
 import org.sonar.server.issue.index.IssueIndexer;
+import org.sonar.server.issue.index.IssueSyncOrphanedBranchesStartupHandler;
 import org.sonar.server.issue.index.IssueIteratorFactory;
 import org.sonar.server.issue.notification.IssuesChangesNotificationModule;
 import org.sonar.server.issue.notification.MyNewIssuesEmailTemplate;
@@ -174,9 +196,11 @@ import org.sonar.server.metric.IssueCountMetrics;
 import org.sonar.server.metric.UnanalyzedLanguageMetrics;
 import org.sonar.server.metric.ws.MetricsWsModule;
 import org.sonar.server.monitoring.ComputeEngineMetricStatusTask;
+import org.sonar.server.monitoring.DbLatencyTask;
 import org.sonar.server.monitoring.ElasticSearchMetricTask;
 import org.sonar.server.monitoring.MainCollector;
 import org.sonar.server.monitoring.MonitoringWsModule;
+import org.sonar.server.monitoring.MyBatisMetricsInterceptorRegistrar;
 import org.sonar.server.monitoring.ServerMonitoringMetrics;
 import org.sonar.server.monitoring.SonarLintConnectedClientsTask;
 import org.sonar.server.monitoring.WebUptimeTask;
@@ -199,17 +223,27 @@ import org.sonar.server.notification.ws.NotificationWsModule;
 import org.sonar.server.permission.index.PermissionIndexer;
 import org.sonar.server.permission.ws.PermissionsWsModule;
 import org.sonar.server.platform.ClusterVerification;
+import org.sonar.server.platform.InstallationDateProviderImpl;
 import org.sonar.server.platform.PersistentSettings;
 import org.sonar.server.platform.SystemInfoWriterModule;
 import org.sonar.server.platform.WebCoreExtensionsInstaller;
-import org.sonar.server.platform.db.CheckAnyonePermissionsAtStartup;
 import org.sonar.server.platform.db.migration.DatabaseMigrationPersister;
 import org.sonar.server.platform.db.migration.DatabaseMigrationTelemetry;
+import org.sonar.server.platform.issue.IssueCountsByStatusComputation;
+import org.sonar.server.platform.issue.IssueCountsByStatusComputationExecutorServiceImpl;
+import org.sonar.server.platform.telemetry.DefaultDashboardCountService;
+import org.sonar.server.platform.telemetry.OnboardingSystemInfoSection;
+import org.sonar.server.platform.telemetry.TelemetryCustomPortfolioDashboardCountProvider;
+import org.sonar.server.platform.telemetry.TelemetryCustomProjectDashboardCountProvider;
 import org.sonar.server.platform.telemetry.TelemetryFipsEnabledProvider;
 import org.sonar.server.platform.telemetry.TelemetryIpv6EnabledProvider;
 import org.sonar.server.platform.telemetry.TelemetryIssueCountsPerStatusProvider;
 import org.sonar.server.platform.telemetry.TelemetryMQRModePropertyProvider;
 import org.sonar.server.platform.telemetry.TelemetryNclocProvider;
+import org.sonar.server.platform.telemetry.TelemetryOnboardingBoundProjectsByAlmProvider;
+import org.sonar.server.platform.telemetry.TelemetryOnboardingCountsProvider;
+import org.sonar.server.platform.telemetry.TelemetryOnboardingDiscoveredRepoCountByAlmProvider;
+import org.sonar.server.platform.telemetry.TelemetryOnboardingLastAnalysisBucketProvider;
 import org.sonar.server.platform.telemetry.TelemetryPortfolioSelectionModeProvider;
 import org.sonar.server.platform.telemetry.TelemetrySubportfolioSelectionModeProvider;
 import org.sonar.server.platform.telemetry.TelemetryUserEnabledProvider;
@@ -218,6 +252,7 @@ import org.sonar.server.platform.web.ActionDeprecationLoggerInterceptor;
 import org.sonar.server.platform.web.ConcurrentCallsLimitInterceptor;
 import org.sonar.server.platform.web.NoCacheFilter;
 import org.sonar.server.platform.web.SonarQubeIdeConnectionFilter;
+import org.sonar.server.platform.web.WebApiV1MetricsInterceptor;
 import org.sonar.server.platform.web.WebServiceFilter;
 import org.sonar.server.platform.web.WebServiceReroutingFilter;
 import org.sonar.server.platform.web.requestid.HttpRequestIdModule;
@@ -272,7 +307,6 @@ import org.sonar.server.qualityprofile.builtin.BuiltInQProfileRepositoryImpl;
 import org.sonar.server.qualityprofile.builtin.RuleActivator;
 import org.sonar.server.qualityprofile.index.ActiveRuleIndexer;
 import org.sonar.server.qualityprofile.ws.QProfilesWsModule;
-import org.sonar.server.resolver.OrganizationDefaultsWebMvcConfigurer;
 import org.sonar.server.rule.RuleDefinitionsLoader;
 import org.sonar.server.rule.RuleDescriptionFormatter;
 import org.sonar.server.rule.RuleUpdater;
@@ -294,7 +328,17 @@ import org.sonar.server.setting.SettingsChangeNotifier;
 import org.sonar.server.setting.ws.SettingsWsModule;
 import org.sonar.server.source.ws.SourceWsModule;
 import org.sonar.server.startup.LogServerId;
+import org.sonar.server.telemetry.AgenticQGProjectResolver;
+import org.sonar.server.telemetry.AgenticQPProjectResolver;
+import org.sonar.server.telemetry.ServerStartupEventPublisher;
+import org.sonar.server.telemetry.TelemetryAgenticQGAdoptionProvider;
+import org.sonar.server.telemetry.TelemetryAgenticQGNcdOutcomeProvider;
+import org.sonar.server.telemetry.TelemetryAgenticQPAdoptionProvider;
+import org.sonar.server.telemetry.TelemetryCustomProfileActiveRulesProvider;
 import org.sonar.server.telemetry.TelemetryQualityGateBeforeNcdStartProvider;
+import org.sonar.server.telemetry.gessie.GessieFlushExecutorServiceImpl;
+import org.sonar.server.telemetry.gessie.GessieIngestorExecutorServiceImpl;
+import org.sonar.server.telemetry.gessie.GessieMetadataSourceImpl;
 import org.sonar.server.ui.PageRepository;
 import org.sonar.server.ui.WebAnalyticsLoaderImpl;
 import org.sonar.server.ui.ws.NavigationWsModule;
@@ -309,6 +353,8 @@ import org.sonar.server.usergroups.ws.UserGroupsModule;
 import org.sonar.server.usertoken.UserTokenModule;
 import org.sonar.server.usertoken.ws.UserTokenWsModule;
 import org.sonar.server.util.TypeValidationModule;
+import org.sonar.server.v2.telemetry.TelemetryBuiltInDashboardViewCountProvider;
+import org.sonar.server.v2.telemetry.TelemetryCustomDashboardViewCountProvider;
 import org.sonar.server.view.index.ViewIndex;
 import org.sonar.server.view.index.ViewIndexDefinition;
 import org.sonar.server.view.index.ViewIndexer;
@@ -329,9 +375,15 @@ import org.sonarsource.compliancereports.ingestion.IssueIngestionService;
 import org.sonarsource.compliancereports.reports.ComplianceReportService;
 import org.sonarsource.compliancereports.reports.MetadataLoader;
 import org.sonarsource.compliancereports.reports.MetadataRules;
+import org.sonarsource.gessie.server.GessieProperties;
+import org.sonarsource.gessie.server.telemetry.GessieTelemetryWebConfiguration;
+import org.sonarsource.history.server.HistoryServerComponents;
+import org.sonarsource.history.server.service.IssueCountHistoryRecordingService;
+import org.sonarsource.measures.server.MeasuresServerComponents;
+import org.sonarsource.metrics.server.bean.MetricsServerComponents;
 import org.sonarsource.organizations.server.OrganizationsServiceServerImpl;
+import org.sonarsource.projects.server.bean.ProjectsServerComponents;
 import org.sonarsource.users.server.bean.UsersServerComponents;
-import org.sonar.server.events.EventsWebComponents;
 
 import static org.sonar.core.extension.CoreExtensionsInstaller.noAdditionalSideFilter;
 import static org.sonar.core.extension.PlatformLevelPredicates.hasPlatformLevel4OrNone;
@@ -351,7 +403,8 @@ public class PlatformLevel4 extends PlatformLevel {
       IndexCreator.class,
       MetadataIndexDefinition.class,
       MetadataIndexImpl.class,
-      EsDbCompatibilityImpl.class);
+      EsDbCompatibilityImpl.class,
+      IssueSyncOrphanedBranchesStartupHandler.class);
 
     addIfCluster(new NodeHealthModule(),
       DistributedServerLogging.class);
@@ -376,7 +429,7 @@ public class PlatformLevel4 extends PlatformLevel {
       DelegatingDevOpsProjectCreatorFactory.class,
       NetworkInterfaceProvider.class,
       OrganizationsServiceServerImpl.class,
-      OrganizationDefaultsWebMvcConfigurer.class,
+      ProjectBindingsServiceServerImpl.class,
 
       // ai code assurance
       NoOpAiCodeAssuranceVerifier.class,
@@ -435,6 +488,7 @@ public class PlatformLevel4 extends PlatformLevel {
       // compliance reports
       IssueIngestionService.class,
       IssueStatsByRuleKeyDaoImpl.class,
+      IssueStatsIndexer.class,
       MetadataLoader.class,
       MetadataRules.class,
       SqrActiveRuleDao.class,
@@ -453,6 +507,7 @@ public class PlatformLevel4 extends PlatformLevel {
       // web services
       ActionDeprecationLoggerInterceptor.class,
       ConcurrentCallsLimitInterceptor.class,
+      WebApiV1MetricsInterceptor.class,
       WebServiceEngine.class,
       new WebServicesWsModule(),
       SonarQubeIdeConnectionFilter.class,
@@ -471,6 +526,7 @@ public class PlatformLevel4 extends PlatformLevel {
       GitHubSettings.class,
       GithubConfigurationService.class,
       new GitHubModule(),
+      GraphQlClient.class,
       new GitLabModule(),
       new LdapModule(),
       new SamlModule(),
@@ -503,7 +559,6 @@ public class PlatformLevel4 extends PlatformLevel {
       PermissionUpdater.class,
       UserPermissionChanger.class,
       GroupPermissionChanger.class,
-      CheckAnyonePermissionsAtStartup.class,
       VisibilityService.class,
 
       // components
@@ -648,6 +703,7 @@ public class PlatformLevel4 extends PlatformLevel {
       GithubProvisioningWs.class,
       GithubDevOpsProjectCreationContextService.class,
       GithubProjectCreatorFactory.class,
+      GithubInstallationTokenProviderImpl.class,
       GithubPermissionConverter.class,
       GitlabDevOpsProjectCreationContextService.class,
       BitbucketCloudRestClientConfiguration.class,
@@ -667,6 +723,16 @@ public class PlatformLevel4 extends PlatformLevel {
       GitlabGlobalSettingsValidator.class,
       GitlabProjectCreatorFactory.class,
       AzureDevOpsValidator.class,
+
+      // DevOps Platform permission validation for the Remediation Agent (SONAR-31626)
+      GithubRemediationPermissionChecker.class,
+      DopPermissionValidationService.class,
+
+      // SCM access token brokering (SONAR-31165)
+      GithubScmAccessTokenProviderAdapter.class,
+      GitlabScmAccessTokenProvider.class,
+      AzureDevOpsScmAccessTokenProvider.class,
+      DelegatingScmAccessTokenProvider.class,
 
       // ALM settings
       new AlmSettingsWsModule(),
@@ -699,12 +765,18 @@ public class PlatformLevel4 extends PlatformLevel {
       ReportTaskProcessor.class,
       IssueSyncTaskProcessor.class,
       AuditPurgeTaskProcessor.class,
+      HistoryPurgeTaskProcessor.class,
+      HistoryPurgeSchedulerImpl.class,
+      HistoryPurgeExecutorServiceImpl.class,
+      HistoryPurgeInitializer.class,
+      HistoryPurgePropertyChangeHandler.class,
       ProjectExportTaskProcessor.class,
 
       // SonarSource editions
       PlatformEditionProvider.class,
 
       InternalPropertiesImpl.class,
+      InstallationDateProviderImpl.class,
 
       // UI
       new NavigationWsModule(),
@@ -737,11 +809,33 @@ public class PlatformLevel4 extends PlatformLevel {
       TelemetryPortfolioSelectionModeProvider.class,
       TelemetryApplicationsCountProvider.class,
       TelemetryIssueCountsPerStatusProvider.class,
+      IssueCountsByStatusComputation.class,
+      IssueCountsByStatusComputationExecutorServiceImpl.class,
+      AgenticQGProjectResolver.class,
+      TelemetryAgenticQGAdoptionProvider.class,
+      TelemetryAgenticQGNcdOutcomeProvider.class,
+      AgenticQPProjectResolver.class,
+      TelemetryAgenticQPAdoptionProvider.class,
+      TelemetryCustomProfileActiveRulesProvider.class,
+
+      // Onboarding telemetry (SONAR-31715)
+      TelemetryOnboardingCountsProvider.class,
+      TelemetryOnboardingBoundProjectsByAlmProvider.class,
+      TelemetryOnboardingLastAnalysisBucketProvider.class,
+      TelemetryOnboardingDiscoveredRepoCountByAlmProvider.class,
+      OnboardingSystemInfoSection.class,
 
       // Reports telemetry
       TelemetryApplicationSubscriptionsProvider.class,
       TelemetryProjectSubscriptionsProvider.class,
       TelemetryPortfolioSubscriptionsProvider.class,
+
+      // Dashboards telemetry
+      DefaultDashboardCountService.class,
+      TelemetryBuiltInDashboardViewCountProvider.class,
+      TelemetryCustomDashboardViewCountProvider.class,
+      TelemetryCustomPortfolioDashboardCountProvider.class,
+      TelemetryCustomProjectDashboardCountProvider.class,
 
       // telemetry
       TelemetryMetricsLoader.class,
@@ -757,9 +851,11 @@ public class PlatformLevel4 extends PlatformLevel {
       // database migration logging and telemetry
       DatabaseMigrationPersister.class,
       DatabaseMigrationTelemetry.class,
+      DevOpsConfigurationTelemetry.class,
 
       // monitoring
       ServerMonitoringMetrics.class,
+      MyBatisMetricsInterceptorRegistrar.class,
 
       // dismiss message
       new DismissMessageWsModule(),
@@ -779,6 +875,7 @@ public class PlatformLevel4 extends PlatformLevel {
       ComputeEngineMetricStatusTask.class,
       ElasticSearchMetricTask.class,
       WebUptimeTask.class,
+      DbLatencyTask.class,
       SonarLintConnectedClientsTask.class,
 
       MainCollector.class,
@@ -791,8 +888,34 @@ public class PlatformLevel4 extends PlatformLevel {
     // registered via users-server-app
     addAll(UsersServerComponents.components());
 
+    // registered via metrics-server-app
+    addAll(MetricsServerComponents.components());
+
+    // registered via measures-server-app
+    addAll(MeasuresServerComponents.components());
+
+    // registered via projects-server-app
+    addAll(ProjectsServerComponents.components());
+
+    // registered via gessie-server-app
+    addAll(GessieProperties.getPropertyDefinitions());
+    add(GessieFlushExecutorServiceImpl.class);
+    add(GessieIngestorExecutorServiceImpl.class);
+    add(GessieTelemetryWebConfiguration.class);
+    add(GessieMetadataSourceImpl.class);
+
+    // registered via history-server-app
+    addAll(HistoryServerComponents.webComponents());
+    add(IssueCountHistoryRecordingService.class,
+        MeasuresHistoryRecordingService.class,
+        ProjectMeasureHistoryMetricKeyProvider.class,
+        IssueCountHistoryExecutorImpl.class,
+        IssueCountHistoryQGChangeEventListener.class);
+
     // registered via sonar-unified-events
     addAll(EventsWebComponents.components());
+    // publishes a telemetry event on Web process startup
+    add(ServerStartupEventPublisher.class);
 
     // system info
     add(new SystemInfoWriterModule(getWebServer()));

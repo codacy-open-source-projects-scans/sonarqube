@@ -36,7 +36,7 @@ import org.sonar.server.v2.api.projectbindings.request.ProjectBindingsSearchRest
 import org.sonar.server.v2.api.projectbindings.response.ProjectBindingsSearchRestResponse;
 import org.sonar.server.v2.api.response.PageRestResponse;
 
-import static org.sonar.db.permission.GlobalPermission.PROVISION_PROJECTS;
+import static java.util.Objects.requireNonNull;
 import static org.sonar.db.permission.ProjectPermission.USER;
 import static org.sonar.server.exceptions.BadRequestException.throwBadRequestException;
 
@@ -65,11 +65,12 @@ public class DefaultProjectBindingsController implements ProjectBindingsControll
 
   @Override
   public ProjectBindingsSearchRestResponse searchProjectBindings(ProjectBindingsSearchRestRequest restRequest, RestPage restPage) {
-    userSession.checkLoggedIn().checkPermission(PROVISION_PROJECTS);
+    userSession.checkLoggedIn();
     validateSearchParameters(restRequest);
+    String userUuid = requireNonNull(userSession.getUuid(), "User UUID cannot be null");
     ProjectBindingsSearchRequest serviceRequest = new ProjectBindingsSearchRequest(
       restRequest.repository(), restRequest.dopSettingId(), restRequest.repositoryUrl(), restPage.pageIndex(), restPage.pageSize());
-    SearchResults<ProjectBindingInformation> searchResults = projectBindingsService.findProjectBindingsByRequest(serviceRequest);
+    SearchResults<ProjectBindingInformation> searchResults = projectBindingsService.findProjectBindingsByRequest(serviceRequest, userUuid);
     List<ProjectBinding> projectBindings = toProjectBindings(searchResults);
     return new ProjectBindingsSearchRestResponse(projectBindings, new PageRestResponse(restPage.pageIndex(), restPage.pageSize(), searchResults.total()));
   }

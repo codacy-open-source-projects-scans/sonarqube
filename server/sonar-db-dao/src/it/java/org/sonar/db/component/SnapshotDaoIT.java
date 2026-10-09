@@ -47,6 +47,7 @@ import static java.util.Collections.emptyList;
 import static java.util.Collections.singletonList;
 import static java.util.stream.Collectors.toList;
 import static org.apache.commons.lang3.RandomStringUtils.secure;
+import static org.apache.commons.lang3.StringUtils.trimToNull;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.sonar.db.ce.CeActivityDto.Status.CANCELED;
@@ -421,6 +422,19 @@ class SnapshotDaoIT {
 
   @ParameterizedTest
   @MethodSource("nullAndEmptyNonEmptyStrings")
+  void insert_and_select_relativePathFromScmRoot(@Nullable String relativePathFromScmRoot) {
+    ComponentDto project = db.components().insertPrivateProject().getMainBranchComponent();
+
+    SnapshotDto inserted = underTest.insert(db.getSession(),
+      newAnalysis(project).setRelativePathFromScmRoot(relativePathFromScmRoot));
+    db.getSession().commit();
+
+    assertThat(underTest.selectByUuid(db.getSession(), inserted.getUuid()).get().getRelativePathFromScmRoot())
+      .isEqualTo(trimToNull(relativePathFromScmRoot));
+  }
+
+  @ParameterizedTest
+  @MethodSource("nullAndEmptyNonEmptyStrings")
   void insert_with_null_and_empty_and_non_empty_projectVersion(@Nullable String projectVersion) {
     ComponentDto project = db.components().insertPrivateProject().getMainBranchComponent();
 
@@ -470,7 +484,7 @@ class SnapshotDaoIT {
 
   @Test
   void isLast_is_true_when_previous_snapshot_is_older() {
-    Date today = new Date();
+    Date today = new Date(1_704_067_200_000L);
     Date yesterday = DateUtils.addDays(today, -1);
 
     SnapshotDto snapshot = defaultSnapshot().setCreatedAt(today.getTime());
@@ -483,7 +497,7 @@ class SnapshotDaoIT {
 
   @Test
   void isLast_is_false_when_previous_snapshot_is_newer() {
-    Date today = new Date();
+    Date today = new Date(1_704_067_200_000L);
     Date yesterday = DateUtils.addDays(today, -1);
 
     SnapshotDto snapshot = defaultSnapshot().setCreatedAt(yesterday.getTime());

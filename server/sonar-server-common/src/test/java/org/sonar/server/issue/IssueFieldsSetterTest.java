@@ -65,7 +65,7 @@ class IssueFieldsSetterTest {
   private final String DEFAULT_RULE_DESCRIPTION_CONTEXT_KEY = "spring";
 
   private final DefaultIssue issue = new DefaultIssue();
-  private final IssueChangeContext context = issueChangeContextByUserBuilder(new Date(), "user_uuid").build();
+  private final IssueChangeContext context = issueChangeContextByUserBuilder(new Date(1_704_067_200_000L), "user_uuid").build();
   private final IssueFieldsSetter underTest = new IssueFieldsSetter();
 
   @Test
@@ -317,6 +317,29 @@ class IssueFieldsSetterTest {
     assertThat(issue.isChanged()).isFalse();
     assertThat(issue.currentChange()).isNull();
     assertThat(issue.mustSendNotifications()).isFalse();
+  }
+
+  @Test
+  void unset_deferral_date() {
+    issue.setDeferralDate(1_704_067_200_000L + 90L * 24 * 60 * 60 * 1000);
+
+    underTest.unsetDeferralDate(issue, context);
+
+    assertThat(issue.deferralDate()).isNull();
+    assertThat(issue.isChanged()).isTrue();
+    assertThat(issue.updateDate()).isEqualTo(context.date());
+    assertThat(issue.currentChange()).isNull();
+  }
+
+  @Test
+  void unset_deferral_date_has_no_effect_if_already_null() {
+    issue.setDeferralDate(null);
+
+    underTest.unsetDeferralDate(issue, context);
+
+    assertThat(issue.deferralDate()).isNull();
+    assertThat(issue.isChanged()).isFalse();
+    assertThat(issue.currentChange()).isNull();
   }
 
   @Test
@@ -855,6 +878,27 @@ class IssueFieldsSetterTest {
     issue.setType(RuleType.BUG);
     boolean updated = underTest.setImpacts(issue, currentImpacts, context);
     assertThat(updated).isFalse();
+    assertThat(issue.changes()).isEmpty();
+  }
+
+  @Test
+  void setImpacts_whenIssueIsManualSeveritySecurityHotspot_shouldNotThrow() {
+    // Security Hotspots cannot be mapped to a Software Quality, so they must be excluded from the
+    // manual-severity migration branch. Without the guard, convertToSoftwareQuality(SECURITY_HOTSPOT)
+    // throws and fails the CE task. See SONAR-30563.
+    Set<DefaultImpact> currentImpacts = Set.of();
+
+    issue.setManualSeverity(true);
+    issue.setSeverity(org.sonar.api.rule.Severity.BLOCKER);
+    issue.setType(RuleType.SECURITY_HOTSPOT);
+    // Simulate a hotspot that already has an impact stored in the DB from before SONAR-30563.
+    issue.addImpact(SoftwareQuality.SECURITY, Severity.LOW, false);
+
+    boolean updated = underTest.setImpacts(issue, currentImpacts, context);
+
+    assertThat(updated).isTrue();
+    // The migration branch is skipped for hotspots, so the impact severity is left untouched.
+    assertThat(issue.getImpacts()).containsExactly(new DefaultImpact(SoftwareQuality.SECURITY, Severity.LOW, false));
     assertThat(issue.changes()).isEmpty();
   }
 

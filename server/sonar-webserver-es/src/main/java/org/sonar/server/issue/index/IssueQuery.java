@@ -50,9 +50,19 @@ public class IssueQuery {
    * Sort hotspots by vulnerabilityProbability, sqSecurityCategory, project, file path then line id
    */
   public static final String SORT_HOTSPOTS = "HOTSPOTS";
+  /**
+   * Sort by rule type then standard severity (Standard mode). Default sort in Standard mode.
+   */
+  public static final String SORT_BY_TYPE_SEVERITY = "TYPE_SEVERITY";
+  /**
+   * Sort by impact severity, with software quality (Security before Reliability) only breaking
+   * ties at the same severity; Maintainability is always ranked last (MQR mode). Default sort in
+   * MQR mode.
+   */
+  public static final String SORT_BY_IMPACT_RANK = "IMPACT_RANK";
 
   public static final Set<String> SORTS = Set.of(SORT_BY_CREATION_DATE, SORT_BY_UPDATE_DATE, SORT_BY_CLOSE_DATE, SORT_BY_SEVERITY,
-    SORT_BY_STATUS, SORT_BY_FILE_LINE, SORT_HOTSPOTS);
+    SORT_BY_STATUS, SORT_BY_FILE_LINE, SORT_HOTSPOTS, SORT_BY_TYPE_SEVERITY, SORT_BY_IMPACT_RANK);
 
   private final Collection<String> issueKeys;
   private final Collection<String> severities;

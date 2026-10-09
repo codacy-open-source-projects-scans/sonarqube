@@ -19,6 +19,7 @@
  */
 package org.sonar.db.alm.pat;
 
+import java.util.List;
 import javax.annotation.CheckForNull;
 import org.apache.ibatis.annotations.Param;
 
@@ -30,9 +31,26 @@ public interface AlmPatMapper {
   @CheckForNull
   AlmPatDto selectByUserAndAlmSetting(@Param("userUuid") String userUuid, @Param("almSettingUuid") String almSettingUuid);
 
-  void insert(@Param("dto") AlmPatDto almPatDto);
+  List<AlmPatDto> selectAll();
 
-  void update(@Param("dto") AlmPatDto almPatDto);
+  /**
+   * Counts the tokens that are stored as clear text, without reading any of them. Both cipher prefixes are tested
+   * because {@code {aes-gcm}} does not start with {@code {aes}}, and neither is widened to an opening brace on its
+   * own: that would take a clear text token which merely starts with one for an encrypted token, and never report
+   * it. See {@link AlmPatDao#countNotEncryptedPersonalAccessTokens}.
+   */
+  int countNotEncrypted();
+
+  void insert(@Param("dto") AlmPatDto almPatDto, @Param("pat") String pat);
+
+  void update(@Param("dto") AlmPatDto almPatDto, @Param("pat") String pat);
+
+  /**
+   * Replaces the stored value of a token without touching any other column, used when only the storage format changes.
+   * The replacement only happens while the row still holds {@code expectedPat}, so that a token stored meanwhile by
+   * another node is not overwritten. Returns how many rows were updated, which is 0 when the value has changed.
+   */
+  int updatePat(@Param("uuid") String uuid, @Param("pat") String pat, @Param("expectedPat") String expectedPat);
 
   int deleteByUuid(@Param("uuid") String uuid);
 

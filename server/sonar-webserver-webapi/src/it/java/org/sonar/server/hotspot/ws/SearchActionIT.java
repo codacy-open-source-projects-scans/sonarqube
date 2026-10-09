@@ -36,6 +36,7 @@ import java.util.stream.IntStream;
 import java.util.stream.Stream;
 import javax.annotation.Nullable;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -123,6 +124,7 @@ import static org.sonarqube.ws.client.issue.IssuesWsParameters.PARAM_CASA;
 import static org.sonarqube.ws.client.issue.IssuesWsParameters.PARAM_COMPLIANCE_STANDARDS;
 import static org.sonarqube.ws.client.issue.IssuesWsParameters.PARAM_STIG_ASD_V5R3;
 
+@Tag("elasticsearch")
 class SearchActionIT {
 
   private static final String PARAM_PROJECT = "project";
@@ -178,6 +180,7 @@ class SearchActionIT {
 
   @Test
   void verify_ws_def() {
+    WebService.Param projectParam = actionTester.getDef().param(PARAM_PROJECT);
     WebService.Param onlyMineParam = actionTester.getDef().param(PARAM_ONLY_MINE);
     WebService.Param pciDss32Param = actionTester.getDef().param(PARAM_PCI_DSS_32);
     WebService.Param pciDss40Param = actionTester.getDef().param(PARAM_PCI_DSS_40);
@@ -190,6 +193,8 @@ class SearchActionIT {
     WebService.Param filesParam = actionTester.getDef().param(PARAM_FILES);
 
     assertThat(actionTester.getDef().isInternal()).isFalse();
+    assertThat(projectParam).isNotNull();
+    assertThat(projectParam.deprecatedKey()).isNull();
     assertThat(onlyMineParam).isNotNull();
     assertThat(onlyMineParam.isRequired()).isFalse();
     assertThat(actionTester.getDef().param(PARAM_ONLY_MINE).possibleValues())

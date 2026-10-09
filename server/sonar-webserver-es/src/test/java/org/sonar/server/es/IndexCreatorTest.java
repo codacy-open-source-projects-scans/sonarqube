@@ -27,15 +27,14 @@ import co.elastic.clients.json.jackson.JacksonJsonProvider;
 import co.elastic.clients.json.jackson.JacksonJsonpMapper;
 import jakarta.json.spi.JsonProvider;
 import jakarta.json.stream.JsonGenerator;
-import java.io.IOException;
 import java.io.StringWriter;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import javax.annotation.CheckForNull;
-import org.elasticsearch.cluster.metadata.MappingMetadata;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.slf4j.event.Level;
 import org.sonar.api.config.internal.MapSettings;
@@ -51,6 +50,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.sonar.server.es.IndexType.main;
 import static org.sonar.server.es.newindex.SettingsConfiguration.newBuilder;
 
+@Tag("elasticsearch")
 class IndexCreatorTest {
 
   private static final SettingsConfiguration SETTINGS_CONFIGURATION = newBuilder(new MapSettings().asConfig()).build();
@@ -95,8 +95,8 @@ class IndexCreatorTest {
     // v2
     run(new FakeIndexDefinitionV2());
 
-    Map<String, MappingMetadata> mappings = mappings();
-    MappingMetadata mapping = mappings.get("fakes");
+    Map<String, Map<String, Object>> mappings = mappings();
+    Map<String, Object> mapping = mappings.get("fakes");
     assertThat(countMappingFields(mapping)).isEqualTo(3);
     assertThat(field(mapping, "updatedAt")).containsEntry("type", "date");
     assertThat(field(mapping, "newField")).containsEntry("type", "integer");
@@ -212,27 +212,23 @@ class IndexCreatorTest {
     assertThat(es.countDocuments(FakeIndexDefinition.INDEX_TYPE)).isZero();
   }
 
-  private Map<String, MappingMetadata> mappings() {
-    // This allows to maintain the retro compatibility with the MappingMetadata class used with ES client v7
-    return es.client().getMappingV2(req -> req.index("*")).result().entrySet()
+  /**
+   * Returns the indexed mappings as a plain {@code Map<indexName, Map<"properties", Map<fieldName, fieldDefinition>>>}
+   * — same shape that the ES7 {@code MappingMetadata.getSourceAsMap()} produced.
+   */
+  private Map<String, Map<String, Object>> mappings() {
+    return es.client().getMappingV2(req -> req.index("*")).mappings().entrySet()
       .stream()
       .collect(Collectors.toMap(
         Map.Entry::getKey,
-        this::toMappingMetadata
+        this::toSourceMap
       ));
   }
 
-  private MappingMetadata toMappingMetadata(Map.Entry<String, IndexMappingRecord> entry) {
-    try {
-      Map<String, Object> propertiesMap = new HashMap<>();
-      entry.getValue().mappings().properties().forEach((key, value) -> {
-        propertiesMap.put(key, serializeToMap(value));
-      });
-      Map<String, Object> sourceMap = Map.of("properties", propertiesMap);
-      return new MappingMetadata("_doc", sourceMap);
-    } catch (IOException ex) {
-      throw new RuntimeException(ex);
-    }
+  private Map<String, Object> toSourceMap(Map.Entry<String, IndexMappingRecord> entry) {
+    Map<String, Object> propertiesMap = new HashMap<>();
+    entry.getValue().mappings().properties().forEach((key, value) -> propertiesMap.put(key, serializeToMap(value)));
+    return Map.of("properties", propertiesMap);
   }
 
   @SuppressWarnings("unchecked")
@@ -249,13 +245,13 @@ class IndexCreatorTest {
 
   @CheckForNull
   @SuppressWarnings("unchecked")
-  private Map<String, Object> field(MappingMetadata mapping, String field) {
-    Map<String, Object> props = (Map<String, Object>) mapping.getSourceAsMap().get("properties");
+  private Map<String, Object> field(Map<String, Object> mapping, String field) {
+    Map<String, Object> props = (Map<String, Object>) mapping.get("properties");
     return (Map<String, Object>) props.get(field);
   }
 
-  private int countMappingFields(MappingMetadata mapping) {
-    return ((Map) mapping.getSourceAsMap().get("properties")).size();
+  private int countMappingFields(Map<String, Object> mapping) {
+    return ((Map<?, ?>) mapping.get("properties")).size();
   }
 
   private IndexCreator run(IndexDefinition... definitions) {
@@ -271,9 +267,9 @@ class IndexCreatorTest {
   }
 
   private void verifyFakeIndexV1() {
-    Map<String, MappingMetadata> mappings = mappings();
-    MappingMetadata mapping = mappings.get("fakes");
-    assertThat(mapping.getSourceAsMap()).isNotEmpty();
+    Map<String, Map<String, Object>> mappings = mappings();
+    Map<String, Object> mapping = mappings.get("fakes");
+    assertThat(mapping).isNotEmpty();
     assertThat(countMappingFields(mapping)).isEqualTo(2);
     assertThat(field(mapping, "updatedAt")).containsEntry("type", "date");
   }

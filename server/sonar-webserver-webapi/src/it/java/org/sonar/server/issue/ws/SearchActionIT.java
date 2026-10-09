@@ -38,6 +38,7 @@ import org.assertj.core.api.AbstractListAssert;
 import org.assertj.core.api.ObjectAssert;
 import org.assertj.core.groups.Tuple;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -176,6 +177,7 @@ import static org.sonarqube.ws.client.issue.IssuesWsParameters.PARAM_PULL_REQUES
 import static org.sonarqube.ws.client.issue.IssuesWsParameters.PARAM_RULES;
 import static org.sonarqube.ws.client.issue.IssuesWsParameters.PARAM_STATUSES;
 
+@Tag("elasticsearch")
 class SearchActionIT {
 
   private static final DbIssues.MessageFormatting MESSAGE_FORMATTING = DbIssues.MessageFormatting.newBuilder()
@@ -560,7 +562,6 @@ class SearchActionIT {
     UserDto fabrice = db.users().insertUser(u -> u.setLogin("fabrice").setName("Fabrice").setEmail("fabrice@email.com"));
 
     ProjectData project = db.components().insertPublicProject("PROJECT_ID", c -> c.setKey("PROJECT_KEY").setName("NAME_PROJECT_ID"));
-    grantPermissionToAnyone(project.getProjectDto(), ISSUE_ADMIN);
     indexPermissions();
     ComponentDto file =
       db.components().insertComponent(newFileDto(project.getMainBranchComponent(), null, "FILE_ID").setKey("FILE_KEY").setLanguage("js"));
@@ -574,7 +575,8 @@ class SearchActionIT {
     indexIssues();
 
     userSession.logIn("john")
-      .addProjectPermission(ISSUE_ADMIN, project.getMainBranchComponent()); // granted by Anyone
+      .addProjectPermission(ISSUE_ADMIN, project.getProjectDto()) // granted by Anyone
+      .registerBranches(project.getMainBranchDto());
     ws.newRequest()
       .setParam("additionalFields", "_all").execute()
       .assertJson(this.getClass(), "load_additional_fields_with_issue_admin_permission.json");
@@ -583,7 +585,8 @@ class SearchActionIT {
   @Test
   void search_by_rule_key() {
     RuleDto rule = newIssueRule();
-    ComponentDto project = insertProject();
+    ProjectData projectData = insertProjectData();
+    ComponentDto project = projectData.getMainBranchComponent();
     ComponentDto file = db.components().insertComponent(newFileDto(project, null, "FILE_ID").setKey("FILE_KEY").setLanguage("java"));
 
     db.issues().insertIssue(rule, project, file);
@@ -591,7 +594,8 @@ class SearchActionIT {
     indexIssues();
 
     userSession.logIn("john")
-      .addProjectPermission(ISSUE_ADMIN, project); // granted by Anyone
+      .addProjectPermission(ISSUE_ADMIN, projectData.getProjectDto()) // granted by Anyone
+      .registerBranches(projectData.getMainBranchDto());
     indexPermissions();
 
     TestResponse execute = ws.newRequest()
@@ -626,13 +630,15 @@ class SearchActionIT {
   @Test
   void search_by_non_existing_rule_key() {
     RuleDto rule = newIssueRule();
-    ComponentDto project = db.components().insertPublicProject().getMainBranchComponent();
+    ProjectData projectData = db.components().insertPublicProject();
+    ComponentDto project = projectData.getMainBranchComponent();
     ComponentDto file = db.components().insertComponent(newFileDto(project, null, "FILE_ID").setKey("FILE_KEY").setLanguage("java"));
 
     db.issues().insertIssue(rule, project, file);
     session.commit();
 
-    userSession.logIn("john").addProjectPermission(ISSUE_ADMIN, project); // granted by Anyone
+    userSession.logIn("john").addProjectPermission(ISSUE_ADMIN, projectData.getProjectDto()) // granted by Anyone
+      .registerBranches(projectData.getMainBranchDto());
     indexPermissionsAndIssues();
 
     TestResponse execute = ws.newRequest()
@@ -2731,9 +2737,12 @@ class SearchActionIT {
   }
 
   private ComponentDto insertProject() {
+    return insertProjectData().getMainBranchComponent();
+  }
+
+  private ProjectData insertProjectData() {
     return db.components().insertPublicProject("PROJECT_ID",
-        c -> c.setKey("PROJECT_KEY").setName("NAME_PROJECT_ID").setLongName("LONG_NAME_PROJECT_ID").setLanguage("java"))
-      .getMainBranchComponent();
+      c -> c.setKey("PROJECT_KEY").setName("NAME_PROJECT_ID").setLongName("LONG_NAME_PROJECT_ID").setLanguage("java"));
   }
 
   private void indexPermissions() {
@@ -2742,19 +2751,6 @@ class SearchActionIT {
 
   private void indexIssues() {
     issueIndexer.indexAllIssues();
-  }
-
-  private void grantPermissionToAnyone(ProjectDto project, ProjectPermission permission) {
-    dbClient.groupPermissionDao().insert(session,
-      new GroupPermissionDto()
-        .setUuid(Uuids.createFast())
-        .setGroupUuid(null)
-        .setEntityUuid(project.getUuid())
-        .setEntityName(project.getName())
-        .setRole(permission),
-      project, null);
-    session.commit();
-    userSession.logIn().addProjectPermission(permission, project);
   }
 
   private void insertIssues(Consumer<IssueDto>... populators) {

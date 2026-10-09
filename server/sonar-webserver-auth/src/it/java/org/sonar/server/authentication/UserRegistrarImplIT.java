@@ -52,6 +52,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.sonar.server.authentication.UserRegistrarImpl.BITBUCKET_PROVIDER;
 import static org.sonar.server.authentication.UserRegistrarImpl.GITHUB_PROVIDER;
 import static org.sonar.server.authentication.UserRegistrarImpl.GITLAB_PROVIDER;
 import static org.sonar.server.authentication.UserRegistrarImpl.LDAP_PROVIDER_PREFIX;
@@ -59,7 +60,10 @@ import static org.sonar.server.authentication.UserRegistrarImpl.SQ_AUTHORITY;
 import static org.sonar.server.authentication.event.AuthenticationEvent.Method.BASIC;
 import static org.sonar.server.authentication.event.AuthenticationEvent.Source.local;
 import static org.sonar.server.authentication.event.AuthenticationEvent.Source.realm;
+import org.junit.experimental.categories.Category;
+import org.sonar.test.tags.ElasticsearchTest;
 
+@Category(ElasticsearchTest.class)
 public class UserRegistrarImplIT {
   private static final String USER_LOGIN = "johndoo";
 
@@ -132,6 +136,27 @@ public class UserRegistrarImplIT {
     assertThat(user.getExternalId()).isEqualTo("ABCD");
     assertThat(user.isLocal()).isFalse();
     checkGroupMembership(user, defaultGroup);
+  }
+
+  @Test
+  public void authenticate_via_sso_fails_when_login_matches_a_local_account() {
+    // Any pre-existing local account (not only the built-in admin) must not be adopted by SSO
+    UserDto localUser = insertUser("localuser", "Local User", null, "localuser", "localuser", SQ_AUTHORITY, true, true);
+    UserIdentity identity = UserIdentity.builder()
+      .setProviderLogin("localuser")
+      .setName("Attacker")
+      .build();
+    IdentityProvider ssoProvider = composeIdentityProvider(SQ_AUTHORITY, "sso", true, true);
+    UserRegistration registration = composeUserRegistration(identity, ssoProvider, Source.sso());
+
+    assertThatThrownBy(() -> underTest.register(registration))
+      .isInstanceOf(SsoLocalAccountRejection.class)
+      .hasMessage("Failed to authenticate with login 'localuser'");
+
+    // The local account is preserved (not converted to an external SSO account, password not wiped)
+    assertThat(db.getDbClient().userDao().selectByUuid(db.getSession(), localUser.getUuid()))
+      .extracting(UserDto::isLocal, UserDto::getName, UserDto::getExternalIdentityProvider)
+      .containsExactly(true, "Local User", "sonarqube");
   }
 
   @Test
@@ -277,7 +302,7 @@ public class UserRegistrarImplIT {
 
   @Test
   public void authenticate_existing_user_doesnt_change_group_membership() {
-    UserDto user = db.users().insertUser(u -> u.setExternalIdentityProvider(GH_IDENTITY_PROVIDER.getKey()));
+    UserDto user = db.users().insertUser(u -> u.setExternalIdentityProvider(GH_IDENTITY_PROVIDER.getKey()).setExternalId(u.getExternalLogin()));
     GroupDto group1 = db.users().insertGroup("group1");
     db.users().insertMember(group1, user);
     db.users().insertMember(defaultGroup, user);
@@ -301,7 +326,8 @@ public class UserRegistrarImplIT {
 
   @Test
   public void authenticate_and_update_existing_user_matching_external_login_and_email() {
-    UserDto user = insertUser("Old login", "Old name", USER_IDENTITY.getEmail(), "Old id", USER_IDENTITY.getProviderLogin(), GH_IDENTITY_PROVIDER.getKey(), false, true);
+    UserDto user = insertUser("Old login", "Old name", USER_IDENTITY.getEmail(), USER_IDENTITY.getProviderLogin(), USER_IDENTITY.getProviderLogin(), GH_IDENTITY_PROVIDER.getKey(),
+      false, true);
 
     underTest.register(newUserRegistration());
 
@@ -329,7 +355,7 @@ public class UserRegistrarImplIT {
 
   @Test
   public void authenticate_existing_user_matching_external_login_and_email_when_external_id_is_null() {
-    UserDto user = insertUser("", "Old name", "john@email.com", "Old id", "johndoo", GH_IDENTITY_PROVIDER.getKey(), false, true);
+    UserDto user = insertUser("", "Old name", "john@email.com", "johndoo", "johndoo", GH_IDENTITY_PROVIDER.getKey(), false, true);
 
     underTest.register(newUserRegistration(UserIdentity.builder()
       .setProviderId(null)
@@ -357,7 +383,8 @@ public class UserRegistrarImplIT {
 
   @Test
   public void do_not_authenticate_and_update_existing_github_user_matching_external_login_if_emails_do_not_match() {
-    insertUser("Old login", "Old name", "another-email@sonarsource.com", "Old id", USER_IDENTITY.getProviderLogin(), GH_IDENTITY_PROVIDER.getKey(), false, true);
+    insertUser("Old login", "Old name", "another-email@sonarsource.com", USER_IDENTITY.getProviderLogin(), USER_IDENTITY.getProviderLogin(),
+      GH_IDENTITY_PROVIDER.getKey(), false, true);
 
     assertThatThrownBy(() -> underTest.register(newUserRegistration()))
       .isInstanceOf(AuthenticationException.class)
@@ -391,6 +418,70 @@ public class UserRegistrarImplIT {
       .extracting(UserDto::getLogin, UserDto::getName, UserDto::getEmail, UserDto::getExternalId, UserDto::getExternalLogin, UserDto::getExternalIdentityProvider,
         UserDto::isActive)
       .contains(user.getLogin(), "John", "john@email.com", "ABCD", "johndoo", "other", true);
+  }
+
+  @Test
+  public void do_not_authenticate_bitbucket_user_matching_external_login_when_account_already_migrated_to_uuid() {
+    IdentityProvider provider = composeIdentityProvider(BITBUCKET_PROVIDER, "name of bitbucket", true, false);
+    UserRegistration registration = composeUserRegistration(USER_IDENTITY, provider, local(BASIC));
+    insertUser("Old login", "Old name", USER_IDENTITY.getEmail(), "old-uuid", USER_IDENTITY.getProviderLogin(), BITBUCKET_PROVIDER, false, true);
+
+    assertThatThrownBy(() -> underTest.register(registration))
+      .isInstanceOf(AuthenticationException.class)
+      .hasMessage(String.format("Failed to authenticate with login '%s'", USER_IDENTITY.getProviderLogin()));
+  }
+
+  @Test
+  public void authenticate_and_migrate_legacy_bitbucket_user_matching_external_login_when_external_id_equals_external_login() {
+    IdentityProvider provider = composeIdentityProvider(BITBUCKET_PROVIDER, "name of bitbucket", true, false);
+    UserRegistration registration = composeUserRegistration(USER_IDENTITY, provider, local(BASIC));
+    UserDto user = insertUser("Old login", "Old name", USER_IDENTITY.getEmail(), USER_IDENTITY.getProviderLogin(), USER_IDENTITY.getProviderLogin(), BITBUCKET_PROVIDER, false, true);
+
+    underTest.register(registration);
+
+    assertThat(db.getDbClient().userDao().selectByUuid(db.getSession(), user.getUuid()))
+      .extracting(UserDto::getName, UserDto::getEmail, UserDto::getExternalId, UserDto::getExternalLogin, UserDto::getExternalIdentityProvider,
+        UserDto::isActive)
+      .contains("John", "john@email.com", "ABCD", "johndoo", "bitbucket", true);
+  }
+
+  @Test
+  public void authenticate_and_update_existing_bitbucket_user_matching_external_id() {
+    IdentityProvider provider = composeIdentityProvider(BITBUCKET_PROVIDER, "name of bitbucket", true, false);
+    UserRegistration registration = composeUserRegistration(USER_IDENTITY, provider, local(BASIC));
+    UserDto user = insertUser("Old login", "Old name", "Old email", USER_IDENTITY.getProviderId(), "old-username", BITBUCKET_PROVIDER, false, true);
+
+    underTest.register(registration);
+
+    assertThat(db.getDbClient().userDao().selectByUuid(db.getSession(), user.getUuid()))
+      .extracting(UserDto::getName, UserDto::getEmail, UserDto::getExternalId, UserDto::getExternalLogin, UserDto::getExternalIdentityProvider,
+        UserDto::isActive)
+      .contains("John", "john@email.com", "ABCD", "johndoo", "bitbucket", true);
+  }
+
+  @Test
+  public void reactivate_and_migrate_disabled_legacy_bitbucket_user_matching_external_login() {
+    IdentityProvider provider = composeIdentityProvider(BITBUCKET_PROVIDER, "name of bitbucket", true, true);
+    UserRegistration registration = composeUserRegistration(USER_IDENTITY, provider, local(BASIC));
+    UserDto user = insertUser("Old login", "Old name", USER_IDENTITY.getEmail(), USER_IDENTITY.getProviderLogin(), USER_IDENTITY.getProviderLogin(), BITBUCKET_PROVIDER, false, false);
+
+    underTest.register(registration);
+
+    assertThat(db.getDbClient().userDao().selectByUuid(db.getSession(), user.getUuid()))
+      .extracting(UserDto::getName, UserDto::getEmail, UserDto::getExternalId, UserDto::getExternalLogin, UserDto::getExternalIdentityProvider,
+        UserDto::isActive)
+      .contains("John", "john@email.com", "ABCD", "johndoo", "bitbucket", true);
+  }
+
+  @Test
+  public void do_not_authenticate_disabled_migrated_bitbucket_user_matching_external_login() {
+    IdentityProvider provider = composeIdentityProvider(BITBUCKET_PROVIDER, "name of bitbucket", true, false);
+    UserRegistration registration = composeUserRegistration(USER_IDENTITY, provider, local(BASIC));
+    insertUser("Old login", "Old name", USER_IDENTITY.getEmail(), "old-uuid", USER_IDENTITY.getProviderLogin(), BITBUCKET_PROVIDER, false, false);
+
+    assertThatThrownBy(() -> underTest.register(registration))
+      .isInstanceOf(AuthenticationException.class)
+      .hasMessage(String.format("Failed to authenticate with login '%s'", USER_IDENTITY.getProviderLogin()));
   }
 
   @Test
@@ -450,13 +541,39 @@ public class UserRegistrarImplIT {
   }
 
   @Test
-  public void authenticate_and_update_existing_user_matching_external_login_if_email_is_missing() {
+  public void do_not_authenticate_existing_github_user_when_external_id_differs_and_email_missing() {
     insertUser("Old login", "Old name", null, "Old id", USER_IDENTITY.getProviderLogin(), GH_IDENTITY_PROVIDER.getKey(), false, true);
+
+    assertThatThrownBy(() -> underTest.register(newUserRegistration()))
+      .isInstanceOf(AuthenticationException.class)
+      .hasMessage(String.format("Failed to authenticate with login '%s'", USER_IDENTITY.getProviderLogin()));
+
+    UserDto user = db.users().selectUserByLogin("Old login").get();
+    assertThat(user.getExternalId()).isEqualTo("Old id");
+    assertThat(user.getEmail()).isNull();
+    assertThat(logTester.logs()).contains(String.format(
+      "User '%s' matched by external login, but the stored external ID differs - possible recycled external username",
+      USER_IDENTITY.getProviderLogin()));
+  }
+
+  @Test
+  public void do_not_authenticate_existing_github_user_when_external_id_differs_even_if_email_matches() {
+    insertUser("Old login", "Old name", USER_IDENTITY.getEmail(), "Old id", USER_IDENTITY.getProviderLogin(), GH_IDENTITY_PROVIDER.getKey(), false, true);
+
+    assertThatThrownBy(() -> underTest.register(newUserRegistration()))
+      .isInstanceOf(AuthenticationException.class)
+      .hasMessage(String.format("Failed to authenticate with login '%s'", USER_IDENTITY.getProviderLogin()));
+  }
+
+  @Test
+  public void authenticate_legacy_github_user_matching_external_login_when_email_missing_backfills_id() {
+    insertUser("Old login", "Old name", null, USER_IDENTITY.getProviderLogin(), USER_IDENTITY.getProviderLogin(), GH_IDENTITY_PROVIDER.getKey(), false, true);
 
     underTest.register(newUserRegistration());
 
     Optional<UserDto> user = db.users().selectUserByLogin("Old login");
     assertThat(user).isPresent();
+    assertThat(user.get().getExternalId()).isEqualTo(USER_IDENTITY.getProviderId());
     assertThat(user.get().getEmail()).isEqualTo(USER_IDENTITY.getEmail());
   }
 
@@ -481,7 +598,7 @@ public class UserRegistrarImplIT {
 
   @Test
   public void authenticate_existing_disabled_user_should_reactivate_it() {
-    insertUser(USER_LOGIN, "Old name", USER_IDENTITY.getEmail(), "Old id", USER_IDENTITY.getProviderLogin(), GH_IDENTITY_PROVIDER.getKey(), false, false);
+    insertUser(USER_LOGIN, "Old name", USER_IDENTITY.getEmail(), USER_IDENTITY.getProviderId(), USER_IDENTITY.getProviderLogin(), GH_IDENTITY_PROVIDER.getKey(), false, false);
 
     underTest.register(newUserRegistration());
 
@@ -535,7 +652,7 @@ public class UserRegistrarImplIT {
 
   @Test
   public void authenticate_existing_user_and_add_new_groups() {
-    UserDto user = insertUser("login", "John", USER_IDENTITY.getEmail(), "id", USER_IDENTITY.getProviderLogin(), GH_IDENTITY_PROVIDER.getKey(), false, true);
+    UserDto user = insertUser("login", "John", USER_IDENTITY.getEmail(), USER_IDENTITY.getProviderLogin(), USER_IDENTITY.getProviderLogin(), GH_IDENTITY_PROVIDER.getKey(), false, true);
 
     GroupDto group1 = db.users().insertGroup("group1");
     GroupDto group2 = db.users().insertGroup("group2");
@@ -547,7 +664,7 @@ public class UserRegistrarImplIT {
 
   @Test
   public void authenticate_existing_user_and_remove_groups() {
-    UserDto user = insertUser("login", "John", USER_IDENTITY.getEmail(), "id", USER_IDENTITY.getProviderLogin(), GH_IDENTITY_PROVIDER.getKey(), false, true);
+    UserDto user = insertUser("login", "John", USER_IDENTITY.getEmail(), USER_IDENTITY.getProviderLogin(), USER_IDENTITY.getProviderLogin(), GH_IDENTITY_PROVIDER.getKey(), false, true);
 
     GroupDto group1 = db.users().insertGroup("group1");
     GroupDto group2 = db.users().insertGroup("group2");
@@ -561,7 +678,7 @@ public class UserRegistrarImplIT {
 
   @Test
   public void authenticate_existing_user_and_remove_all_groups_expect_default() {
-    UserDto user = insertUser("login", "John", USER_IDENTITY.getEmail(), "id", USER_IDENTITY.getProviderLogin(), GH_IDENTITY_PROVIDER.getKey(), false, true);
+    UserDto user = insertUser("login", "John", USER_IDENTITY.getEmail(), USER_IDENTITY.getProviderLogin(), USER_IDENTITY.getProviderLogin(), GH_IDENTITY_PROVIDER.getKey(), false, true);
 
     GroupDto group1 = db.users().insertGroup("group1");
     GroupDto group2 = db.users().insertGroup("group2");
@@ -579,7 +696,7 @@ public class UserRegistrarImplIT {
     when(managedInstanceService.isInstanceExternallyManaged()).thenReturn(true);
     when(managedInstanceService.getProviderName()).thenReturn(GITHUB_PROVIDER);
 
-    UserDto user = insertUser("login", "John", USER_IDENTITY.getEmail(), "id", USER_IDENTITY.getProviderLogin(), GH_IDENTITY_PROVIDER.getKey(), false, true);
+    UserDto user = insertUser("login", "John", USER_IDENTITY.getEmail(), USER_IDENTITY.getProviderLogin(), USER_IDENTITY.getProviderLogin(), GH_IDENTITY_PROVIDER.getKey(), false, true);
 
     GroupDto group1 = db.users().insertGroup("group1");
     GroupDto group2 = db.users().insertGroup("group2");
@@ -623,7 +740,7 @@ public class UserRegistrarImplIT {
   public void authenticate_existing_user_should_remove_groups_when_instance_is_not_externally_managed() {
     when(managedInstanceService.isInstanceExternallyManaged()).thenReturn(false);
 
-    UserDto user = insertUser("login", "John", USER_IDENTITY.getEmail(), "id", USER_IDENTITY.getProviderLogin(), GH_IDENTITY_PROVIDER.getKey(), false, true);
+    UserDto user = insertUser("login", "John", USER_IDENTITY.getEmail(), USER_IDENTITY.getProviderLogin(), USER_IDENTITY.getProviderLogin(), GH_IDENTITY_PROVIDER.getKey(), false, true);
 
     GroupDto group1 = db.users().insertGroup("group1");
     GroupDto group2 = db.users().insertGroup("group2");

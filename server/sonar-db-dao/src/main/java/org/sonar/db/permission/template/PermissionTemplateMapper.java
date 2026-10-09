@@ -36,6 +36,9 @@ public interface PermissionTemplateMapper {
 
   void update(PermissionTemplateDto permissionTemplate);
 
+  @Nullable
+  String lockByUuid(@Param("templateUuid") String templateUuid);
+
   int deleteByUuid(String templateUuid);
 
   void deleteUserPermissionsByTemplateUuid(String templateUuid);
@@ -57,6 +60,9 @@ public interface PermissionTemplateMapper {
   void insertUserPermission(PermissionTemplateUserDto permissionTemplateUser);
 
   void insertGroupPermission(PermissionTemplateGroupDto permissionTemplateGroup);
+
+  int countUsersWithPermission(@Param("templateUuid") String templateUuid, @Param("permission") String permission,
+    @Param("userUuid") String userUuid);
 
   int deleteByGroupUuid(String groupUuid);
 
@@ -80,7 +86,7 @@ public interface PermissionTemplateMapper {
 
   List<String> selectPotentialPermissionsByUserUuidAndTemplateUuid(@Param("userUuid") @Nullable String currentUserUuid, @Param("templateUuid") String templateUuid);
 
-  int countGroupsWithPermission(@Param("templateUuid") String templateUuid, @Param("permission") String permission, @Nullable @Param("groupUuid") String groupUuid);
+  int countGroupsWithPermission(@Param("templateUuid") String templateUuid, @Param("permission") String permission, @Param("groupUuid") String groupUuid);
 
   List<PermissionTemplateGroupDto> selectAllGroupPermissionTemplatesByGroupUuid(@Param("groupUuid") String groupUuid);
 

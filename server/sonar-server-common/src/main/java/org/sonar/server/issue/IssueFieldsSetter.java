@@ -502,6 +502,14 @@ public class IssueFieldsSetter {
     }
   }
 
+  public void unsetDeferralDate(DefaultIssue issue, IssueChangeContext context) {
+    if (issue.deferralDate() != null) {
+      issue.setDeferralDate(null);
+      issue.setUpdateDate(context.date());
+      issue.setChanged(true);
+    }
+  }
+
   public void setCreationDate(DefaultIssue issue, Date d, IssueChangeContext context) {
     if (relevantDateDifference(d, issue.creationDate())) {
       issue.setCreationDate(d);
@@ -611,6 +619,7 @@ public class IssueFieldsSetter {
     // This happens for user migrating from lower than 10.8 and having already customized the rule severity
     if (issue.manualSeverity()
       && issue.severity() != null
+      && issue.type() != RuleType.SECURITY_HOTSPOT
       && issue.getImpacts().stream().noneMatch(DefaultImpact::manualSeverity)) {
       issue.getImpacts()
         .stream()

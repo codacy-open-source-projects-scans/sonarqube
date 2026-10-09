@@ -22,6 +22,7 @@ package org.sonar.db.rule;
 import java.util.Collection;
 import java.util.List;
 import java.util.Set;
+import javax.annotation.Nullable;
 import org.apache.ibatis.annotations.Param;
 import org.sonar.api.rule.RuleKey;
 import org.sonar.api.rules.RuleQuery;
@@ -32,6 +33,14 @@ public interface RuleMapper {
 
   List<RuleDto> selectAll();
 
+  /**
+   * Like {@link #selectAll()}, but excludes rules that must never appear in the Elasticsearch rules index
+   * (e.g. {@code hunter-agent} rules). Use this instead of {@code selectAll()} whenever the result
+   * is fed to {@code RuleIndexer} — {@code selectAll()} must remain unfiltered so that
+   * {@code RulesRegistrant} and {@code CachingRuleFinder} continue to see every rule in the DB.
+   */
+  List<RuleDto> selectAllForIndexing();
+
   List<RuleDto> selectAllWithoutDescriptions();
 
   List<RuleDto> selectEnabled();
@@ -40,11 +49,18 @@ public interface RuleMapper {
 
   List<RuleDto> selectByUuids(@Param("uuids") List<String> uuids);
 
-  RuleDto selectByKey(@Param("ruleKey") RuleKey ruleKey);
+  /**
+   * @param contextKey when non-null, only description sections whose context key matches (plus
+   *   context-less ones) are populated on the returned {@link RuleDto}. See
+   *   {@link RuleDao#selectByKey(org.sonar.db.DbSession, RuleKey, String)}.
+   */
+  RuleDto selectByKey(@Param("ruleKey") RuleKey ruleKey, @Nullable @Param("contextKey") String contextKey);
 
   List<RuleDto> selectByKeys(@Param("ruleKeys") List<RuleKey> keys);
 
   List<RuleDto> selectByRuleKeys(@Param("ruleKeys") List<String> ruleKeys);
+
+  List<RuleDto> selectByRepositories(@Param("repositories") List<String> repositories);
 
   List<RuleExtensionForIndexingDto> selectIndexingRuleExtensionsByIds(@Param("ruleExtensionIds") List<String> ruleExtensionIds);
 
@@ -62,6 +78,10 @@ public interface RuleMapper {
   void insertRule(RuleDto ruleDefinitionDto);
 
   void insertRuleDescriptionSection(@Param("ruleUuid") String ruleUuid, @Param("dto") RuleDescriptionSectionDto ruleDescriptionSectionDto);
+
+  int updateRuleDescriptionSectionContent(@Param("ruleUuid") String ruleUuid, @Param("dto") RuleDescriptionSectionDto dto);
+
+  void clearAdHocDescription(@Param("ruleUuid") String ruleUuid);
 
   void insertRuleDefaultImpact(@Param("ruleUuid") String ruleUuid, @Param("dto") ImpactDto ruleDefaultImpactDto);
 

@@ -22,8 +22,11 @@ package org.sonar.server.issue.index;
 import com.google.common.collect.Maps;
 import java.util.Collection;
 import java.util.Date;
+import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.OptionalInt;
 import javax.annotation.CheckForNull;
 import javax.annotation.Nullable;
 import org.sonar.api.issue.impact.SoftwareQuality;
@@ -40,6 +43,41 @@ import static org.sonar.server.issue.index.IssueIndexDefinition.SUB_FIELD_SOFTWA
 import static org.sonar.server.issue.index.IssueIndexDefinition.TYPE_ISSUE;
 
 public class IssueDoc extends BaseDoc {
+
+  static final Map<RuleType, Byte> RULE_TYPE_SORT_RANK;
+
+  static {
+    // Explicit stable rank values — not ordinal-based — so the sort order is
+    // preserved if enum constants are ever reordered or new ones added.
+    RULE_TYPE_SORT_RANK = new EnumMap<>(RuleType.class);
+    RULE_TYPE_SORT_RANK.put(RuleType.CODE_SMELL, (byte) 0);
+    RULE_TYPE_SORT_RANK.put(RuleType.BUG, (byte) 1);
+    RULE_TYPE_SORT_RANK.put(RuleType.VULNERABILITY, (byte) 2);
+    RULE_TYPE_SORT_RANK.put(RuleType.SECURITY_HOTSPOT, (byte) 3);
+  }
+
+  // Multiplier for standard-mode rank encoding: must equal the number of levels in the scale
+  private static final int STANDARD_SEVERITY_LEVELS = Severity.ALL.size();
+
+  // Explicit priority order (index 0 = most important) — not ordinal-based — so the sort order
+  // is preserved if enum constants are ever reordered or new ones added.
+  //
+  // Severity dominates within this tier: Security/Reliability impacts are interleaved by
+  // severity, with quality only breaking ties between them at the same severity (Security
+  // before Reliability).
+  private static final List<SoftwareQuality> SEVERITY_LED_QUALITY_ORDER = List.of(
+    SoftwareQuality.SECURITY, SoftwareQuality.RELIABILITY);
+  // Always ranked below every SEVERITY_LED_QUALITY_ORDER combination, regardless of its own
+  // severity - e.g. an Info Reliability impact still outranks a Blocker Maintainability one.
+  private static final List<SoftwareQuality> DEPRIORITIZED_QUALITY_ORDER = List.of(
+    SoftwareQuality.MAINTAINABILITY);
+  private static final List<org.sonar.api.issue.impact.Severity> IMPACT_SEVERITY_RANK_ORDER = List.of(
+    org.sonar.api.issue.impact.Severity.BLOCKER, org.sonar.api.issue.impact.Severity.HIGH,
+    org.sonar.api.issue.impact.Severity.MEDIUM, org.sonar.api.issue.impact.Severity.LOW,
+    org.sonar.api.issue.impact.Severity.INFO);
+  private static final int IMPACT_SEVERITY_RANK_MULTIPLIER = 1000;
+  private static final int IMPACT_QUALITY_RANK_MULTIPLIER = 10;
+  private static final int DEPRIORITIZED_TIER_OFFSET = 10_000;
 
   public IssueDoc(Map<String, Object> fields) {
     super(TYPE_ISSUE, fields);
@@ -210,6 +248,7 @@ public class IssueDoc extends BaseDoc {
   public IssueDoc setSeverity(@Nullable String s) {
     setField(IssueIndexDefinition.FIELD_ISSUE_SEVERITY, s);
     setField(IssueIndexDefinition.FIELD_ISSUE_SEVERITY_VALUE, Severity.ALL.indexOf(s));
+    computeStandardSortRank();
     return this;
   }
 
@@ -290,6 +329,7 @@ public class IssueDoc extends BaseDoc {
 
   public IssueDoc setType(RuleType type) {
     setField(IssueIndexDefinition.FIELD_ISSUE_TYPE, type.toString());
+    computeStandardSortRank();
     return this;
   }
 
@@ -302,7 +342,48 @@ public class IssueDoc extends BaseDoc {
         SUB_FIELD_SEVERITY, entry.getValue().name()))
       .toList();
     setField(IssueIndexDefinition.FIELD_ISSUE_IMPACTS, convertedMap);
+    computeImpactRank(impacts);
     return this;
+  }
+
+  private void computeStandardSortRank() {
+    String typeName = (String) fields.get(IssueIndexDefinition.FIELD_ISSUE_TYPE);
+    Integer severityValue = (Integer) fields.get(IssueIndexDefinition.FIELD_ISSUE_SEVERITY_VALUE);
+    if (typeName != null && severityValue != null && severityValue >= 0) {
+      Byte typeRank = RULE_TYPE_SORT_RANK.get(RuleType.valueOf(typeName));
+      Objects.requireNonNull(typeRank, "No sort rank defined for rule type: " + typeName);
+      setField(IssueIndexDefinition.FIELD_ISSUE_STANDARD_SORT_RANK, (byte) (typeRank * STANDARD_SEVERITY_LEVELS + severityValue));
+    } else {
+      setField(IssueIndexDefinition.FIELD_ISSUE_STANDARD_SORT_RANK, null);
+    }
+  }
+
+  /**
+   * Two tiers: Security/Reliability impacts are ranked by severity first, quality second
+   * ({@link #SEVERITY_LED_QUALITY_ORDER}), then every Maintainability impact
+   * ({@link #DEPRIORITIZED_QUALITY_ORDER}) - pushed past {@link #DEPRIORITIZED_TIER_OFFSET}, which
+   * is wider than the severity-led tier's own max rank so no combination of severity and quality
+   * in that tier can cross into it. Within each tier, the severity multiplier is wider than the
+   * quality multiplier's range so quality can only break ties at the same severity, never
+   * override it.
+   */
+  private void computeImpactRank(Map<SoftwareQuality, org.sonar.api.issue.impact.Severity> impacts) {
+    OptionalInt minRank = impacts.entrySet().stream()
+      .filter(e -> IMPACT_SEVERITY_RANK_ORDER.contains(e.getValue())
+        && (SEVERITY_LED_QUALITY_ORDER.contains(e.getKey()) || DEPRIORITIZED_QUALITY_ORDER.contains(e.getKey())))
+      .mapToInt(e -> computeImpactRank(e.getKey(), e.getValue()))
+      .min();
+    setField(IssueIndexDefinition.FIELD_ISSUE_IMPACT_RANK, minRank.isPresent() ? minRank.getAsInt() : null);
+  }
+
+  private static int computeImpactRank(SoftwareQuality quality, org.sonar.api.issue.impact.Severity severity) {
+    int severityIndex = IMPACT_SEVERITY_RANK_ORDER.indexOf(severity);
+    int severityLedIndex = SEVERITY_LED_QUALITY_ORDER.indexOf(quality);
+    if (severityLedIndex >= 0) {
+      return severityIndex * IMPACT_SEVERITY_RANK_MULTIPLIER + (severityLedIndex + 1) * IMPACT_QUALITY_RANK_MULTIPLIER;
+    }
+    int deprioritizedIndex = DEPRIORITIZED_QUALITY_ORDER.indexOf(quality);
+    return DEPRIORITIZED_TIER_OFFSET + severityIndex * IMPACT_SEVERITY_RANK_MULTIPLIER + (deprioritizedIndex + 1) * IMPACT_QUALITY_RANK_MULTIPLIER;
   }
 
   @CheckForNull

@@ -19,6 +19,7 @@
  */
 package org.sonar.server.qualityprofile.ws;
 
+import java.util.Objects;
 import org.sonar.api.resources.Languages;
 import org.sonar.api.server.ws.Request;
 import org.sonar.api.server.ws.Response;
@@ -28,6 +29,7 @@ import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
 import org.sonar.db.qualityprofile.QProfileDto;
 import org.sonar.server.qualityprofile.QProfileTree;
+import org.sonar.server.qualityprofile.QualityProfileDisplayNames;
 import org.sonar.server.user.UserSession;
 import org.sonarqube.ws.client.qualityprofile.QualityProfileWsParameters;
 
@@ -87,7 +89,7 @@ public class ChangeParentAction implements QProfileWsAction {
         ruleActivator.removeParentAndCommit(dbSession, profile);
       } else {
         String parentLanguage = request.mandatoryParam(PARAM_LANGUAGE);
-        QProfileReference parentRef = QProfileReference.fromName(parentLanguage, parentName);
+        QProfileReference parentRef = QProfileReference.fromName(parentLanguage, Objects.requireNonNull(QualityProfileDisplayNames.toInternalName(parentName)));
         QProfileDto parent = wsSupport.getProfile(dbSession, parentRef);
         ruleActivator.setParentAndCommit(dbSession, profile, parent);
       }

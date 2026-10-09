@@ -23,6 +23,7 @@ import ch.qos.logback.classic.spi.ILoggingEvent;
 import com.google.common.collect.ImmutableSet;
 import java.io.File;
 import java.io.IOException;
+import java.util.List;
 import java.util.Properties;
 import org.apache.commons.io.FileUtils;
 import org.junit.After;
@@ -130,12 +131,17 @@ public class CommandFactoryImplTest {
       .contains(entry("appender.file_es.fileName", new File(logsDir, "es.log").getAbsolutePath()));
 
     assertThat(esCommand.getEnvVariables())
-      .containsKey("ES_JAVA_HOME");
+      .containsKey("ES_JAVA_HOME")
+      .containsKey("JAVA")
+      .containsKey("JAVA_TYPE")
+      .containsEntry("ES_HOME", esConfig.getHomeDirectory().getAbsolutePath())
+      .containsEntry("ES_PATH_CONF", esConfig.getConfDirectory().getAbsolutePath())
+      .containsEntry("ES_DISTRIBUTION_TYPE", "tar");
 
     assertThat(esCommand.getJvmOptions().getAll())
-      .contains("-Xms4m", "-Xmx64m", "-XX:+UseSerialGC", "-Dcli.name=server", "-Dcli.script=./bin/elasticsearch",
-        "-Dcli.libs=lib/tools/server-cli", "-Des.path.home=" + esConfig.getHomeDirectory().getAbsolutePath(),
-        "-Des.path.conf=" + esConfig.getConfDirectory().getAbsolutePath(), "-Des.distribution.type=tar");
+      .contains("-Xms4m", "-Xmx64m", "-XX:+UseSerialGC")
+      .doesNotContain("-Dcli.name=server", "-Dcli.script=./bin/elasticsearch",
+        "-Dcli.libs=lib/tools/server-cli");
   }
 
   @Test
@@ -175,13 +181,13 @@ public class CommandFactoryImplTest {
       .contains("-Djava.awt.headless=true", "-Dfile.encoding=UTF-8")
       // default settings
       .contains("-Djava.io.tmpdir=" + tempDir.getAbsolutePath(), "-Dfile.encoding=UTF-8")
-      .contains("-Xmx512m", "-Xms128m", "-XX:+HeapDumpOnOutOfMemoryError");
+      .contains("-Xmx1G", "-Xms128m", "-XX:+HeapDumpOnOutOfMemoryError");
     assertThat(command.getProcessId()).isEqualTo(ProcessId.WEB_SERVER);
     assertThat(command.getEnvVariables())
       .isNotEmpty();
     assertThat(command.getArguments())
       // default settings
-      .contains(entry("sonar.web.javaOpts", "-Xmx512m -Xms128m -XX:+HeapDumpOnOutOfMemoryError"))
+      .contains(entry("sonar.web.javaOpts", "-Xmx1G -Xms128m -XX:+HeapDumpOnOutOfMemoryError"))
       .contains(entry("sonar.cluster.enabled", "false"));
 
     assertThat(command.getSuppressedEnvVariables()).containsOnly("JAVA_TOOL_OPTIONS");
@@ -199,13 +205,13 @@ public class CommandFactoryImplTest {
       .contains("-Djava.awt.headless=true", "-Dfile.encoding=UTF-8")
       // default settings
       .contains("-Djava.io.tmpdir=" + tempDir.getAbsolutePath(), "-Dfile.encoding=UTF-8")
-      .contains("-Xmx512m", "-Xms128m", "-XX:+HeapDumpOnOutOfMemoryError");
+      .contains("-Xmx1536m", "-Xms128m", "-XX:+HeapDumpOnOutOfMemoryError");
     assertThat(command.getProcessId()).isEqualTo(ProcessId.COMPUTE_ENGINE);
     assertThat(command.getEnvVariables())
       .isNotEmpty();
     assertThat(command.getArguments())
       // default settings
-      .contains(entry("sonar.web.javaOpts", "-Xmx512m -Xms128m -XX:+HeapDumpOnOutOfMemoryError"))
+      .contains(entry("sonar.ce.javaOpts", "-Xmx1536m -Xms128m -XX:+HeapDumpOnOutOfMemoryError"))
       .contains(entry("sonar.cluster.enabled", "false"));
 
     assertThat(command.getSuppressedEnvVariables()).containsOnly("JAVA_TOOL_OPTIONS");
@@ -232,6 +238,30 @@ public class CommandFactoryImplTest {
       .contains(entry("sonar.cluster.enabled", "false"));
 
     assertThat(command.getSuppressedEnvVariables()).containsOnly("JAVA_TOOL_OPTIONS");
+  }
+
+  @Test
+  public void createWebCommand_does_not_override_nonProxyHosts_set_in_javaOpts() {
+    Properties props = new Properties();
+    props.setProperty("sonar.web.javaOpts", "-Dhttp.nonProxyHosts=telemetry.*|*.sonarqube.io");
+    JavaCommand command = newFactory(props).createWebCommand(true);
+
+    List<String> jvmOptions = command.getJvmOptions().getAll();
+    long nonProxyHostsCount = jvmOptions.stream().filter(o -> o.startsWith("-Dhttp.nonProxyHosts=")).count();
+    assertThat(nonProxyHostsCount).isOne();
+    assertThat(jvmOptions).contains("-Dhttp.nonProxyHosts=telemetry.*|*.sonarqube.io");
+  }
+
+  @Test
+  public void createCeCommand_does_not_override_nonProxyHosts_set_in_javaOpts() {
+    Properties props = new Properties();
+    props.setProperty("sonar.ce.javaOpts", "-Dhttp.nonProxyHosts=telemetry.*|*.sonarqube.io");
+    JavaCommand command = newFactory(props).createCeCommand();
+
+    List<String> jvmOptions = command.getJvmOptions().getAll();
+    long nonProxyHostsCount = jvmOptions.stream().filter(o -> o.startsWith("-Dhttp.nonProxyHosts=")).count();
+    assertThat(nonProxyHostsCount).isOne();
+    assertThat(jvmOptions).contains("-Dhttp.nonProxyHosts=telemetry.*|*.sonarqube.io");
   }
 
   @Test

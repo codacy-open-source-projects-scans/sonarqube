@@ -19,14 +19,15 @@
  */
 package org.sonar.server.component.index;
 
+import co.elastic.clients.elasticsearch._types.query_dsl.Query;
+import co.elastic.clients.elasticsearch.core.search.Hit;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Optional;
-import org.elasticsearch.search.SearchHit;
-import org.elasticsearch.search.builder.SearchSourceBuilder;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
+import org.junit.experimental.categories.Category;
 import org.slf4j.event.Level;
 import org.sonar.api.testfixtures.log.LogTester;
 import org.sonar.api.utils.System2;
@@ -34,22 +35,22 @@ import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
 import org.sonar.db.DbTester;
 import org.sonar.db.component.BranchDto;
+import org.sonar.db.component.ComponentTesting;
 import org.sonar.db.component.ProjectData;
 import org.sonar.db.entity.EntityDto;
 import org.sonar.db.es.EsQueueDto;
 import org.sonar.db.portfolio.PortfolioDto;
 import org.sonar.db.project.ProjectDto;
-import org.sonar.server.es.EsClient;
 import org.sonar.server.es.EsTester;
 import org.sonar.server.es.Indexers;
 import org.sonar.server.es.IndexingResult;
+import org.sonar.test.tags.ElasticsearchTest;
 
 import static java.lang.String.format;
 import static java.util.Collections.emptySet;
 import static java.util.Collections.singletonList;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatException;
-import static org.elasticsearch.index.query.QueryBuilders.matchQuery;
 import static org.sonar.db.component.ComponentQualifiers.PROJECT;
 import static org.sonar.server.component.index.ComponentIndexDefinition.FIELD_NAME;
 import static org.sonar.server.component.index.ComponentIndexDefinition.TYPE_COMPONENT;
@@ -59,6 +60,7 @@ import static org.sonar.server.es.Indexers.EntityEvent.PERMISSION_CHANGE;
 import static org.sonar.server.es.Indexers.EntityEvent.PROJECT_TAGS_UPDATE;
 import static org.sonar.server.es.newindex.DefaultIndexSettingsElement.SORTABLE_ANALYZER;
 
+@Category(ElasticsearchTest.class)
 public class EntityDefinitionIndexerIT {
 
   private System2 system2 = System2.INSTANCE;
@@ -113,6 +115,18 @@ public class EntityDefinitionIndexerIT {
   }
 
   @Test
+  public void indexAll_does_not_index_subportfolio_without_component() {
+    PortfolioDto rootPortfolio = db.components().insertPrivatePortfolioDto();
+    PortfolioDto subPortfolio = ComponentTesting.newPortfolioDto("subportfolio-uuid", "subportfolio-key", "Subportfolio", rootPortfolio);
+    dbClient.portfolioDao().insert(dbSession, subPortfolio, false);
+    dbSession.commit();
+
+    underTest.indexAll();
+
+    assertThatIndexContainsOnly(rootPortfolio);
+  }
+
+  @Test
   public void map_fields() {
     ProjectDto project = db.components().insertPrivateProject().getProjectDto();
 
@@ -147,6 +161,7 @@ public class EntityDefinitionIndexerIT {
       .setUuid(uuid)
       .setRootUuid(uuid);
     db.getDbClient().portfolioDao().insert(dbSession, corruptedPortfolio, false);
+    db.getDbClient().componentDao().insertWithAudit(dbSession, ComponentTesting.newPortfolio(uuid).setKey("portfolio1").setName("My Portfolio"));
 
     // corrupt the portfolio in a fixable way (root portfolio with self-referential parent_uuid)
     dbSession.getSqlSession().getConnection().prepareStatement(format("UPDATE portfolios SET parent_uuid = '%s' where uuid = '%s'", uuid, uuid))
@@ -332,14 +347,13 @@ public class EntityDefinitionIndexerIT {
   }
 
   private void assertThatEntityHasName(String uuid, String expectedName) {
-    SearchHit[] hits = es.client()
-      .search(EsClient.prepareSearch(TYPE_COMPONENT.getMainType())
-        .source(new SearchSourceBuilder()
-          .query(matchQuery(SORTABLE_ANALYZER.subField(FIELD_NAME), expectedName))))
-      .getHits()
-      .getHits();
+    String field = SORTABLE_ANALYZER.subField(FIELD_NAME);
+    var hits = es.client().searchV2(s -> s
+      .index(TYPE_COMPONENT.getMainType().getIndex().getName())
+      .query(Query.of(q -> q.match(m -> m.field(field).query(expectedName)))), Void.class)
+      .hits().hits();
     assertThat(hits)
-      .extracting(SearchHit::getId)
+      .extracting(Hit::id)
       .contains(uuid);
   }
 }

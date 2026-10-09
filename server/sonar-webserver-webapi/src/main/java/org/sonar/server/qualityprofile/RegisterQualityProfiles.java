@@ -27,6 +27,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -34,6 +35,7 @@ import java.util.Set;
 import java.util.function.Function;
 import org.apache.commons.lang3.StringUtils;
 import org.sonar.api.Startable;
+import org.sonar.api.platform.ServerUpgradeStatus;
 import org.sonar.api.resources.Language;
 import org.sonar.api.resources.Languages;
 import org.sonar.api.server.ServerSide;
@@ -52,6 +54,7 @@ import org.sonar.server.qualityprofile.builtin.BuiltInQProfileRepository;
 import org.sonar.server.qualityprofile.builtin.BuiltInQProfileUpdate;
 import org.sonar.server.qualityprofile.builtin.BuiltInQualityProfilesUpdateListener;
 import org.sonar.server.qualityprofile.builtin.QProfileName;
+import org.sonar.server.qualityprofile.builtin.sonarwayvariants.SonarWayCoreProfileDefinition;
 
 import static java.lang.String.format;
 import static java.util.stream.Collectors.toMap;
@@ -65,6 +68,7 @@ import static org.sonar.server.qualityprofile.ActiveRuleInheritance.NONE;
 public class RegisterQualityProfiles implements Startable {
 
   private static final Logger LOGGER = Loggers.get(RegisterQualityProfiles.class);
+  private static final String DEFAULT_PROFILE_NAME = QualityProfileDisplayNames.SONAR_WAY_INTERNAL_NAME;
 
   private final BuiltInQProfileRepository builtInQProfileRepository;
   private final DbClient dbClient;
@@ -73,10 +77,13 @@ public class RegisterQualityProfiles implements Startable {
   private final BuiltInQualityProfilesUpdateListener builtInQualityProfilesNotification;
   private final System2 system2;
   private final Languages languages;
+  private final ServerUpgradeStatus serverUpgradeStatus;
 
+  @SuppressWarnings("java:S107")
   public RegisterQualityProfiles(BuiltInQProfileRepository builtInQProfileRepository,
     DbClient dbClient, BuiltInQProfileInsert builtInQProfileInsert, BuiltInQProfileUpdate builtInQProfileUpdate,
-    BuiltInQualityProfilesUpdateListener builtInQualityProfilesNotification, System2 system2, Languages languages) {
+    BuiltInQualityProfilesUpdateListener builtInQualityProfilesNotification, System2 system2, Languages languages,
+    ServerUpgradeStatus serverUpgradeStatus) {
     this.builtInQProfileRepository = builtInQProfileRepository;
     this.dbClient = dbClient;
     this.builtInQProfileInsert = builtInQProfileInsert;
@@ -84,6 +91,7 @@ public class RegisterQualityProfiles implements Startable {
     this.builtInQualityProfilesNotification = builtInQualityProfilesNotification;
     this.system2 = system2;
     this.languages = languages;
+    this.serverUpgradeStatus = serverUpgradeStatus;
   }
 
   @Override
@@ -122,6 +130,7 @@ public class RegisterQualityProfiles implements Startable {
       ensureBuiltInDefaultQPContainsRules(dbSession);
       unsetBuiltInFlagAndRenameQPWhenPluginUninstalled(dbSession);
       ensureBuiltInAreDefaultQPWhenNoRules(dbSession);
+      switchDefaultToSonarWayCoreOnFreshInstall(dbSession);
 
       dbSession.commit();
     }
@@ -139,7 +148,7 @@ public class RegisterQualityProfiles implements Startable {
   }
 
   private void create(DbSession dbSession, DbSession batchDbSession, BuiltInQProfile builtIn) {
-    LOGGER.info("Register profile {}", builtIn.getQProfileName());
+    LOGGER.info("Register profile {}", toDisplayName(builtIn.getQProfileName()));
 
     renameOutdatedProfiles(dbSession, builtIn);
 
@@ -147,9 +156,18 @@ public class RegisterQualityProfiles implements Startable {
   }
 
   private List<ActiveRuleChange> update(DbSession dbSession, BuiltInQProfile definition, RulesProfileDto dbProfile) {
-    LOGGER.info("Update profile {}", definition.getQProfileName());
+    LOGGER.info("Update profile {}", toDisplayName(definition.getQProfileName()));
 
     return builtInQProfileUpdate.update(dbSession, definition, dbProfile);
+  }
+
+  /**
+   * Renders a {@link QProfileName} the way an admin reading startup logs should see it, i.e. using the same
+   * brand name as the UI and the WS API, without changing the internal name used for matching above. Every
+   * {@link BuiltInQProfile} registered here is by definition built-in, hence the literal {@code true}.
+   */
+  private static String toDisplayName(QProfileName name) {
+    return format("%s/%s", name.getLanguage(), QualityProfileDisplayNames.toDisplayName(name.getName(), true));
   }
 
   /**
@@ -182,6 +200,10 @@ public class RegisterQualityProfiles implements Startable {
   private void ensureBuiltInAreDefaultQPWhenNoRules(DbSession dbSession) {
     Set<String> activeLanguages = Arrays.stream(languages.all()).map(Language::getKey).collect(toSet());
     Map<String, RulesProfileDto> builtInQProfileByLanguage = dbClient.qualityProfileDao().selectBuiltInRuleProfiles(dbSession).stream()
+      // prefer "Sonar way" over any derived variant (e.g. "Sonar way core"/"Sonar way extended") when reassigning
+      // away from a default profile with no active rules; switchDefaultToSonarWayCoreOnFreshInstall is the one
+      // deliberate, separate path that puts a variant back in as default
+      .sorted(Comparator.comparingInt(rp -> DEFAULT_PROFILE_NAME.equals(rp.getName()) ? 0 : 1))
       .collect(toMap(RulesProfileDto::getLanguage, Function.identity(), (oldValue, newValue) -> oldValue));
     List<QProfileDto> defaultProfileWithNoRules = dbClient.qualityProfileDao().selectDefaultProfilesWithoutActiveRules(dbSession, activeLanguages, false);
 
@@ -205,6 +227,10 @@ public class RegisterQualityProfiles implements Startable {
    */
   private void ensureBuiltInDefaultQPContainsRules(DbSession dbSession) {
     Map<String, RulesProfileDto> rulesProfilesByLanguage = dbClient.qualityProfileDao().selectBuiltInRuleProfilesWithActiveRules(dbSession).stream()
+      // prefer "Sonar way" over any derived variant (e.g. "Sonar way core"/"Sonar way extended") when reassigning
+      // away from a default profile with no active rules; switchDefaultToSonarWayCoreOnFreshInstall is the one
+      // deliberate, separate path that puts a variant back in as default
+      .sorted(Comparator.comparingInt(rp -> DEFAULT_PROFILE_NAME.equals(rp.getName()) ? 0 : 1))
       .collect(toMap(RulesProfileDto::getLanguage, Function.identity(), (oldValue, newValue) -> oldValue));
 
     dbClient.qualityProfileDao().selectDefaultProfilesWithoutActiveRules(dbSession, rulesProfilesByLanguage.keySet(), true)
@@ -234,6 +260,45 @@ public class RegisterQualityProfiles implements Startable {
     dbClient.defaultQProfileDao().insertOrUpdate(dbSession, new DefaultQProfileDto()
       .setQProfileUuid(newDefaultQualityProfile.getKee())
       .setLanguage(currentDefaultQualityProfile.getLanguage()));
+  }
+
+  /**
+   * On a brand-new instance's very first startup, prefer "Sonar way core" over "Sonar way" as a language's default,
+   * for every language where a non-empty "Sonar way core" variant exists. Gated on
+   * {@link ServerUpgradeStatus#isFreshInstall()} — captured once, before migrations run — rather than the
+   * per-language "no default persisted yet" check {@link BuiltInQProfileInsert} already uses for new built-in
+   * profiles, since that check can't tell a genuinely new instance apart from an existing instance installing a
+   * new language for the first time.
+   */
+  private void switchDefaultToSonarWayCoreOnFreshInstall(DbSession dbSession) {
+    if (!serverUpgradeStatus.isFreshInstall()) {
+      return;
+    }
+
+    Map<String, RulesProfileDto> coreVariantsWithRulesByLanguage = dbClient.qualityProfileDao().selectBuiltInRuleProfilesWithActiveRules(dbSession).stream()
+      .filter(rp -> SonarWayCoreProfileDefinition.NAME.equals(rp.getName()))
+      .collect(toMap(RulesProfileDto::getLanguage, Function.identity()));
+    if (coreVariantsWithRulesByLanguage.isEmpty()) {
+      return;
+    }
+
+    dbClient.qualityProfileDao().selectAllDefaultProfiles(dbSession).stream()
+      .filter(defaultProfile -> DEFAULT_PROFILE_NAME.equals(defaultProfile.getName()))
+      .forEach(defaultProfile -> {
+        RulesProfileDto coreVariant = coreVariantsWithRulesByLanguage.get(defaultProfile.getLanguage());
+        if (coreVariant == null) {
+          return;
+        }
+        QProfileDto coreQualityProfile = dbClient.qualityProfileDao().selectByRuleProfileUuid(dbSession, coreVariant.getUuid());
+        if (coreQualityProfile == null) {
+          return;
+        }
+        reassignDefaultQualityProfile(dbSession, defaultProfile, coreQualityProfile);
+        LOGGER.info("Default built-in quality profile for language [{}] has been switched from [{}] to [{}] on fresh install.",
+          defaultProfile.getLanguage(),
+          QualityProfileDisplayNames.toDisplayName(defaultProfile.getName(), true),
+          QualityProfileDisplayNames.toDisplayName(coreQualityProfile.getName(), true));
+      });
   }
 
   public void unsetBuiltInFlagAndRenameQPWhenPluginUninstalled(DbSession dbSession) {

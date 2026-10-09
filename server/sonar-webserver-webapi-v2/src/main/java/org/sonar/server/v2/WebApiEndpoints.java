@@ -47,7 +47,10 @@ public class WebApiEndpoints {
   public static final String BOUND_PROJECTS_ENDPOINT = DOP_TRANSLATION_DOMAIN + "/bound-projects";
   public static final String PROJECT_BINDINGS_ENDPOINT = DOP_TRANSLATION_DOMAIN + "/project-bindings";
   public static final String DOP_SETTINGS_ENDPOINT = DOP_TRANSLATION_DOMAIN + "/dop-settings";
+  public static final String GITHUB_INSTALLATION_TOKEN_ENDPOINT = DOP_TRANSLATION_DOMAIN + "/github-installation-tokens";
   public static final String GITLAB_PERMISSIONS_MAPPING_ENDPOINT = DOP_TRANSLATION_DOMAIN + "/gitlab-permission-mappings";
+  public static final String SCM_ACCESS_TOKEN_ENDPOINT = DOP_TRANSLATION_DOMAIN + "/scm-access-tokens";
+  public static final String PERMISSION_CHECKS_ENDPOINT = DOP_TRANSLATION_DOMAIN + "/permission-checks";
 
   public static final String ANALYSIS_DOMAIN = "/analysis";
   public static final String VERSION_ENDPOINT = ANALYSIS_DOMAIN + "/version";
@@ -55,12 +58,21 @@ public class WebApiEndpoints {
   public static final String ACTIVE_RULES_ENDPOINT = ANALYSIS_DOMAIN + "/active_rules";
   public static final String SCANNER_ENGINE_ENDPOINT = ANALYSIS_DOMAIN + "/engine";
 
+  public static final String HISTORY_DOMAIN = "/history";
+  public static final String MEASURES_HISTORY_ENDPOINT = HISTORY_DOMAIN + "/measures-history";
+  public static final String ISSUE_COUNT_HISTORY_ENDPOINT = HISTORY_DOMAIN + "/issue-count-history";
+  public static final String ISSUE_RESOLUTION_HISTORY_ENDPOINT = HISTORY_DOMAIN + "/issue-resolution-history";
+  public static final String PROJECT_ISSUE_RESOLUTION_ENDPOINT = HISTORY_DOMAIN + "/project-issue-resolution";
+
   public static final String SCA_DOMAIN = "/sca";
   public static final String SCA_RELEASES_ENDPOINT = SCA_DOMAIN + "/releases";
   public static final String SCA_ISSUES_RELEASES_ENDPOINT = SCA_DOMAIN + "/issues-releases";
   public static final String SCA_SBOM_REPORTS_ENDPOINT = SCA_DOMAIN + "/sbom-reports";
   public static final String SCA_CLIS_ENDPOINT = SCA_DOMAIN + "/clis";
   public static final String SCA_FEATURE_ENABLEMENT_ENDPOINT = SCA_DOMAIN + "/feature-enablements";
+
+  public static final String AGENTIC_DOMAIN = "/agentic";
+  public static final String AGENTIC_JOBS_ENDPOINT = AGENTIC_DOMAIN + "/jobs";
 
   public static final String MARKETPLACE_DOMAIN = "/marketplace";
   public static final String AZURE_DOMAIN = "/azure";

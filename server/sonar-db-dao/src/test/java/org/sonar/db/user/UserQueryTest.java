@@ -19,7 +19,9 @@
  */
 package org.sonar.db.user;
 
+import java.time.Month;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
@@ -44,15 +46,16 @@ class UserQueryTest {
   }
 
   private static UserQuery createUserQueryWithAllFieldsSet() {
+    OffsetDateTime offsetDateTime = OffsetDateTime.of(2024, Month.JANUARY.getValue(), 1, 0, 0, 0, 0, ZoneOffset.UTC);
     return UserQuery.builder()
       .userUuids(Set.of("user1", "user2"))
       .searchText("search text")
       .isActive(true)
       .isManagedClause("is managed clause")
-      .lastConnectionDateFrom(OffsetDateTime.now().minus(1, ChronoUnit.DAYS))
-      .lastConnectionDateTo(OffsetDateTime.now().plus(1, ChronoUnit.DECADES))
-      .sonarLintLastConnectionDateFrom(OffsetDateTime.now().plus(2, ChronoUnit.DAYS))
-      .sonarLintLastConnectionDateTo(OffsetDateTime.now().minus(2, ChronoUnit.DECADES))
+      .lastConnectionDateFrom(offsetDateTime.minusDays(1))
+      .lastConnectionDateTo(offsetDateTime.plus(1, ChronoUnit.DECADES))
+      .sonarLintLastConnectionDateFrom(offsetDateTime.plusDays(2))
+      .sonarLintLastConnectionDateTo(offsetDateTime.minus(2, ChronoUnit.DECADES))
       .externalLogin("externalLogin")
       .build();
   }

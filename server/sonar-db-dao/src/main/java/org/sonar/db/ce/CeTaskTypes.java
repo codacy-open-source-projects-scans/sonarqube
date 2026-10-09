@@ -22,6 +22,7 @@ package org.sonar.db.ce;
 public final class CeTaskTypes {
   
   public static final String AUDIT_PURGE = "AUDIT_PURGE";
+  public static final String HISTORY_PURGE = "HISTORY_PURGE";
   public static final String BRANCH_ISSUE_SYNC = "ISSUE_SYNC";
   public static final String REPORT = "REPORT";
   public static final String PROJECT_EXPORT = "PROJECT_EXPORT";

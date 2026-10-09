@@ -62,10 +62,13 @@ public class DefaultIssue implements Issue, Trackable {
 
   private String projectUuid = null;
   private String projectKey = null;
+  private String branchUuid = null;
 
   private RuleKey ruleKey = null;
   private String language = null;
   private String severity = null;
+  private Map<SoftwareQuality, org.sonar.api.issue.impact.Severity> overriddenImpacts = Map.of();
+  private Map<SoftwareQuality, org.sonar.api.issue.impact.Severity> defaultRuleImpacts = Map.of();
   private boolean manualSeverity = false;
   private String message = null;
   private Object messageFormattings = null;
@@ -84,6 +87,7 @@ public class DefaultIssue implements Issue, Trackable {
   private Set<String> codeVariants = null;
   private boolean prioritizedRule = false;
   private boolean fromSonarQubeUpdate = false;
+  private Long deferralDate = null;
   // temporarily an Object as long as DefaultIssue is used by sonar-batch
   private Object locations = null;
 
@@ -93,6 +97,8 @@ public class DefaultIssue implements Issue, Trackable {
   private Date creationDate = null;
   private Date updateDate = null;
   private Date closeDate = null;
+  // The date the issue was first inserted into the DB, i.e., the analysis date when it was first discovered (regardless of any SCM backdating).
+  private Date detectionDate = null;
 
   // Current changes
   private FieldDiffs currentChange = null;
@@ -229,6 +235,15 @@ public class DefaultIssue implements Issue, Trackable {
     return this;
   }
 
+  public DefaultIssue setBranchUuid(String branchUuid) {
+    this.branchUuid = branchUuid;
+    return this;
+  }
+
+  public String getBranchUuid() {
+    return branchUuid;
+  }
+
   @Override
   public RuleKey ruleKey() {
     return ruleKey;
@@ -247,6 +262,27 @@ public class DefaultIssue implements Issue, Trackable {
 
   public DefaultIssue setLanguage(@Nullable String l) {
     this.language = l;
+    return this;
+  }
+
+  public Map<SoftwareQuality, org.sonar.api.issue.impact.Severity> overriddenImpacts() {
+    return overriddenImpacts;
+  }
+
+  public DefaultIssue setOverriddenImpacts(Map<SoftwareQuality, org.sonar.api.issue.impact.Severity> overriddenImpacts) {
+    this.overriddenImpacts = overriddenImpacts;
+    return this;
+  }
+
+  /**
+   * Populated only once the issue is read from the database. It is empty in the CE, where we deal with issues reported by the scanner.
+   */
+  public Map<SoftwareQuality, org.sonar.api.issue.impact.Severity> defaultRuleImpacts() {
+    return defaultRuleImpacts;
+  }
+
+  public DefaultIssue setDefaultRuleImpacts(Map<SoftwareQuality, org.sonar.api.issue.impact.Severity> defaultRuleImpacts) {
+    this.defaultRuleImpacts = defaultRuleImpacts;
     return this;
   }
 
@@ -405,6 +441,16 @@ public class DefaultIssue implements Issue, Trackable {
     return this;
   }
 
+  @CheckForNull
+  public Date detectionDate() {
+    return detectionDate;
+  }
+
+  public DefaultIssue setDetectionDate(@Nullable Date d) {
+    this.detectionDate = truncateToSeconds(d);
+    return this;
+  }
+
   @Override
   @CheckForNull
   public Date updateDate() {
@@ -534,12 +580,13 @@ public class DefaultIssue implements Issue, Trackable {
     @Nullable Serializable newValue) {
     if (!Objects.equals(oldValue, newValue)) {
       if (currentChange == null) {
-        currentChange = new FieldDiffs();
-        currentChange.setUserUuid(context.userUuid());
-        currentChange.setCreationDate(context.date());
-        currentChange.setWebhookSource(context.getWebhookSource());
-        currentChange.setExternalUser(context.getExternalUser());
-        addChange(currentChange);
+        FieldDiffs newChange = new FieldDiffs();
+        newChange.setUserUuid(context.userUuid());
+        newChange.setCreationDate(context.date());
+        newChange.setWebhookSource(context.getWebhookSource());
+        newChange.setExternalUser(context.getExternalUser());
+        addChange(newChange);
+        currentChange = newChange;
       }
       currentChange.setDiff(field, oldValue, newValue);
     }
@@ -749,6 +796,16 @@ public class DefaultIssue implements Issue, Trackable {
 
   public DefaultIssue setFromSonarQubeUpdate(boolean fromSonarQubeUpdate) {
     this.fromSonarQubeUpdate = fromSonarQubeUpdate;
+    return this;
+  }
+
+  @CheckForNull
+  public Long deferralDate() {
+    return deferralDate;
+  }
+
+  public DefaultIssue setDeferralDate(@Nullable Long deferralDate) {
+    this.deferralDate = deferralDate;
     return this;
   }
 

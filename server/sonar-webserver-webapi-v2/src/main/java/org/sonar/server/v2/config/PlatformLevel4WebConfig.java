@@ -19,8 +19,15 @@
  */
 package org.sonar.server.v2.config;
 
+import java.util.ArrayList;
+import java.util.List;
+import org.sonar.api.config.Configuration;
+import org.sonar.server.monitoring.ServerMonitoringMetrics;
+import org.sonar.server.resolver.DefaultsArgumentResolver;
+import org.sonar.server.resolver.DefaultsRequestBodyAdvice;
 import org.sonar.server.rule.ActiveRuleService;
 import org.sonar.server.user.UserSession;
+import org.sonar.server.v2.api.agentic.controller.DefaultAgenticJobsController;
 import org.sonar.server.v2.api.analysis.controller.DefaultActiveRulesController;
 import org.sonar.server.v2.api.analysis.controller.DefaultJresController;
 import org.sonar.server.v2.api.analysis.controller.DefaultScannerEngineController;
@@ -31,43 +38,60 @@ import org.sonar.server.v2.api.analysis.service.ScannerEngineHandlerImpl;
 import org.sonar.server.v2.api.azurebilling.controller.DefaultAzureBillingController;
 import org.sonar.server.v2.api.azurebilling.environment.AzureEnvironment;
 import org.sonar.server.v2.api.azurebilling.service.DefaultAzureBillingHandler;
+import org.sonar.server.v2.api.dashboards.config.BuiltInDashboardsWebConfiguration;
 import org.sonar.server.v2.api.dop.controller.DefaultDopSettingsController;
+import org.sonar.server.v2.api.dop.controller.DefaultPermissionChecksController;
 import org.sonar.server.v2.api.email.config.controller.DefaultEmailConfigurationController;
 import org.sonar.server.v2.api.github.config.controller.DefaultGithubConfigurationController;
+import org.sonar.server.v2.api.github.installationtoken.controller.DefaultGithubInstallationTokenController;
 import org.sonar.server.v2.api.gitlab.config.controller.DefaultGitlabConfigurationController;
+import org.sonar.server.v2.api.gitlab.config.converter.GitlabConfigurationResponseGenerator;
 import org.sonar.server.v2.api.group.controller.DefaultGroupController;
+import org.sonar.server.v2.api.history.config.HistoryWebConfiguration;
 import org.sonar.server.v2.api.membership.controller.DefaultGroupMembershipController;
 import org.sonar.server.v2.api.mode.controller.DefaultModeController;
 import org.sonar.server.v2.api.projectbindings.controller.DefaultProjectBindingsController;
 import org.sonar.server.v2.api.projects.controller.DefaultBoundProjectsController;
 import org.sonar.server.v2.api.rule.controller.DefaultRuleController;
 import org.sonar.server.v2.api.rule.converter.RuleRestResponseGenerator;
+import org.sonar.server.v2.api.scmaccesstoken.controller.DefaultScmAccessTokenController;
 import org.sonar.server.v2.api.system.controller.DatabaseMigrationsController;
 import org.sonar.server.v2.api.system.controller.DefaultLivenessController;
 import org.sonar.server.v2.api.system.controller.HealthController;
 import org.sonar.server.v2.api.user.controller.DefaultUserController;
 import org.sonar.server.v2.api.user.converter.UsersSearchRestResponseGenerator;
 import org.sonar.server.v2.common.DeprecatedHandler;
+import org.sonar.server.v2.api.onboarding.alm.OnboardingAlmConfiguration;
+import org.sonar.server.v2.common.WebApiV2MetricsInterceptor;
 import org.sonar.server.v2.security.WebSecurityConfig;
+import org.sonarsource.onboarding.server.config.OnboardingServerWebConfiguration;
+import org.springframework.beans.BeansException;
+import org.springframework.beans.factory.config.BeanPostProcessor;
 import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
-import org.springframework.context.annotation.Primary;
-import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
+import org.springframework.web.method.support.HandlerMethodArgumentResolver;
+import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
+import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
+import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerAdapter;
 
-@Configuration
+@org.springframework.context.annotation.Configuration
 @Import({
   ActiveRulesHandlerImpl.class,
   ActiveRuleService.class,
   ServerWebConfig.class,
   WebSecurityConfig.class,
   DatabaseMigrationsController.class,
+  DefaultAgenticJobsController.class,
   DefaultActiveRulesController.class,
+  HistoryWebConfiguration.class,
   DefaultBoundProjectsController.class,
   DefaultDopSettingsController.class,
+  DefaultPermissionChecksController.class,
   DefaultEmailConfigurationController.class,
   DefaultGithubConfigurationController.class,
+  DefaultGithubInstallationTokenController.class,
   DefaultGitlabConfigurationController.class,
+  GitlabConfigurationResponseGenerator.class,
   DefaultGroupController.class,
   DefaultGroupMembershipController.class,
   DefaultJresController.class,
@@ -76,9 +100,11 @@ import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandl
   DefaultProjectBindingsController.class,
   DefaultRuleController.class,
   DefaultScannerEngineController.class,
+  DefaultScmAccessTokenController.class,
   DefaultUserController.class,
   DefaultVersionController.class,
-
+  OnboardingServerWebConfiguration.class,
+  OnboardingAlmConfiguration.class,
   HealthController.class,
   JresHandlerImpl.class,
   ScannerEngineHandlerImpl.class,
@@ -86,16 +112,47 @@ import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandl
   RuleRestResponseGenerator.class,
   AzureEnvironment.class,
   DefaultAzureBillingHandler.class,
-  DefaultAzureBillingController.class
+  DefaultAzureBillingController.class,
+  BuiltInDashboardsWebConfiguration.class
 })
-public class PlatformLevel4WebConfig {
+public class PlatformLevel4WebConfig implements WebMvcConfigurer {
 
-  @Primary
-  @Bean("org.sonar.server.v2.config.PlatformLevel4WebConfig.requestMappingHandlerMapping")
-  public RequestMappingHandlerMapping requestMappingHandlerMapping(UserSession userSession) {
-    RequestMappingHandlerMapping handlerMapping = new RequestMappingHandlerMapping();
-    handlerMapping.setInterceptors(new DeprecatedHandler(userSession));
-    return handlerMapping;
+  private final UserSession userSession;
+  private final ServerMonitoringMetrics metrics;
+  private final Configuration config;
+
+  public PlatformLevel4WebConfig(UserSession userSession, ServerMonitoringMetrics metrics, Configuration config) {
+    this.userSession = userSession;
+    this.metrics = metrics;
+    this.config = config;
   }
 
+  @Override
+  public void addInterceptors(InterceptorRegistry registry) {
+    registry.addInterceptor(new DeprecatedHandler(userSession));
+    registry.addInterceptor(new WebApiV2MetricsInterceptor(metrics, config));
+  }
+
+  @Bean
+  public static BeanPostProcessor defaultsArgumentResolverPrepender() {
+    return new BeanPostProcessor() {
+      @Override
+      public Object postProcessAfterInitialization(Object bean, String beanName) throws BeansException {
+        if (bean instanceof RequestMappingHandlerAdapter adapter) {
+          List<HandlerMethodArgumentResolver> resolvers = new ArrayList<>();
+          resolvers.add(new DefaultsArgumentResolver());
+          if (adapter.getArgumentResolvers() != null) {
+            resolvers.addAll(adapter.getArgumentResolvers());
+          }
+          adapter.setArgumentResolvers(resolvers);
+        }
+        return bean;
+      }
+    };
+  }
+
+  @Bean
+  public DefaultsRequestBodyAdvice defaultsRequestBodyAdvice() {
+    return new DefaultsRequestBodyAdvice();
+  }
 }

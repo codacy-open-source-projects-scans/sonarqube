@@ -25,9 +25,30 @@ import org.sonar.server.platform.db.migration.version.DbVersion;
 public class DbVersion202604 implements DbVersion {
 
   @Override
+  @SuppressWarnings("java:S3937")
   public void addSteps(MigrationStepRegistry registry) {
     registry
-      .add(2026_04_000, "Add epss_score, epss_percentile, known_exploited columns to 'sca_vulnerability_issues'", AddEpssColumnsToScaVulnerabilityIssues.class)
-      .add(2026_04_001, "Alter 'sca_analyses.failed_reason' column type to clob", AlterScaAnalysesFailedReasonColumnToClob.class);
+      .add(2026_04_000, "Drop redundant unique index 'uniq_iss_key_sof_qual' on 'issues_impacts'", DropUniqueIndexOnIssuesImpacts.class)
+      .add(2026_04_001, "Drop redundant unique index 'uniq_rul_uuid_sof_qual' on 'rules_default_impacts'", DropUniqueIndexOnRulesDefaultImpacts.class)
+      .add(2026_04_002, "Rename index 'uniq_iss_key_sof_qual' to 'pk_issues_impacts' on Oracle", RenameIndexOnIssuesImpactsToPk.class)
+      .add(2026_04_003, "Rename index 'uniq_rul_uuid_sof_qual' to 'pk_rules_default_impacts' on Oracle", RenameIndexOnRulesDefaultImpactsToPk.class)
+      .add(2026_04_004, "Drop redundant index 'issue_changes_issue_key' on 'issue_changes'", DropRedundantIndexOnIssueChangesIssueKey.class)
+      .add(2026_04_005, "Create index 'sca_issues_updated_at' on 'sca_issues.updated_at'", CreateIndexOnScaIssuesUpdatedAt.class)
+      .add(2026_04_006, "Create index 'sca_releases_updated_at' on 'sca_releases.updated_at'", CreateIndexOnScaReleasesUpdatedAt.class)
+      .add(2026_04_007, "Create index 'sca_issues_releases_updated_at' on 'sca_issues_releases.updated_at'", CreateIndexOnScaIssuesReleasesUpdatedAt.class)
+      .add(2026_04_008, "Set portfolios as private when their matching component is private", SetPrivatePortfoliosFromPrivateComponents.class)
+      .add(2026_04_009, "Decommission 'Sonar way for AI Code' quality gate", DecommissionSonarWayForAiCodeQualityGate.class)
+      .add(2026_04_010, "Add organization_uuid to sca_encountered_licenses and update unique index", AddOrganizationUuidToScaEncounteredLicenses.class)
+      .add(2026_04_011, "Create table 'architecture_models'", CreateArchitectureModelsTable.class)
+      .add(2026_04_012, "Drop table 'architecture_graphs'", DropArchitectureGraphsTable.class)
+      .add(2026_04_013, "Add architectureadmin permission to existing project admins", AddArchitectureAdminPermissionToProjectAdmins.class)
+      .add(2026_04_014, "Add 'signature_type' to 'sca_ir_cve_locations'", AddSignatureTypeToScaIrCveLocations.class)
+      .add(2026_04_015, "Create table 'arch_graph_metadata'", CreateArchitectureGraphMetadataTable.class)
+      .add(2026_04_016, "Create table 'arch_graph_blobs'", CreateArchitectureGraphBlobsTable.class)
+      .add(2026_04_017, "Create table 'arch_scanner_data'", CreateArchitectureScannerDataTable.class)
+      .add(2026_04_018, "Create table 'arch_directives'", CreateArchitectureDirectivesTable.class)
+      .add(2026_04_019, "Drop table 'architecture_models'", DropArchitectureModelsTable.class)
+      .add(2026_04_020, "Create table 'arch_intended'", CreateArchIntendedTable.class)
+      .add(2026_04_021, "Add 'origin' to 'arch_directives'", AddOriginToArchDirectives.class);
   }
 }

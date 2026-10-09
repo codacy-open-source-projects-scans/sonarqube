@@ -24,10 +24,9 @@ import org.sonar.api.server.ws.Response;
 import org.sonar.api.server.ws.WebService;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
-import org.sonar.db.alm.setting.AlmSettingDto;
+import org.sonar.server.common.almsettings.telemetry.DevOpsConfigurationTelemetry;
 import org.sonar.server.user.UserSession;
 
-import static org.sonar.db.alm.setting.ALM.BITBUCKET;
 import static org.sonar.db.alm.setting.ALM.BITBUCKET_CLOUD;
 
 public class CreateBitbucketCloudAction implements AlmSettingsWsAction {
@@ -39,11 +38,14 @@ public class CreateBitbucketCloudAction implements AlmSettingsWsAction {
   private final DbClient dbClient;
   private final UserSession userSession;
   private final AlmSettingsSupport almSettingsSupport;
+  private final DevOpsConfigurationTelemetry devOpsConfigurationTelemetry;
 
-  public CreateBitbucketCloudAction(DbClient dbClient, UserSession userSession, AlmSettingsSupport almSettingsSupport) {
+  public CreateBitbucketCloudAction(DbClient dbClient, UserSession userSession, AlmSettingsSupport almSettingsSupport,
+    DevOpsConfigurationTelemetry devOpsConfigurationTelemetry) {
     this.dbClient = dbClient;
     this.userSession = userSession;
     this.almSettingsSupport = almSettingsSupport;
+    this.devOpsConfigurationTelemetry = devOpsConfigurationTelemetry;
   }
 
   @Override
@@ -85,20 +87,13 @@ public class CreateBitbucketCloudAction implements AlmSettingsWsAction {
     String clientSecret = request.mandatoryParam(PARAM_CLIENT_SECRET);
     String workspace = request.mandatoryParam(PARAM_WORKSPACE);
 
-    try (DbSession dbSession = dbClient.openSession(false)) {
-      // We do not treat Bitbucket Server and Bitbucket Cloud as different ALMs when it comes to limiting the
-      // number of connections.
-      almSettingsSupport.checkAlmMultipleFeatureEnabled(BITBUCKET);
-      almSettingsSupport.checkAlmMultipleFeatureEnabled(BITBUCKET_CLOUD);
-      almSettingsSupport.checkAlmSettingDoesNotAlreadyExist(dbSession, key);
-      almSettingsSupport.checkBitbucketCloudWorkspaceIDFormat(workspace);
-      dbClient.almSettingDao().insert(dbSession, new AlmSettingDto()
-        .setAlm(BITBUCKET_CLOUD)
-        .setKey(key)
-        .setAppId(workspace)
-        .setClientId(clientId)
-        .setClientSecret(clientSecret));
-      dbSession.commit();
-    }
+    almSettingsSupport.withAlmSettingCreationLock(() -> {
+      try (DbSession dbSession = dbClient.openSession(false)) {
+        almSettingsSupport.createBitbucketCloudSetting(dbSession,
+          new AlmSettingsSupport.NewBitbucketCloudSetting(key, workspace, clientId, clientSecret));
+        dbSession.commit();
+      }
+    });
+    devOpsConfigurationTelemetry.sendManualDevOpsConfig(BITBUCKET_CLOUD);
   }
 }

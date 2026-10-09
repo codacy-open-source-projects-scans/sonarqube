@@ -19,6 +19,7 @@
  */
 package org.sonar.server.project.ws;
 
+import java.time.Instant;
 import java.util.List;
 import org.junit.Rule;
 import org.junit.Test;
@@ -28,6 +29,7 @@ import org.sonar.db.permission.ProjectPermission;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
 import org.sonar.db.DbTester;
+import org.sonar.db.component.BranchDto;
 import org.sonar.db.component.ComponentDto;
 import org.sonar.db.component.ProjectData;
 import org.sonar.db.permission.GlobalPermission;
@@ -46,6 +48,15 @@ import org.sonar.server.tester.UserSessionRule;
 import org.sonar.server.ws.TestRequest;
 import org.sonar.server.ws.TestResponse;
 import org.sonar.server.ws.WsActionTester;
+import org.sonarsource.history.model.EntityType;
+import org.sonarsource.history.model.IssueCountHistoryRow;
+import org.sonarsource.history.model.IssueTtrHistory;
+import org.sonarsource.history.model.MeasureHistoryRow;
+import org.sonarsource.history.server.db.HistoryMyBatisConfExtension;
+import org.sonarsource.history.server.db.mapper.IssueTtrHistoryMapperFragments;
+import org.sonarsource.history.server.db.repository.IssueCountHistoryRepository;
+import org.sonarsource.history.server.db.repository.IssueTtrHistoryRepository;
+import org.sonarsource.history.server.db.repository.MeasureHistoryRepository;
 
 import static java.util.Collections.singleton;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -61,7 +72,7 @@ public class DeleteActionIT {
   private final System2 system2 = System2.INSTANCE;
 
   @Rule
-  public final DbTester db = DbTester.create(system2);
+  public final DbTester db = DbTester.createWithConfExtensions(system2, List.of(new HistoryMyBatisConfExtension(IssueTtrHistoryMapperFragments.class)));
   @Rule
   public final UserSessionRule userSessionRule = UserSessionRule.standalone();
 
@@ -70,6 +81,9 @@ public class DeleteActionIT {
   private final WebhookDbTester webhookDbTester = db.webhooks();
   private final ComponentCleanerService componentCleanerService = mock(ComponentCleanerService.class);
   private final ProjectLifeCycleListeners projectLifeCycleListeners = mock(ProjectLifeCycleListeners.class);
+  private final IssueCountHistoryRepository issueCountHistoryRepository = new IssueCountHistoryRepository();
+  private final MeasureHistoryRepository measureHistoryRepository = new MeasureHistoryRepository();
+  private final IssueTtrHistoryRepository issueTtrHistoryRepository = new IssueTtrHistoryRepository();
 
   private final DeleteAction underTest = new DeleteAction(
     componentCleanerService,
@@ -105,6 +119,28 @@ public class DeleteActionIT {
   }
 
   @Test
+  public void project_deletion_should_delete_history() {
+    ProjectData projectData = db.components().insertPrivateProject();
+    BranchDto branch = db.components().insertProjectBranch(projectData.getProjectDto());
+    insertHistory(projectData.getMainBranchDto());
+    insertHistory(branch);
+    db.commit();
+    userSessionRule.logIn().addProjectPermission(ProjectPermission.ADMIN, projectData.getProjectDto());
+    DeleteAction underTestLocal = new DeleteAction(
+      new ComponentCleanerService(dbClient, new TestIndexers()),
+      from(db), dbClient, userSessionRule, projectLifeCycleListeners);
+
+    new WsActionTester(underTestLocal)
+      .newRequest()
+      .setParam(PARAM_PROJECT, projectData.projectKey())
+      .execute();
+
+    assertThat(db.countRowsOfTable(dbSession, "issue_count_history")).isZero();
+    assertThat(db.countRowsOfTable(dbSession, "measure_history")).isZero();
+    assertThat(db.countRowsOfTable(dbSession, "issue_ttr_history")).isZero();
+  }
+
+  @Test
   public void project_deletion_also_ensure_that_homepage_on_this_project_if_it_exists_is_cleared() {
     ProjectData projectData = db.components().insertPrivateProject();
     ComponentDto project = projectData.getMainBranchComponent();
@@ -112,11 +148,11 @@ public class DeleteActionIT {
       newUserDto().setHomepageType("PROJECT").setHomepageParameter(projectData.projectUuid()));
     dbSession.commit();
     userSessionRule.logIn().addProjectPermission(ProjectPermission.ADMIN, projectData.getProjectDto());
-    DeleteAction underTest = new DeleteAction(
+    DeleteAction underTestLocal = new DeleteAction(
       new ComponentCleanerService(dbClient, new TestIndexers()),
       from(db), dbClient, userSessionRule, projectLifeCycleListeners);
 
-    new WsActionTester(underTest)
+    new WsActionTester(underTestLocal)
       .newRequest()
       .setParam(PARAM_PROJECT, project.getKey())
       .execute();
@@ -135,11 +171,11 @@ public class DeleteActionIT {
     webhookDbTester.insertWebhook(project);
 
     userSessionRule.logIn().addProjectPermission(ProjectPermission.ADMIN, project);
-    DeleteAction underTest = new DeleteAction(
+    DeleteAction underTestLocal = new DeleteAction(
       new ComponentCleanerService(dbClient, new TestIndexers()),
       from(db), dbClient, userSessionRule, projectLifeCycleListeners);
 
-    new WsActionTester(underTest)
+    new WsActionTester(underTestLocal)
       .newRequest()
       .setParam(PARAM_PROJECT, project.getKey())
       .execute();
@@ -182,5 +218,12 @@ public class DeleteActionIT {
   private void call(TestRequest request) {
     TestResponse result = request.execute();
     result.assertNoContent();
+  }
+
+  private void insertHistory(BranchDto branch) {
+    Instant recordedAt = Instant.now();
+    issueCountHistoryRepository.upsert(dbSession, new IssueCountHistoryRow(branch.getUuid(), EntityType.PROJECT_BRANCH, 1, recordedAt, 1));
+    measureHistoryRepository.upsert(dbSession, new MeasureHistoryRow(1, branch.getUuid(), EntityType.PROJECT_BRANCH, recordedAt, "1"));
+    issueTtrHistoryRepository.upsert(dbSession, new IssueTtrHistory(branch.getUuid(), EntityType.PROJECT_BRANCH, 1, recordedAt, 1L, 1));
   }
 }

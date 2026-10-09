@@ -60,7 +60,8 @@ public class QProfileFactoryImpl implements QProfileFactory {
     if (profile == null) {
       profile = doCreate(dbSession, name, null, false, false);
     } else {
-      checkArgument(!profile.isBuiltIn(), "Operation forbidden for built-in Quality Profile '%s' with language '%s'", profile.getName(), profile.getLanguage());
+      checkArgument(!profile.isBuiltIn(), "Operation forbidden for built-in Quality Profile '%s' with language '%s'",
+        QualityProfileDisplayNames.toDisplayName(profile.getName(), profile.isBuiltIn()), profile.getLanguage());
     }
 
     return profile;
@@ -82,6 +83,7 @@ public class QProfileFactoryImpl implements QProfileFactory {
     if (StringUtils.isEmpty(name.getName())) {
       throw BadRequestException.create("quality_profiles.profile_name_cant_be_blank");
     }
+    checkRequest(!QualityProfileDisplayNames.isReservedName(name.getName()), "Name '%s' is reserved", name.getName());
     Date now = new Date(system2.now());
     QProfileDto dto = new QProfileDto()
       .setKee(uuidFactory.create())

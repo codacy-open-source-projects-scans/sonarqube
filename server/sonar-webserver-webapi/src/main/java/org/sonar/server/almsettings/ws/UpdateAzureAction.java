@@ -19,6 +19,7 @@
  */
 package org.sonar.server.almsettings.ws;
 
+import org.sonar.alm.client.azure.AzureDevOpsValidator;
 import org.sonar.api.server.ws.Change;
 import org.sonar.api.server.ws.Request;
 import org.sonar.api.server.ws.Response;
@@ -40,11 +41,13 @@ public class UpdateAzureAction implements AlmSettingsWsAction {
   private final DbClient dbClient;
   private UserSession userSession;
   private final AlmSettingsSupport almSettingsSupport;
+  private final AzureDevOpsValidator azureDevOpsValidator;
 
-  public UpdateAzureAction(DbClient dbClient, UserSession userSession, AlmSettingsSupport almSettingsSupport) {
+  public UpdateAzureAction(DbClient dbClient, UserSession userSession, AlmSettingsSupport almSettingsSupport, AzureDevOpsValidator azureDevOpsValidator) {
     this.dbClient = dbClient;
     this.userSession = userSession;
     this.almSettingsSupport = almSettingsSupport;
+    this.azureDevOpsValidator = azureDevOpsValidator;
   }
 
   @Override
@@ -55,7 +58,8 @@ public class UpdateAzureAction implements AlmSettingsWsAction {
       .setPost(true)
       .setSince("8.1")
       .setChangelog(new Change("8.6", "Parameter 'URL' was added"),
-        new Change("8.7", String.format("Parameter '%s' is no longer required", PARAM_PERSONAL_ACCESS_TOKEN)))
+        new Change("8.7", String.format("Parameter '%s' is no longer required", PARAM_PERSONAL_ACCESS_TOKEN)),
+        new Change("2026.5", "Parameter 'url' is now rejected with a 400 response when its value changes and is not a valid absolute HTTP(S) URL"))
       .setHandler(this);
 
     action.createParam(PARAM_KEY)
@@ -73,7 +77,9 @@ public class UpdateAzureAction implements AlmSettingsWsAction {
     action.createParam(PARAM_URL)
       .setRequired(true)
       .setMaximumLength(2000)
-      .setDescription("Azure API URL");
+      .setDescription("Azure API URL. Must be a valid absolute HTTP(S) URL, e.g. https://dev.azure.com/myorg. "
+        + "The format is only enforced when the value differs from the currently stored URL, "
+        + "so existing pre-validation settings can still be updated without fixing the URL first.");
   }
 
   @Override
@@ -95,9 +101,13 @@ public class UpdateAzureAction implements AlmSettingsWsAction {
         almSettingsSupport.checkAlmSettingDoesNotAlreadyExist(dbSession, newKey);
       }
 
+      if (!url.equals(almSettingDto.getUrl())) {
+        almSettingsSupport.validateUrl(url);
+      }
       almSettingsSupport.checkPatOnUrlUpdate(almSettingDto, url, pat);
 
       if (isNotBlank(pat)) {
+        azureDevOpsValidator.checkPatIsNotGlobal(url, pat);
         almSettingDto.setPersonalAccessToken(pat);
       }
 

@@ -27,7 +27,9 @@ import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneId;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
@@ -48,7 +50,10 @@ import org.sonar.auth.github.AppInstallationToken;
 import org.sonar.auth.github.ExpiringAppInstallationToken;
 import org.sonar.auth.github.GitHubSettings;
 import org.sonar.auth.github.GithubAppConfiguration;
+import org.sonar.auth.github.GithubAppCredentials;
 import org.sonar.auth.github.GithubAppInstallation;
+import org.sonar.auth.github.GithubAppInstallationDetails;
+import org.sonar.auth.github.GithubAppPermissions;
 import org.sonar.auth.github.GithubApplicationClient;
 import org.sonar.auth.github.GithubBinding;
 import org.sonar.auth.github.GsonRepositoryCollaborator;
@@ -67,12 +72,14 @@ import static org.apache.commons.lang3.RandomStringUtils.secure;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
+import static org.assertj.core.api.Assertions.entry;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.groups.Tuple.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.sonar.alm.client.ApplicationHttpClient.GetResponse;
@@ -258,7 +265,7 @@ public class GithubApplicationClientImplTest {
 
     assertThatThrownBy(() -> underTest.checkAppPermissions(githubAppConfiguration))
       .isInstanceOf(IllegalArgumentException.class)
-      .hasMessage("Missing permissions; permission granted on pull_requests is 'read', should be 'write', checks is 'read', should be 'write'");
+      .hasMessage("Missing permissions; permission granted on checks is 'read', should be 'write', pull_requests is 'read', should be 'write'");
   }
 
   @Test
@@ -278,6 +285,57 @@ public class GithubApplicationClientImplTest {
     when(githubApplicationHttpClient.get(appUrl, appToken, "/app")).thenReturn(new OkGetResponse(json));
 
     assertThatCode(() -> underTest.checkAppPermissions(githubAppConfiguration)).isNull();
+  }
+
+  @Test
+  public void checkAppPermissions_withExplicitPermissions_checksThatMapInsteadOfTheDefault() throws IOException {
+    AppToken appToken = mockAppToken();
+
+    String json = """
+      {
+            "permissions": {
+              "checks": "write",
+              "metadata": "read",
+              "pull_requests": "write",
+              "contents": "read"
+            }
+      }
+      """;
+
+    when(githubApplicationHttpClient.get(appUrl, appToken, "/app")).thenReturn(new OkGetResponse(json));
+
+    Map<String, String> tokenMintingPermissions = new HashMap<>(GithubAppPermissions.REQUIRED_PERMISSIONS);
+    tokenMintingPermissions.put("contents", "write");
+
+    assertThatThrownBy(() -> underTest.checkAppPermissions(githubAppConfiguration, tokenMintingPermissions))
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage("Missing permissions; permission granted on contents is 'read', should be 'write'");
+
+    // the default (no-arg) overload is unaffected: it only checks REQUIRED_PERMISSIONS, which this response satisfies
+    assertThatCode(() -> underTest.checkAppPermissions(githubAppConfiguration)).isNull();
+  }
+
+  @Test
+  public void findMissingAppPermissions_returnsMissingKeys() throws IOException {
+    AppToken appToken = mockAppToken();
+
+    String json = """
+      {
+            "permissions": {
+              "checks": "write",
+              "metadata": "read",
+              "pull_requests": "write",
+              "contents": "read"
+            }
+      }
+      """;
+
+    when(githubApplicationHttpClient.get(appUrl, appToken, "/app")).thenReturn(new OkGetResponse(json));
+
+    Map<String, String> tokenMintingPermissions = new HashMap<>(GithubAppPermissions.REQUIRED_PERMISSIONS);
+    tokenMintingPermissions.put("contents", "write");
+
+    assertThat(underTest.findMissingAppPermissions(githubAppConfiguration, tokenMintingPermissions)).containsExactly("contents");
   }
 
   @Test
@@ -363,6 +421,77 @@ public class GithubApplicationClientImplTest {
       .extracting(UserAccessToken::getValue, UserAccessToken::getAuthorizationHeaderPrefix)
       .containsOnly(token, "token");
     verify(githubApplicationHttpClient).post(appUrl, null, "/login/oauth/access_token?client_id=clientId&client_secret=clientSecret&code=code");
+  }
+
+  @Test
+  public void convertAppManifest_returns_credentials() throws IOException {
+    String apiEndpoint = "https://api.github.com";
+    String endpoint = "/app-manifests/the-code/conversions";
+    String json = """
+      {
+        "id": 12345,
+        "slug": "sonarqube",
+        "client_id": "Iv1.abc123",
+        "client_secret": "the-client-secret",
+        "webhook_secret": "the-webhook-secret",
+        "pem": "-----BEGIN RSA PRIVATE KEY-----\\nMIIE\\n-----END RSA PRIVATE KEY-----\\n",
+        "html_url": "https://github.com/apps/sonarqube"
+      }""";
+    when(githubApplicationHttpClient.post(apiEndpoint, null, endpoint)).thenReturn(new Response(HTTP_CREATED, json));
+
+    GithubAppCredentials credentials = underTest.convertAppManifest(apiEndpoint, "the-code");
+
+    assertThat(credentials.getAppId()).isEqualTo("12345");
+    assertThat(credentials.clientId()).isEqualTo("Iv1.abc123");
+    assertThat(credentials.clientSecret()).isEqualTo("the-client-secret");
+    assertThat(credentials.webhookSecret()).isEqualTo("the-webhook-secret");
+    assertThat(credentials.pem()).contains("BEGIN RSA PRIVATE KEY");
+    verify(githubApplicationHttpClient).post(apiEndpoint, null, endpoint);
+  }
+
+  @Test
+  public void convertAppManifest_urlEncodesCodeInEndpoint() throws IOException {
+    String apiEndpoint = "https://api.github.com";
+    String code = "a/b c?d";
+    String endpoint = "/app-manifests/a%2Fb+c%3Fd/conversions";
+    when(githubApplicationHttpClient.post(apiEndpoint, null, endpoint)).thenReturn(new Response(HTTP_CREATED, "{\"id\":1}"));
+
+    underTest.convertAppManifest(apiEndpoint, code);
+
+    verify(githubApplicationHttpClient).post(apiEndpoint, null, endpoint);
+  }
+
+  @Test
+  public void convertAppManifest_whenResponseCodeIsNotCreatedOrOk_throws() throws IOException {
+    String apiEndpoint = "https://api.github.com";
+    String endpoint = "/app-manifests/the-code/conversions";
+    when(githubApplicationHttpClient.post(apiEndpoint, null, endpoint)).thenReturn(new Response(422, "{\"message\":\"boom\"}"));
+
+    assertThatThrownBy(() -> underTest.convertAppManifest(apiEndpoint, "the-code"))
+      .isInstanceOf(IllegalStateException.class)
+      .hasMessageContaining("Failed to create the GitHub App from manifest");
+  }
+
+  @Test
+  public void convertAppManifest_whenResponseBodyIsEmpty_throws() throws IOException {
+    String apiEndpoint = "https://api.github.com";
+    String endpoint = "/app-manifests/the-code/conversions";
+    when(githubApplicationHttpClient.post(apiEndpoint, null, endpoint)).thenReturn(new Response(HTTP_CREATED, null));
+
+    assertThatThrownBy(() -> underTest.convertAppManifest(apiEndpoint, "the-code"))
+      .isInstanceOf(IllegalStateException.class)
+      .hasMessageContaining("response body was empty");
+  }
+
+  @Test
+  public void convertAppManifest_whenRequestFails_throws() throws IOException {
+    String apiEndpoint = "https://api.github.com";
+    String endpoint = "/app-manifests/the-code/conversions";
+    when(githubApplicationHttpClient.post(apiEndpoint, null, endpoint)).thenThrow(new IOException("OOPS"));
+
+    assertThatThrownBy(() -> underTest.convertAppManifest(apiEndpoint, "the-code"))
+      .isInstanceOf(IllegalStateException.class)
+      .hasMessageContaining("Failed to create the GitHub App from manifest");
   }
 
   @Test
@@ -623,6 +752,211 @@ public class GithubApplicationClientImplTest {
     assertThatThrownBy(() -> underTest.getWhitelistedGithubAppInstallations(githubAppConfiguration))
       .isInstanceOf(IllegalStateException.class)
       .hasMessage("exception");
+  }
+
+  @Test
+  public void getAppPermissions_returnsEveryGrantedPermission() throws IOException {
+    AppToken appToken = mockAppToken();
+    when(githubApplicationHttpClient.get(appUrl, appToken, "/app")).thenReturn(new OkGetResponse("""
+      {
+        "permissions": {
+          "checks": "write",
+          "metadata": "read",
+          "pull_requests": "write",
+          "contents": "read"
+        }
+      }
+      """));
+
+    assertThat(underTest.getAppPermissions(githubAppConfiguration))
+      .containsOnly(entry("checks", "write"), entry("metadata", "read"), entry("pull_requests", "write"), entry("contents", "read"));
+  }
+
+  @Test
+  public void getAllAppInstallations_returnsOrganizationAndUserInstallations_withTheirFullPermissionMap() {
+    List<GithubAppInstallationDetails> installations = getAllAppInstallationsFromGithubResponse("""
+      [
+        {
+          "id": 1,
+          "account": {"login": "org1", "type": "Organization"},
+          "html_url": "https://github.com/organizations/org1/settings/installations/1",
+          "suspended_at": "2023-05-30T08:40:55Z",
+          "permissions": {"contents": "read", "pull_requests": "write", "checks": "write", "metadata": "read"}
+        },
+        {
+          "id": 2,
+          "account": {"login": "user1", "type": "User"},
+          "html_url": "https://github.com/settings/installations/2",
+          "permissions": {"contents": "write"}
+        }
+      ]""");
+
+    assertThat(installations)
+      .extracting(GithubAppInstallationDetails::installationId, GithubAppInstallationDetails::accountLogin, GithubAppInstallationDetails::accountType,
+        GithubAppInstallationDetails::htmlUrl, GithubAppInstallationDetails::suspended, GithubAppInstallationDetails::isOrganization)
+      .containsExactly(
+        tuple(1L, "org1", "Organization", "https://github.com/organizations/org1/settings/installations/1", true, true),
+        tuple(2L, "user1", "User", "https://github.com/settings/installations/2", false, false));
+    // pull_requests is kept, unlike the legacy installation model this endpoint is otherwise deserialized into.
+    assertThat(installations.get(0).permissions())
+      .containsOnly(entry("contents", "read"), entry("pull_requests", "write"), entry("checks", "write"), entry("metadata", "read"));
+  }
+
+  @Test
+  public void getAllAppInstallations_appliesNoOrganizationAllowlist() {
+    // The allowlist restricts who may authenticate; an organization outside it still has to approve permissions.
+    List<GithubAppInstallationDetails> installations = getAllAppInstallationsFromGithubResponse("""
+      [
+        {"id": 1, "account": {"login": "org1", "type": "Organization"}, "permissions": {"metadata": "read"}},
+        {"id": 2, "account": {"login": "org2", "type": "Organization"}, "permissions": {"metadata": "read"}}
+      ]""");
+
+    assertThat(installations).extracting(GithubAppInstallationDetails::accountLogin).containsExactly("org1", "org2");
+    verify(gitHubSettings, never()).getOrganizations();
+  }
+
+  @Test
+  public void getAllAppInstallations_whenNoInstallation_returnsEmptyList() {
+    assertThat(getAllAppInstallationsFromGithubResponse("[]")).isEmpty();
+  }
+
+  @Test
+  @UseDataProvider("unusableInstallationPayloads")
+  public void getAllAppInstallations_whenPayloadCannotBeJudged_throws(String payload) {
+    assertThatIllegalStateException()
+      .isThrownBy(() -> getAllAppInstallationsFromGithubResponse(payload))
+      .withMessageContaining("without a usable id, account or permission set");
+  }
+
+  @DataProvider
+  public static Object[][] unusableInstallationPayloads() {
+    return new Object[][] {
+      {"[{\"account\": {\"login\": \"org1\"}, \"permissions\": {\"metadata\": \"read\"}}]"},
+      {"[{\"id\": 1, \"permissions\": {\"metadata\": \"read\"}}]"},
+      {"[{\"id\": 1, \"account\": {\"type\": \"Organization\"}, \"permissions\": {\"metadata\": \"read\"}}]"},
+      {"[{\"id\": 1, \"account\": {\"login\": \"org1\"}}]"},
+    };
+  }
+
+  @Test
+  @UseDataProvider("unrecognisedAccountTypes")
+  public void getAllAppInstallations_whenTheAccountTypeIsNotRecognised_throws(String accountTypeField) {
+    // Falling through to "not an organization" would build a personal-account settings link for an installation an
+    // organization may well own, so an unjudgeable type fails the verification instead.
+    String payload = format("[{\"id\": 1, \"account\": {\"login\": \"org1\"%s}, \"permissions\": {\"metadata\": \"read\"}}]", accountTypeField);
+
+    assertThatIllegalStateException()
+      .isThrownBy(() -> getAllAppInstallationsFromGithubResponse(payload))
+      .withMessageContaining("account type is missing or not recognised");
+  }
+
+  @Test
+  @UseDataProvider("unrecognisedAccountTypes")
+  public void getRepositoryInstallation_whenTheAccountTypeIsNotRecognised_throws(String accountTypeField) throws IOException {
+    AppToken appToken = mockAppToken();
+    when(githubApplicationHttpClient.get(appUrl, appToken, "/repos/torvalds/linux/installation")).thenReturn(new OkGetResponse(
+      format("{\"id\": 7, \"account\": {\"login\": \"torvalds\"%s}, \"permissions\": {\"metadata\": \"read\"}}", accountTypeField)));
+
+    assertThatIllegalStateException()
+      .isThrownBy(() -> underTest.getRepositoryInstallation(githubAppConfiguration, "torvalds/linux"))
+      .withMessageContaining("account type is missing or not recognised");
+  }
+
+  @DataProvider
+  public static Object[][] unrecognisedAccountTypes() {
+    return new Object[][] {
+      // absent
+      {""},
+      {", \"type\": null"},
+      // a type GitHub does not document for an installation account
+      {", \"type\": \"Bot\""},
+      {", \"type\": \"Enterprise\""},
+      // right word, wrong case: accepted silently, "organization" would have become a personal account
+      {", \"type\": \"organization\""},
+      {", \"type\": \"USER\""},
+    };
+  }
+
+  @Test
+  @UseDataProvider("recognisedAccountTypes")
+  public void getAllAppInstallations_acceptsTheTwoDocumentedAccountTypes(String accountType, boolean expectedOrganization) {
+    String payload = format("[{\"id\": 1, \"account\": {\"login\": \"owner1\", \"type\": \"%s\"}, \"permissions\": {\"metadata\": \"read\"}}]", accountType);
+
+    assertThat(getAllAppInstallationsFromGithubResponse(payload))
+      .extracting(GithubAppInstallationDetails::accountType, GithubAppInstallationDetails::isOrganization)
+      .containsExactly(tuple(accountType, expectedOrganization));
+  }
+
+  @DataProvider
+  public static Object[][] recognisedAccountTypes() {
+    return new Object[][] {
+      {"Organization", true},
+      {"User", false},
+    };
+  }
+
+  @Test
+  public void getAllAppInstallations_whenAPageCannotBeRead_reThrows() {
+    AppToken appToken = mockAppToken();
+    when(githubPaginatedHttpClient.getStrict(eq(appUrl), eq(appToken), eq("/app/installations"), any()))
+      .thenThrow(new IllegalStateException("page 2 came back without a body"));
+
+    assertThatIllegalStateException()
+      .isThrownBy(() -> underTest.getAllAppInstallations(githubAppConfiguration))
+      .withMessage("page 2 came back without a body");
+  }
+
+  @SuppressWarnings("unchecked")
+  private List<GithubAppInstallationDetails> getAllAppInstallationsFromGithubResponse(String content) {
+    AppToken appToken = mockAppToken();
+    when(githubPaginatedHttpClient.getStrict(eq(appUrl), eq(appToken), eq("/app/installations"), any()))
+      .thenAnswer(invocation -> {
+        Function<String, List<GithubBinding.GsonInstallationDetails>> deserializingFunction = invocation.getArgument(3, Function.class);
+        return deserializingFunction.apply(content);
+      });
+    return underTest.getAllAppInstallations(githubAppConfiguration);
+  }
+
+  @Test
+  public void getRepositoryInstallation_returnsTheInstallationCoveringThatRepository() throws IOException {
+    AppToken appToken = mockAppToken();
+    when(githubApplicationHttpClient.get(appUrl, appToken, "/repos/torvalds/linux/installation")).thenReturn(new OkGetResponse("""
+      {
+        "id": 7,
+        "account": {"login": "torvalds", "type": "User"},
+        "html_url": "https://github.com/settings/installations/7",
+        "permissions": {"contents": "write", "metadata": "read"}
+      }"""));
+
+    GithubAppInstallationDetails installation = underTest.getRepositoryInstallation(githubAppConfiguration, "torvalds/linux");
+
+    assertThat(installation.installationId()).isEqualTo(7L);
+    assertThat(installation.accountLogin()).isEqualTo("torvalds");
+    assertThat(installation.isOrganization()).isFalse();
+    assertThat(installation.permissions()).containsOnly(entry("contents", "write"), entry("metadata", "read"));
+  }
+
+  @Test
+  public void getRepositoryInstallation_whenAppNotInstalledOnRepository_throwsWithTheStatusCode() throws IOException {
+    // Unlike getInstallationId, which collapses this into Optional.empty(): a 404 means "install the app here", any
+    // other failure means "the check could not be made", and the remediation UI has to tell those apart.
+    AppToken appToken = mockAppToken();
+    when(githubApplicationHttpClient.get(appUrl, appToken, "/repos/torvalds/linux/installation")).thenReturn(new ErrorGetResponse(HTTP_NOT_FOUND, null));
+
+    assertThatThrownBy(() -> underTest.getRepositoryInstallation(githubAppConfiguration, "torvalds/linux"))
+      .isInstanceOf(HttpException.class)
+      .extracting(e -> ((HttpException) e).code()).isEqualTo(HTTP_NOT_FOUND);
+  }
+
+  @Test
+  public void getRepositoryInstallation_whenPayloadCannotBeJudged_throws() throws IOException {
+    AppToken appToken = mockAppToken();
+    when(githubApplicationHttpClient.get(appUrl, appToken, "/repos/torvalds/linux/installation"))
+      .thenReturn(new OkGetResponse("{\"id\": 7, \"account\": {\"login\": \"torvalds\"}}"));
+
+    assertThatIllegalStateException()
+      .isThrownBy(() -> underTest.getRepositoryInstallation(githubAppConfiguration, "torvalds/linux"))
+      .withMessageContaining("without a usable id, account or permission set");
   }
 
   @Test
@@ -1056,7 +1390,8 @@ public class GithubApplicationClientImplTest {
   @Test
   public void createAppInstallationToken_returns_empty_if_post_throws_IOE() throws IOException {
     mockAppToken();
-    when(githubApplicationHttpClient.post(anyString(), any(AccessToken.class), anyString())).thenThrow(IOException.class);
+    Map<String, String> anyHeaders = any();
+    when(githubApplicationHttpClient.post(anyString(), any(AccessToken.class), anyString(), anyHeaders)).thenThrow(IOException.class);
     Optional<ExpiringAppInstallationToken> accessToken = underTest.createAppInstallationToken(githubAppConfiguration, INSTALLATION_ID);
 
     assertThat(accessToken).isEmpty();
@@ -1071,7 +1406,8 @@ public class GithubApplicationClientImplTest {
     Optional<ExpiringAppInstallationToken> accessToken = underTest.createAppInstallationToken(githubAppConfiguration, INSTALLATION_ID);
 
     assertThat(accessToken).isEmpty();
-    verify(githubApplicationHttpClient).post(appUrl, appToken, "/app/installations/" + INSTALLATION_ID + "/access_tokens");
+    verify(githubApplicationHttpClient).post(appUrl, appToken, "/app/installations/" + INSTALLATION_ID + "/access_tokens",
+      Map.of(GithubHeaders.STATELESS_INSTALLATION_TOKEN_HEADER, GithubHeaders.STATELESS_INSTALLATION_TOKEN_HEADER_VALUE));
   }
 
   @Test
@@ -1082,7 +1418,34 @@ public class GithubApplicationClientImplTest {
     Optional<ExpiringAppInstallationToken> accessToken = underTest.createAppInstallationToken(githubAppConfiguration, INSTALLATION_ID);
 
     assertThat(accessToken).hasValue(installToken);
-    verify(githubApplicationHttpClient).post(appUrl, appToken, "/app/installations/" + INSTALLATION_ID + "/access_tokens");
+    verify(githubApplicationHttpClient).post(appUrl, appToken, "/app/installations/" + INSTALLATION_ID + "/access_tokens",
+      Map.of(GithubHeaders.STATELESS_INSTALLATION_TOKEN_HEADER, GithubHeaders.STATELESS_INSTALLATION_TOKEN_HEADER_VALUE));
+  }
+
+  @Test
+  public void createAppInstallationToken_withRepositoryName_scopes_the_request_body_to_that_repository() throws IOException {
+    AppToken appToken = mockAppToken();
+    ExpiringAppInstallationToken installToken = mockCreateAccessTokenCallingGithubWithBody();
+
+    Optional<ExpiringAppInstallationToken> accessToken = underTest.createAppInstallationToken(githubAppConfiguration, INSTALLATION_ID, "Hello-World");
+
+    assertThat(accessToken).hasValue(installToken);
+    verify(githubApplicationHttpClient).post(appUrl, appToken, "/app/installations/" + INSTALLATION_ID + "/access_tokens",
+      "{\"repositories\":[\"Hello-World\"]}",
+      Map.of(GithubHeaders.STATELESS_INSTALLATION_TOKEN_HEADER, GithubHeaders.STATELESS_INSTALLATION_TOKEN_HEADER_VALUE));
+  }
+
+  @Test
+  public void createAppInstallationToken_withRepositoryName_returns_empty_if_access_token_cant_be_created() throws IOException {
+    AppToken appToken = mockAppToken();
+    Response response = mock(Response.class);
+    when(response.getContent()).thenReturn(Optional.empty());
+    when(response.getCode()).thenReturn(HTTP_UNAUTHORIZED);
+    when(githubApplicationHttpClient.post(eq(appUrl), eq(appToken), eq("/app/installations/" + INSTALLATION_ID + "/access_tokens"), anyString(), any())).thenReturn(response);
+
+    Optional<ExpiringAppInstallationToken> accessToken = underTest.createAppInstallationToken(githubAppConfiguration, INSTALLATION_ID, "Hello-World");
+
+    assertThat(accessToken).isEmpty();
   }
 
   @Test
@@ -1154,7 +1517,8 @@ public class GithubApplicationClientImplTest {
     Response response = mock(Response.class);
     when(response.getContent()).thenReturn(Optional.empty());
     when(response.getCode()).thenReturn(HTTP_UNAUTHORIZED);
-    when(githubApplicationHttpClient.post(eq(appUrl), any(AppToken.class), eq("/app/installations/" + INSTALLATION_ID + "/access_tokens"))).thenReturn(response);
+    when(githubApplicationHttpClient.post(eq(appUrl), any(AppToken.class), eq("/app/installations/" + INSTALLATION_ID + "/access_tokens"),
+      eq(Map.of(GithubHeaders.STATELESS_INSTALLATION_TOKEN_HEADER, GithubHeaders.STATELESS_INSTALLATION_TOKEN_HEADER_VALUE)))).thenReturn(response);
   }
 
   private AppToken mockAppToken() {
@@ -1164,7 +1528,7 @@ public class GithubApplicationClientImplTest {
   }
 
   private ExpiringAppInstallationToken mockCreateAccessTokenCallingGithub() throws IOException {
-    String token = secure().nextAlphanumeric(5);
+    String token = "v1." + secure().nextAlphanumeric(43) + "." + secure().nextAlphanumeric(43) + "." + secure().nextAlphanumeric(86);
     Response response = mock(Response.class);
     when(response.getContent()).thenReturn(Optional.of(format("""
         {
@@ -1180,7 +1544,24 @@ public class GithubApplicationClientImplTest {
         }
       """, token)));
     when(response.getCode()).thenReturn(HTTP_CREATED);
-    when(githubApplicationHttpClient.post(eq(appUrl), any(AppToken.class), eq("/app/installations/" + INSTALLATION_ID + "/access_tokens"))).thenReturn(response);
+    when(githubApplicationHttpClient.post(eq(appUrl), any(AppToken.class), eq("/app/installations/" + INSTALLATION_ID + "/access_tokens"),
+      eq(Map.of(GithubHeaders.STATELESS_INSTALLATION_TOKEN_HEADER, GithubHeaders.STATELESS_INSTALLATION_TOKEN_HEADER_VALUE)))).thenReturn(response);
+    return new ExpiringAppInstallationToken(clock, token, "2024-08-28T10:44:51Z");
+  }
+
+  private ExpiringAppInstallationToken mockCreateAccessTokenCallingGithubWithBody() throws IOException {
+    String token = "v1." + secure().nextAlphanumeric(43) + "." + secure().nextAlphanumeric(43) + "." + secure().nextAlphanumeric(86);
+    Response response = mock(Response.class);
+    when(response.getContent()).thenReturn(Optional.of(format("""
+        {
+          "token": "%s",
+          "expires_at": "2024-08-28T10:44:51Z",
+          "repository_selection": "selected"
+        }
+      """, token)));
+    when(response.getCode()).thenReturn(HTTP_CREATED);
+    when(githubApplicationHttpClient.post(eq(appUrl), any(AppToken.class), eq("/app/installations/" + INSTALLATION_ID + "/access_tokens"), anyString(),
+      eq(Map.of(GithubHeaders.STATELESS_INSTALLATION_TOKEN_HEADER, GithubHeaders.STATELESS_INSTALLATION_TOKEN_HEADER_VALUE)))).thenReturn(response);
     return new ExpiringAppInstallationToken(clock, token, "2024-08-28T10:44:51Z");
   }
 

@@ -156,6 +156,20 @@ public class IssueQueryFactoryTest {
   }
 
   @Test
+  public void create_from_compliance_standards_includes_rules_from_repository_wildcards() {
+    RuleDto secretsRule1 = ruleDbTester.insert(r -> r.setRuleKey(RuleKey.of("secrets", "S001")));
+    RuleDto secretsRule2 = ruleDbTester.insert(r -> r.setRuleKey(RuleKey.of("secrets", "S002")));
+    ruleDbTester.insert(r -> r.setRuleKey(RuleKey.of("java", "S001")));
+
+    SearchRequest request = new SearchRequest()
+      .setCategoriesByStandard(Map.of(new ReportKey("test", "V1"), Set.of("category4withsecretrules")));
+
+    IssueQuery query = underTest.create(request);
+
+    assertThat(query.complianceCategoryRules()).containsOnly(secretsRule1.getUuid(), secretsRule2.getUuid());
+  }
+
+  @Test
   public void getIssuesFixedByPullRequest_returnIssuesFixedByThePullRequest() {
     String ruleAdHocName = "New Name";
     UserDto user = db.users().insertUser(u -> u.setLogin("joanna"));
@@ -236,7 +250,7 @@ public class IssueQueryFactoryTest {
 
   @Test
   public void in_new_code_period_start_date_is_exclusive() {
-    long newCodePeriodStart = addDays(new Date(), -14).getTime();
+    long newCodePeriodStart = addDays(new Date(1_704_067_200_000L), -14).getTime();
 
     ComponentDto project = db.components().insertPublicProject().getMainBranchComponent();
     ComponentDto file = db.components().insertComponent(newFileDto(project));
@@ -428,7 +442,7 @@ public class IssueQueryFactoryTest {
 
   @Test
   public void application_search_project_issues_in_new_code_with_and_without_analysis_after_sonarqube_94() {
-    Date now = new Date();
+    Date now = new Date(1_704_067_200_000L);
     when(clock.millis()).thenReturn(now.getTime());
     ProjectData projectData1 = db.components().insertPublicProject();
     ComponentDto project1 = projectData1.getMainBranchComponent();

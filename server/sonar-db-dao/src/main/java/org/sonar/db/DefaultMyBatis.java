@@ -20,6 +20,8 @@
 package org.sonar.db;
 
 import javax.annotation.Nullable;
+import org.apache.ibatis.plugin.Interceptor;
+import org.apache.ibatis.session.Configuration;
 import org.sonar.db.alm.pat.AlmPatMapper;
 import org.sonar.db.alm.setting.AlmSettingMapper;
 import org.sonar.db.alm.setting.ProjectAlmKeyAndProject;
@@ -58,6 +60,8 @@ import org.sonar.db.es.EsQueueMapper;
 import org.sonar.db.event.EventComponentChangeMapper;
 import org.sonar.db.event.EventDto;
 import org.sonar.db.event.EventMapper;
+import org.sonar.db.adminalert.AdminAlertStatusMapper;
+import org.sonar.db.agent.AgentJobMapper;
 import org.sonar.db.issue.AnticipatedTransitionDto;
 import org.sonar.db.issue.AnticipatedTransitionMapper;
 import org.sonar.db.issue.ImpactDto;
@@ -84,6 +88,8 @@ import org.sonar.db.measure.ProjectMeasureMapper;
 import org.sonar.db.metric.MetricMapper;
 import org.sonar.db.migrationlog.MigrationLogMapper;
 import org.sonar.db.newcodeperiod.NewCodePeriodMapper;
+import org.sonar.db.notification.NotificationGroupSubscriptionDto;
+import org.sonar.db.notification.NotificationGroupSubscriptionMapper;
 import org.sonar.db.notification.NotificationQueueDto;
 import org.sonar.db.notification.NotificationQueueMapper;
 import org.sonar.db.permission.AuthorizationMapper;
@@ -176,12 +182,16 @@ import org.sonar.db.user.UserTokenMapper;
 import org.sonar.db.user.ai.UserAiToolUsageMapper;
 import org.sonar.db.webhook.WebhookDeliveryMapper;
 import org.sonar.db.webhook.WebhookMapper;
+import org.sonarsource.history.server.db.mapper.IssueCountHistoryMapper;
+import org.sonarsource.history.server.db.mapper.MeasureHistoryMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 
 public class DefaultMyBatis extends AbstractMyBatis {
   // keep them sorted alphabetically
   private static final Class<?>[] MAPPERS = {
     ActiveRuleMapper.class,
+    AdminAlertStatusMapper.class,
+    AgentJobMapper.class,
     AlmPatMapper.class,
     AlmSettingMapper.class,
     AnalysisPropertiesMapper.class,
@@ -218,6 +228,7 @@ public class DefaultMyBatis extends AbstractMyBatis {
     IssueMapper.class,
     IssueFixedMapper.class,
     IssueStatsByRuleKeyMapper.class,
+    IssueCountHistoryMapper.class,
     JiraProjectBindingMapper.class,
     JiraOrganizationBindingMapper.class,
     JiraOrganizationBindingPendingMapper.class,
@@ -226,11 +237,13 @@ public class DefaultMyBatis extends AbstractMyBatis {
     JiraPermissionMapper.class,
     AtlassianAuthenticationDetailsMapper.class,
     XsrfTokenMapper.class,
+    MeasureHistoryMapper.class,
     MeasureMapper.class,
     ProjectMeasureMapper.class,
     MetricMapper.class,
     MigrationLogMapper.class,
     NewCodePeriodMapper.class,
+    NotificationGroupSubscriptionMapper.class,
     NotificationQueueMapper.class,
     PermissionTemplateCharacteristicMapper.class,
     PermissionTemplateMapper.class,
@@ -320,6 +333,7 @@ public class DefaultMyBatis extends AbstractMyBatis {
     confBuilder.loadAlias("NewCodeReferenceIssue", NewCodeReferenceIssueDto.class);
     confBuilder.loadAlias("ProjectMeasure", ProjectMeasureDto.class);
     confBuilder.loadAlias("LargestBranchNclocDto", LargestBranchNclocDto.class);
+    confBuilder.loadAlias("NotificationGroupSubscription", NotificationGroupSubscriptionDto.class);
     confBuilder.loadAlias("NotificationQueue", NotificationQueueDto.class);
     confBuilder.loadAlias("PermissionTemplateCharacteristic", PermissionTemplateCharacteristicDto.class);
     confBuilder.loadAlias("PermissionTemplateGroup", PermissionTemplateGroupDto.class);
@@ -368,5 +382,19 @@ public class DefaultMyBatis extends AbstractMyBatis {
       throw new IllegalStateException("DefaultMyBatis assumes the database is already started and has a DataSource.");
     }
     super.start();
+  }
+
+  public void addInterceptor(Interceptor interceptor) {
+    Configuration writerConfig;
+    try (DbSession session = openSession(false)) {
+      writerConfig = session.getConfiguration();
+      writerConfig.addInterceptor(interceptor);
+    }
+    try (ReaderDbSession session = openReadOnlySession()) {
+      Configuration readerConfig = session.getConfiguration();
+      if (readerConfig != writerConfig) {
+        readerConfig.addInterceptor(interceptor);
+      }
+    }
   }
 }

@@ -170,6 +170,99 @@ class RuleDaoIT {
   }
 
   @Test
+  void selectByKey_whenContextKeyProvided_returnsOnlyMatchingAndContextLessSections() {
+    RuleDescriptionSectionDto introduction = RuleDescriptionSectionDto.builder()
+      .uuid("section-introduction")
+      .key("introduction")
+      .content("introduction content")
+      .build();
+    RuleDescriptionSectionDto howToFixSpring = RuleDescriptionSectionDto.builder()
+      .uuid("section-spring")
+      .key("how_to_fix")
+      .content("spring content")
+      .context(RuleDescriptionSectionContextDto.of("spring", "Spring"))
+      .build();
+    RuleDescriptionSectionDto howToFixServlet = RuleDescriptionSectionDto.builder()
+      .uuid("section-servlet")
+      .key("how_to_fix")
+      .content("servlet content")
+      .context(RuleDescriptionSectionContextDto.of("servlet", "Servlet"))
+      .build();
+    RuleDto ruleDto = db.rules().insert(newRule(introduction, howToFixSpring, howToFixServlet));
+
+    RuleDto actualRule = underTest.selectByKey(db.getSession(), ruleDto.getKey(), "spring").orElseThrow();
+
+    assertThat(actualRule.getRuleDescriptionSectionDtos())
+      .extracting(RuleDescriptionSectionDto::getKey, section -> Optional.ofNullable(section.getContext()).map(RuleDescriptionSectionContextDto::getKey).orElse(null))
+      .containsExactlyInAnyOrder(
+        tuple("introduction", null),
+        tuple("how_to_fix", "spring"));
+  }
+
+  @Test
+  void selectByKey_whenContextKeyUnknown_returnsOnlyContextLessSections() {
+    RuleDescriptionSectionDto introduction = RuleDescriptionSectionDto.builder()
+      .uuid("section-introduction-2")
+      .key("introduction")
+      .content("introduction content")
+      .build();
+    RuleDescriptionSectionDto howToFixSpring = RuleDescriptionSectionDto.builder()
+      .uuid("section-spring-2")
+      .key("how_to_fix")
+      .content("spring content")
+      .context(RuleDescriptionSectionContextDto.of("spring", "Spring"))
+      .build();
+    RuleDto ruleDto = db.rules().insert(newRule(introduction, howToFixSpring));
+
+    RuleDto actualRule = underTest.selectByKey(db.getSession(), ruleDto.getKey(), "does-not-exist").orElseThrow();
+
+    assertThat(actualRule.getRuleDescriptionSectionDtos())
+      .extracting(RuleDescriptionSectionDto::getKey, section -> Optional.ofNullable(section.getContext()).map(RuleDescriptionSectionContextDto::getKey).orElse(null))
+      .containsExactly(tuple("introduction", null));
+  }
+
+  @Test
+  void selectByKey_whenContextKeyNull_returnsAllSections() {
+    RuleDescriptionSectionDto howToFixSpring = RuleDescriptionSectionDto.builder()
+      .uuid("section-spring-3")
+      .key("how_to_fix")
+      .content("spring content")
+      .context(RuleDescriptionSectionContextDto.of("spring", "Spring"))
+      .build();
+    RuleDescriptionSectionDto howToFixServlet = RuleDescriptionSectionDto.builder()
+      .uuid("section-servlet-3")
+      .key("how_to_fix")
+      .content("servlet content")
+      .context(RuleDescriptionSectionContextDto.of("servlet", "Servlet"))
+      .build();
+    RuleDto ruleDto = db.rules().insert(newRule(howToFixSpring, howToFixServlet));
+
+    RuleDto actualRule = underTest.selectByKey(db.getSession(), ruleDto.getKey(), null).orElseThrow();
+
+    assertThat(actualRule.getRuleDescriptionSectionDtos())
+      .extracting(RuleDescriptionSectionDto::getKey, section -> Optional.ofNullable(section.getContext()).map(RuleDescriptionSectionContextDto::getKey).orElse(null))
+      .containsExactlyInAnyOrder(
+        tuple("how_to_fix", "spring"),
+        tuple("how_to_fix", "servlet"));
+  }
+
+  @Test
+  void selectByKey_whenContextKeyMatchesNothing_stillReturnsRule() {
+    RuleDescriptionSectionDto howToFixSpring = RuleDescriptionSectionDto.builder()
+      .uuid("section-spring-4")
+      .key("how_to_fix")
+      .content("spring content")
+      .context(RuleDescriptionSectionContextDto.of("spring", "Spring"))
+      .build();
+    RuleDto ruleDto = db.rules().insert(newRule(howToFixSpring));
+
+    Optional<RuleDto> actualRule = underTest.selectByKey(db.getSession(), ruleDto.getKey(), "does-not-exist");
+
+    assertThat(actualRule).isPresent();
+    assertThat(actualRule.get().getRuleDescriptionSectionDtos()).isEmpty();
+  }
+
+  @Test
   void selectByUuid() {
     RuleDto ruleDto = db.rules().insert();
 
@@ -227,6 +320,24 @@ class RuleDaoIT {
     assertThat(underTest.selectByRuleKeys(db.getSession(), asList(r1.getRuleKey(), r2.getRuleKey(), UNKNOWN_RULE_UUID))).hasSize(2);
     assertThat(underTest.selectByRuleKeys(db.getSession(), asList(r1.getRuleKey(), r2.getRuleKey(), removed.getRuleKey()))).hasSize(3);
     assertThat(underTest.selectByRuleKeys(db.getSession(), singletonList(UNKNOWN_RULE_UUID))).isEmpty();
+  }
+
+  @Test
+  void selectByRepositories() {
+    RuleDto secretsRule1 = db.rules().insert(r -> r.setRepositoryKey("secrets"));
+    RuleDto secretsRule2 = db.rules().insert(r -> r.setRepositoryKey("secrets"));
+    RuleDto javaRule = db.rules().insert(r -> r.setRepositoryKey("java"));
+    RuleDto removedRule = db.rules().insert(r -> r.setRepositoryKey("secrets").setStatus(REMOVED));
+    db.rules().insert(r -> r.setRepositoryKey("python"));
+
+    assertThat(underTest.selectByRepositories(db.getSession(), singletonList("secrets")))
+      .extracting(RuleDto::getUuid)
+      .containsOnly(secretsRule1.getUuid(), secretsRule2.getUuid(), removedRule.getUuid());
+    assertThat(underTest.selectByRepositories(db.getSession(), asList("secrets", "java")))
+      .extracting(RuleDto::getUuid)
+      .containsOnly(secretsRule1.getUuid(), secretsRule2.getUuid(), javaRule.getUuid(), removedRule.getUuid());
+    assertThat(underTest.selectByRepositories(db.getSession(), singletonList("unknown"))).isEmpty();
+    assertThat(underTest.selectByRepositories(db.getSession(), emptyList())).isEmpty();
   }
 
   @Test
@@ -814,6 +925,109 @@ class RuleDaoIT {
   }
 
   @Test
+  void upsertRuleDescriptionSection_whenNoMatchingRow_insertsNewSection() {
+    RuleDto rule = db.rules().insert();
+    RuleDescriptionSectionDto section = createDescriptionSectionWithContext("how_to_fix", "servlet", "Servlet");
+
+    underTest.upsertRuleDescriptionSection(db.getSession(), rule.getUuid(), section);
+    db.getSession().commit();
+
+    RuleDto ruleDto = underTest.selectOrFailByKey(db.getSession(), rule.getKey());
+    assertThat(ruleDto.getRuleDescriptionSectionDtos())
+      .usingRecursiveFieldByFieldElementComparator()
+      .contains(section);
+  }
+
+  @Test
+  void upsertRuleDescriptionSection_whenMatchingRowExists_updatesContentInPlaceWithoutChangingUuid() {
+    RuleDto rule = db.rules().insert();
+    RuleDescriptionSectionDto section = createDescriptionSectionWithContext("how_to_fix", "servlet", "Servlet");
+    underTest.upsertRuleDescriptionSection(db.getSession(), rule.getUuid(), section);
+    db.getSession().commit();
+
+    RuleDescriptionSectionDto updatedContent = RuleDescriptionSectionDto.builder()
+      .uuid(secure().nextAlphanumeric(20))
+      .key("how_to_fix")
+      .content("Updated content")
+      .context(RuleDescriptionSectionContextDto.of("servlet", "Servlet"))
+      .build();
+    underTest.upsertRuleDescriptionSection(db.getSession(), rule.getUuid(), updatedContent);
+    db.getSession().commit();
+
+    RuleDto ruleDto = underTest.selectOrFailByKey(db.getSession(), rule.getKey());
+    List<RuleDescriptionSectionDto> howToFixSections = ruleDto.getRuleDescriptionSectionDtos().stream()
+      .filter(s -> "how_to_fix".equals(s.getKey()))
+      .toList();
+    assertThat(howToFixSections).hasSize(1);
+    assertThat(howToFixSections.get(0).getUuid()).isEqualTo(section.getUuid());
+    assertThat(howToFixSections.get(0).getContent()).isEqualTo("Updated content");
+    assertThat(howToFixSections.get(0).getContext().getDisplayName()).isEqualTo("Servlet");
+  }
+
+  @Test
+  void upsertRuleDescriptionSection_whenDifferentContextForSameKey_insertsIndependentRow() {
+    RuleDto rule = db.rules().insert();
+    RuleDescriptionSectionDto servletSection = createDescriptionSectionWithContext("how_to_fix", "servlet", "Servlet");
+    underTest.upsertRuleDescriptionSection(db.getSession(), rule.getUuid(), servletSection);
+    db.getSession().commit();
+
+    RuleDescriptionSectionDto springSection = createDescriptionSectionWithContext("how_to_fix", "spring", "Spring");
+    underTest.upsertRuleDescriptionSection(db.getSession(), rule.getUuid(), springSection);
+    db.getSession().commit();
+
+    RuleDto ruleDto = underTest.selectOrFailByKey(db.getSession(), rule.getKey());
+    List<RuleDescriptionSectionDto> howToFixSections = ruleDto.getRuleDescriptionSectionDtos().stream()
+      .filter(s -> "how_to_fix".equals(s.getKey()))
+      .toList();
+    assertThat(howToFixSections)
+      .usingRecursiveFieldByFieldElementComparator()
+      .containsExactlyInAnyOrder(servletSection, springSection);
+  }
+
+  @Test
+  void upsertRuleDescriptionSection_whenContextLessSectionUpsertedTwice_resultsInSingleRowWithLatestContent() {
+    RuleDto rule = db.rules().insert();
+    RuleDescriptionSectionDto firstVersion = RuleDescriptionSectionDto.builder()
+      .uuid(secure().nextAlphanumeric(20))
+      .key("root_cause")
+      .content("first content")
+      .build();
+    underTest.upsertRuleDescriptionSection(db.getSession(), rule.getUuid(), firstVersion);
+    db.getSession().commit();
+
+    RuleDescriptionSectionDto secondVersion = RuleDescriptionSectionDto.builder()
+      .uuid(secure().nextAlphanumeric(20))
+      .key("root_cause")
+      .content("second content")
+      .build();
+    underTest.upsertRuleDescriptionSection(db.getSession(), rule.getUuid(), secondVersion);
+    db.getSession().commit();
+
+    RuleDto ruleDto = underTest.selectOrFailByKey(db.getSession(), rule.getKey());
+    List<RuleDescriptionSectionDto> rootCauseSections = ruleDto.getRuleDescriptionSectionDtos().stream()
+      .filter(s -> "root_cause".equals(s.getKey()))
+      .toList();
+    assertThat(rootCauseSections).hasSize(1);
+    assertThat(rootCauseSections.get(0).getContent()).isEqualTo("second content");
+    assertThat(rootCauseSections.get(0).getContext()).isNull();
+  }
+
+  @Test
+  void clearAdHocDescription_clearsColumnWithoutTouchingSections() {
+    RuleDto rule = db.rules().insert(r -> r.setAdHocDescription("some ad hoc description"));
+    Set<RuleDescriptionSectionDto> sectionsBefore = rule.getRuleDescriptionSectionDtos();
+
+    underTest.clearAdHocDescription(db.getSession(), rule.getUuid());
+    db.getSession().commit();
+
+    RuleDto ruleDto = underTest.selectOrFailByKey(db.getSession(), rule.getKey());
+    assertThat(ruleDto.getAdHocDescription()).isNull();
+    assertThat(ruleDto.getRuleDescriptionSectionDtos())
+      .usingRecursiveFieldByFieldElementComparator()
+      .containsExactlyInAnyOrderElementsOf(sectionsBefore);
+  }
+
+  @Test
   void update_RuleMetadataDto_inserts_row_in_RULE_METADATA_if_not_exists_yet() {
     RuleDto rule = db.rules().insert();
 
@@ -1107,6 +1321,19 @@ class RuleDaoIT {
     assertThat(firstRule.getUpdatedAt()).isEqualTo(r1.getUpdatedAt());
 
     assertThat(secondRule.isExternal()).isTrue();
+  }
+
+  @Test
+  void scrollIndexingRules_excludes_hunter_agent_rules() {
+    Accumulator<RuleForIndexingDto> accumulator = new Accumulator<>();
+    RuleDto normalRule = db.rules().insert();
+    RuleDto hunterRule = db.rules().insert(r -> r.setRepositoryKey("hunter-agent").setIsExternal(true).setIsAdHoc(true));
+
+    underTest.selectIndexingRules(db.getSession(), accumulator);
+
+    assertThat(accumulator.list).extracting(RuleForIndexingDto::getUuid)
+      .contains(normalRule.getUuid())
+      .doesNotContain(hunterRule.getUuid());
   }
 
   @Test

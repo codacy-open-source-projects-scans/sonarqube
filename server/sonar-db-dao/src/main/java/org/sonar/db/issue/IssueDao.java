@@ -33,6 +33,8 @@ import org.sonar.db.Pagination;
 import org.sonar.db.RowNotFoundException;
 import org.sonar.db.component.ComponentDto;
 
+import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkState;
 import static org.sonar.db.DatabaseUtils.executeLargeInputs;
 
 public class IssueDao implements Dao {
@@ -61,6 +63,10 @@ public class IssueDao implements Dao {
     return executeLargeInputs(keys, mapper(session)::selectByKeys);
   }
 
+  public List<IssueDto> selectSourceRedactionIssues(DbSession session, String componentUuid, Collection<String> ruleKeys) {
+    return mapper(session).selectSourceRedactionIssues(componentUuid, ruleKeys);
+  }
+
   public Set<String> selectIssueKeysByComponentUuid(DbSession session, String componentUuid) {
     return mapper(session).selectIssueKeysByComponentUuid(componentUuid);
   }
@@ -83,8 +89,16 @@ public class IssueDao implements Dao {
     return mapper(session).selectComponentUuidsOfOpenIssuesForProjectUuid(projectUuid);
   }
 
-  public List<PrIssueDto> selectOpenByComponentUuids(DbSession dbSession, Collection<String> componentUuids) {
-    return executeLargeInputs(componentUuids, mapper(dbSession)::selectOpenByComponentUuids);
+  public List<IssueWithoutRuleInfoDto> selectNonClosedHunterAgentIssuesByBranchUuid(DbSession session, String branchUuid) {
+    return mapper(session).selectNonClosedHunterAgentIssuesByBranchUuid(branchUuid);
+  }
+
+  public List<IssueWithoutRuleInfoDto> selectClosedHunterAgentIssuesByKeys(DbSession session, String branchUuid, Collection<String> keys) {
+    return executeLargeInputs(keys, chunk -> mapper(session).selectClosedHunterAgentIssuesByKeys(branchUuid, chunk));
+  }
+
+  public List<PrIssueDto> selectOpenScannerIssuesByComponentUuids(DbSession dbSession, Collection<String> componentUuids) {
+    return executeLargeInputs(componentUuids, mapper(dbSession)::selectOpenScannerIssuesByComponentUuids);
   }
 
   public Collection<IssueGroupDto> selectIssueGroupsByComponent(DbSession dbSession, ComponentDto component, long leakPeriodBeginningDate) {
@@ -105,8 +119,82 @@ public class IssueDao implements Dao {
     return mapper(dbSession).scrollIssuesForIndexation(branchUuid, issueKeys);
   }
 
+  /**
+   * Returns one keyset page of (branch uuid, issue key) for Security Hotspot findings (issue_type = 4) for the
+   * Hotspots-to-Issues migration (MMF-5734), ordered by branch then key and starting strictly after
+   * {@code (lastBranchUuid, lastKee)} (pass {@code null}/{@code null} for the first page). Because the caller
+   * re-queries per page instead of holding a cursor, migrating (and committing) findings mid-run never truncates
+   * the remaining ones (SONAR-31061).
+   *
+   * <p>Only findings whose rule has already been converted are returned: one whose rule is still
+   * {@code SECURITY_HOTSPOT} has no target type, so the migrator cannot migrate it yet and it is filtered out in
+   * SQL rather than fetched and discarded. It becomes eligible as soon as its rule is converted.
+   * {@link #countNotConvertedHotspotsForMigration} reports how many those are.</p>
+   *
+   * @param projectUuids   optional project (entity) uuids to scope the migration; null scans all projects. Must not
+   *                       be empty - an empty scope is a caller bug, and treating it as "all projects" would
+   *                       silently migrate the whole instance.
+   * @param lastBranchUuid branch uuid of the last row of the previous page, or null for the first page.
+   * @param lastKee        issue key of the last row of the previous page, or null for the first page.
+   * @param pageSize       maximum number of findings to return.
+   */
+  public List<HotspotMigrationKeyDto> selectHotspotKeysForMigration(DbSession dbSession, @Nullable Collection<String> projectUuids,
+    @Nullable String lastBranchUuid, @Nullable String lastKee, int pageSize) {
+    checkMigrationScope(projectUuids);
+    return mapper(dbSession).selectHotspotKeysForMigration(projectUuids, lastBranchUuid, lastKee, Pagination.forPage(1).andSize(pageSize));
+  }
+
+  /**
+   * Loads the fully-populated {@link HotspotToMigrateDto} (incl. rule target type) for the given issue keys,
+   * ordered by branch then key. Used together with {@link #selectHotspotKeysForMigration}.
+   */
+  public List<HotspotToMigrateDto> selectHotspotsForMigrationByKeys(DbSession dbSession, List<String> keys) {
+    return executeLargeInputs(keys, partition -> mapper(dbSession).selectHotspotsForMigrationByKeys(partition));
+  }
+
+  /**
+   * Counts Security Hotspot findings (issue_type = 4) a run would still migrate, optionally scoped to the given
+   * project (entity) uuids; {@code null} counts all projects. Shares its predicate with
+   * {@link #selectHotspotKeysForMigration}, so it counts exactly what the migrator would pick up - reaching zero
+   * therefore means the scope really is fully migrated. Used by the migration status/verification view.
+   */
+  public int countHotspotsForMigration(DbSession dbSession, @Nullable Collection<String> projectUuids) {
+    checkMigrationScope(projectUuids);
+    return mapper(dbSession).countHotspotsForMigration(projectUuids);
+  }
+
+  /**
+   * Counts Security Hotspot findings not migratable <em>yet</em> because their rule is still
+   * {@code SECURITY_HOTSPOT} - the exact complement of {@link #countHotspotsForMigration} over the same scope.
+   * They are excluded from the remaining count on purpose, since otherwise it could never reach zero; converting
+   * the rule moves them back into it.
+   *
+   * <p>Does not cover findings excluded by the shared {@code project_branches} predicate: those are counted by
+   * neither method. See the {@code countNotConvertedHotspotsForMigration} comment in {@code IssueMapper.xml}.</p>
+   */
+  public int countNotConvertedHotspotsForMigration(DbSession dbSession, @Nullable Collection<String> projectUuids) {
+    checkMigrationScope(projectUuids);
+    return mapper(dbSession).countNotConvertedHotspotsForMigration(projectUuids);
+  }
+
+  private static void checkMigrationScope(@Nullable Collection<String> projectUuids) {
+    checkArgument(projectUuids == null || !projectUuids.isEmpty(),
+      "Project uuids for the hotspots migration must be null (all projects) or non-empty");
+  }
+
   public Cursor<IssueStatsDto> scrollIssuesForIssueStats(DbSession dbSession, @Param("branchUuid") String branchUuid) {
     return mapper(dbSession).scrollIssuesForIssueStats(branchUuid);
+  }
+
+  /**
+   * Returns the non-closed issues of the given branches pre-aggregated by history dimension (type, severity,
+   * status, code scope, rule, effective impact severities), with its issue count. The grouping is done in SQL
+   * so the caller never materializes one object per issue (SONAR-31731).
+   * <p>Branches are queried in batches (DB parameter limits), so the same dimension may appear once per batch:
+   * callers must sum the counts of equal dimensions instead of assuming one row per combination.</p>
+   */
+  public List<IssueCountDimensionDto> selectIssueCountDimensionsForBranches(DbSession dbSession, Collection<String> branchUuids) {
+    return executeLargeInputs(branchUuids, mapper(dbSession)::selectIssueCountDimensionsForBranches);
   }
 
   public AggregatedIssueStatsDto aggregateIssueStatsForBranchUuidAndRuleKey(DbSession dbSession,
@@ -168,12 +256,33 @@ public class IssueDao implements Dao {
     return mapper(session).updateIfBeforeSelectedDate(dto) != 0;
   }
 
+  /**
+   * Updates a Hunter-Agent-owned issue (move, field update, reopen, or close). Since Hunter issues
+   * share the {@code issues} table with scanner issues, the underlying statement is guarded by
+   * {@code producer}, so a malformed or colliding payload can never take ownership of or mutate a
+   * scanner-owned issue.
+   */
+  public void updateHunterAgentIssue(DbSession session, IssueDto dto) {
+    int count = mapper(session).updateHunterAgentIssue(dto);
+    checkState(count == 1,
+      "Hunter Agent issue update affected %s rows for key '%s' (expected 1); issue is missing or not Hunter-produced", count, dto.getKey());
+    updateIssueImpacts(session, dto);
+  }
+
   public List<IssueDto> selectByKeysIfNotUpdatedAt(DbSession session, List<String> keys, long updatedAt) {
     return mapper(session).selectByKeysIfNotUpdatedAt(keys, updatedAt);
   }
 
   public List<IssueCount> countSandboxIssuesPerProject(DbSession dbSession) {
     return mapper(dbSession).countSandboxIssuesPerProject();
+  }
+
+  public List<String> selectBranchUuidsWithSandboxDeferredIssues(DbSession dbSession, long now) {
+    return mapper(dbSession).selectBranchUuidsWithSandboxDeferredIssues(now);
+  }
+
+  public List<String> selectSandboxDeferredIssueKeys(DbSession dbSession, String branchUuid, long now, int limit) {
+    return mapper(dbSession).selectSandboxDeferredIssueKeys(branchUuid, now, Pagination.forPage(1).andSize(limit));
   }
 
   public List<IssueCountByStatusAndResolution> countIssuesByStatusOnMainBranches(DbSession dbSession) {

@@ -19,12 +19,14 @@
  */
 package org.sonar.server.platform.ws;
 
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.sonar.api.server.ws.WebService;
 import org.sonar.api.utils.DateUtils;
 import org.sonar.api.utils.System2;
+import org.sonar.core.documentation.DocumentationLinkGenerator;
 import org.sonar.core.platform.SonarQubeVersion;
 import org.sonar.server.plugins.UpdateCenterMatrixFactory;
 import org.sonar.server.ws.TestResponse;
@@ -56,9 +58,10 @@ class UpgradesActionTest {
   private final UpdateCenter updateCenter = mock(UpdateCenter.class);
   private final Sonar sonar = mock(Sonar.class);
   private final System2 system2 = mock(System2.class);
+  private final DocumentationLinkGenerator documentationLinkGenerator = mock(DocumentationLinkGenerator.class);
 
-  private final ActiveVersionEvaluator activeVersionEvaluator = new ActiveVersionEvaluator(sonarQubeVersion, system2);
-  private final UpgradesAction underTest = new UpgradesAction(updateCenterFactory, activeVersionEvaluator);
+  private final ActiveVersionEvaluator activeVersionEvaluator = new ActiveVersionEvaluator(sonarQubeVersion, system2, new DefaultLicenseSupportTypeReader());
+  private final UpgradesAction underTest = new UpgradesAction(updateCenterFactory, activeVersionEvaluator, documentationLinkGenerator);
 
   private final WsActionTester tester = new WsActionTester(underTest);
 
@@ -106,6 +109,7 @@ class UpgradesActionTest {
     when(updateCenter.getDate()).thenReturn(DateUtils.parseDateTime("2015-04-24T16:08:36+0200"));
     when(sonar.getLtaVersion()).thenReturn(new Release(sonar, Version.create("9.9.4")));
     when(sonar.getPastLtaVersion()).thenReturn(new Release(sonar, Version.create("8.9.10")));
+    when(documentationLinkGenerator.getDocumentationLink(null)).thenReturn("https://docs.sonarsource.com/sonarqube-server/8.9");
   }
 
   @Test
@@ -137,6 +141,38 @@ class UpgradesActionTest {
     TestResponse response = tester.newRequest().execute();
 
     assertJson(response.getInput()).withStrictArrayOrder().isSimilarTo(JSON_EMPTY_UPGRADE_LIST);
+  }
+
+  @Test
+  void upgrade_entry_is_flagged_as_lta_when_its_majorMinor_is_in_ltaVersions() {
+    SonarUpdate sonarUpdate = createSonar_20251_update();
+    when(sonarQubeVersion.get()).thenReturn(parse("8.9.0"));
+    when(sonar.getLtaVersion()).thenReturn(new Release(sonar, Version.create("8.9.2")));
+    when(sonar.getLtaVersions()).thenReturn(List.of(new Release(sonar, Version.create("2025.1"))));
+    when(updateCenter.findSonarUpdates()).thenReturn(List.of(sonarUpdate));
+    when(updateCenter.getSonar().getAllReleases()).thenReturn(getReleases());
+
+    TestResponse response = tester.newRequest().execute();
+
+    assertJson(response.getInput()).withStrictArrayOrder().isSimilarTo("{" +
+      "  \"upgrades\": [{ \"version\": \"2025.1 (build 5498)\", \"lta\": true }]" +
+      "}");
+  }
+
+  @Test
+  void upgrade_entry_is_not_flagged_as_lta_when_its_majorMinor_is_not_in_ltaVersions() {
+    SonarUpdate sonarUpdate = createSonar_20251_update();
+    when(sonarQubeVersion.get()).thenReturn(parse("8.9.0"));
+    when(sonar.getLtaVersion()).thenReturn(new Release(sonar, Version.create("8.9.2")));
+    when(sonar.getLtaVersions()).thenReturn(List.of(new Release(sonar, Version.create("9.9"))));
+    when(updateCenter.findSonarUpdates()).thenReturn(List.of(sonarUpdate));
+    when(updateCenter.getSonar().getAllReleases()).thenReturn(getReleases());
+
+    TestResponse response = tester.newRequest().execute();
+
+    assertJson(response.getInput()).withStrictArrayOrder().isSimilarTo("{" +
+      "  \"upgrades\": [{ \"version\": \"2025.1 (build 5498)\", \"lta\": false }]" +
+      "}");
   }
 
   @Test

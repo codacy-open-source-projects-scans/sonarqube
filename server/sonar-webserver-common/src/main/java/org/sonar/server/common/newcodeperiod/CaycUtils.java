@@ -19,11 +19,15 @@
  */
 package org.sonar.server.common.newcodeperiod;
 
+import javax.annotation.Nullable;
 import org.sonar.db.newcodeperiod.NewCodePeriodType;
 
 public interface CaycUtils {
-  static boolean isNewCodePeriodCompliant(NewCodePeriodType type, String value) {
+  static boolean isNewCodePeriodCompliant(NewCodePeriodType type, @Nullable String value) {
     if (type == NewCodePeriodType.NUMBER_OF_DAYS) {
+      if (value == null) {
+        return false;
+      }
       return parseDays(value) > 0 && parseDays(value) <= 90;
     }
     return true;

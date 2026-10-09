@@ -30,6 +30,7 @@ Important read: [Data Ownership Principles](https://xtranet-sonarsource.atlassia
 | ce_task_input | Analysis Experience Squad |
 | ce_task_message | Analysis Experience Squad |
 | components |  |
+| dashboards | Organization & Reporting Squad |
 | default_qprofiles |  |
 | deprecated_rule_keys |  |
 | duplications_index |  |
@@ -46,9 +47,14 @@ Important read: [Data Ownership Principles](https://xtranet-sonarsource.atlassia
 | internal_component_props |  |
 | internal_properties |  |
 | issue_changes | Analysis Experience Squad |
+| issue_count_dimensions | Organization & Reporting Squad |
+| issue_count_history | Organization & Reporting Squad |
+| issue_ttr_history  | Organization & Reporting Squad |
 | issues | Analysis Experience Squad |
 | issues_fixed | Analysis Experience Squad |
 | issues_impacts | Analysis Experience Squad |
+| measure_history | Organization & Reporting Squad |
+| measure_key_mapping | Organization & Reporting Squad |
 | measures | Analysis Experience Squad |
 | metrics |  |
 | new_code_periods | Dev and Team Workflow Squad |
@@ -60,10 +66,10 @@ Important read: [Data Ownership Principles](https://xtranet-sonarsource.atlassia
 | perm_tpl_characteristics |  |
 | permission_templates |  |
 | plugins |  |
-| portfolio_proj_branches | Enterprise Reporting and Hierarchy Squad |
-| portfolio_projects | Enterprise Reporting and Hierarchy Squad |
-| portfolio_references | Enterprise Reporting and Hierarchy Squad |
-| portfolios | Enterprise Reporting and Hierarchy Squad |
+| portfolio_proj_branches | Organization & Reporting Squad |
+| portfolio_projects | Organization & Reporting Squad |
+| portfolio_references | Organization & Reporting Squad |
+| portfolios | Organization & Reporting Squad |
 | project_alm_settings | Integration Squad |
 | project_badge_token | Dev and Team Workflow Squad |
 | project_branches |  |
@@ -94,16 +100,22 @@ Important read: [Data Ownership Principles](https://xtranet-sonarsource.atlassia
 | rules_parameters |  |
 | rules_profiles | Dev and Team Workflow Squad |
 | saml_message_ids |  |
+| sca_available_fixes | SCA Squad |
 | sca_dependencies | SCA Squad |
+| sca_issue_dimensions | Organization & Reporting Squad |
 | sca_issues | SCA Squad |
 | sca_issues_releases | SCA Squad |
 | sca_releases | SCA Squad |
+| sca_ttr_history | Organization & Reporting Squad |
 | sca_vulnerability_issues | SCA Squad |
 | scanner_analysis_cache |  |
 | schema_migrations |  |
 | scim_groups |  |
 | scim_users |  |
 | scm_accounts |  |
+| security_alert_instances | SCA Squad |
+| security_alert_sca_risks | SCA Squad |
+| security_alerts | SCA Squad |
 | session_tokens | Identity Squad |
 | snapshots | Analysis Experience Squad |
 | user_dismissed_messages | Dev and Team Workflow Squad |

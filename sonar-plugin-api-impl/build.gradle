@@ -18,7 +18,6 @@ dependencies {
 
   testCompileOnly 'com.github.spotbugs:spotbugs-annotations'
 
-  testImplementation 'com.google.guava:guava'
   testImplementation 'com.tngtech.java:junit-dataprovider'
   testImplementation 'junit:junit'
   testImplementation 'org.junit.jupiter:junit-jupiter-api'
@@ -36,13 +35,10 @@ import org.apache.tools.ant.filters.ReplaceTokens
 processResources {
   filter ReplaceTokens, tokens: [
           'project.version': project.version,
-          'versionEOL': project.properties["versionEOL"]
+          'versionEOL': project.properties["versionEOL"],
+          'premiumVersionEOL': project.properties["premiumVersionEOL"],
+          'isLta': project.properties["isLta"]
   ]
-}
-
-// Produce Java 17 bytecode while making sure the code does not use any APIs from Java 21
-tasks.withType(JavaCompile).configureEach {
-  options.release = 17
 }
 
 artifactoryPublish.skip = !deployCommunity

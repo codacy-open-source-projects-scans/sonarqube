@@ -32,7 +32,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
-import org.elasticsearch.cluster.health.ClusterHealthStatus;
+import co.elastic.clients.elasticsearch._types.HealthStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.sonar.api.Startable;
@@ -55,6 +55,7 @@ public class IndexCreator implements Startable {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(IndexCreator.class);
   public static final String INDEX_BLOCKS_READ_ONLY_ALLOW_DELETE = "index.blocks.read_only_allow_delete";
+  private static final ObjectMapper JSON = new ObjectMapper();
 
   private final MetadataIndexDefinition metadataIndexDefinition;
   private final MetadataIndex metadataIndex;
@@ -154,16 +155,22 @@ public class IndexCreator implements Startable {
       builtIndex.getRelationTypes().forEach(relationType -> metadataIndex.setInitialized(relationType, false));
     }
 
+    String settingsJson;
+    try {
+      settingsJson = JSON.writeValueAsString(Map.of("settings", builtIndex.getSettings()));
+    } catch (JsonProcessingException e) {
+      throw new IllegalStateException("Cannot serialize settings for index " + index.getName(), e);
+    }
     CreateIndexResponse indexResponse = client.createIndexV2(cir -> cir
       .index(index.getName())
-      .withJson(new StringReader("{\"settings\":" + builtIndex.getSettings().toString() + "}"))
+      .withJson(new StringReader(settingsJson))
     );
 
     if (!indexResponse.acknowledged()) {
       throw new IllegalStateException("Failed to create index [" + index.getName() + "]");
     }
 
-    client.waitForStatus(ClusterHealthStatus.YELLOW);
+    client.waitForStatusV2(HealthStatus.Yellow);
 
     LOGGER.info("Create mapping {}", builtIndex.getMainType().getIndex().getName());
 
@@ -171,11 +178,9 @@ public class IndexCreator implements Startable {
         try {
           return pmr
             .index(builtIndex.getMainType().getIndex().getName())
-            .withJson(new StringReader(
-              new ObjectMapper().writeValueAsString(builtIndex.getAttributes())
-            ));
+            .withJson(new StringReader(JSON.writeValueAsString(builtIndex.getAttributes())));
         } catch (JsonProcessingException e) {
-          throw new IllegalStateException("Cannot serialize mapping for index" + builtIndex.getMainType().getIndex().getName(), e);
+          throw new IllegalStateException("Cannot serialize mapping for index " + builtIndex.getMainType().getIndex().getName(), e);
         }
       }
     );
@@ -183,7 +188,7 @@ public class IndexCreator implements Startable {
     if (!putMappingResponse.acknowledged()) {
       throw new IllegalStateException("Failed to create mapping " + builtIndex.getMainType().getIndex().getName());
     }
-    client.waitForStatus(ClusterHealthStatus.YELLOW);
+    client.waitForStatusV2(HealthStatus.Yellow);
   }
 
   private void deleteIndex(String indexName) {
@@ -225,7 +230,7 @@ public class IndexCreator implements Startable {
     Set<String> definedNames = definitions.stream()
       .map(t -> t.getMainType().getIndex().getName())
       .collect(Collectors.toSet());
-    return client.getIndexV2("_all").result().keySet()
+    return client.getIndexV2("_all").indices().keySet()
       .stream()
       .filter(definedNames::contains)
       .filter(index -> !DESCRIPTOR.getName().equals(index))

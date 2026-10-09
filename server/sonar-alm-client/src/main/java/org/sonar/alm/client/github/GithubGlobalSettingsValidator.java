@@ -19,6 +19,8 @@
  */
 package org.sonar.alm.client.github;
 
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import javax.annotation.Nullable;
 import org.apache.commons.lang3.StringUtils;
@@ -26,6 +28,7 @@ import org.sonar.api.config.internal.Encryption;
 import org.sonar.api.config.internal.Settings;
 import org.sonar.api.server.ServerSide;
 import org.sonar.auth.github.GithubAppConfiguration;
+import org.sonar.auth.github.GithubAppPermissions;
 import org.sonar.auth.github.GithubApplicationClient;
 import org.sonar.db.alm.setting.AlmSettingDto;
 
@@ -46,7 +49,61 @@ public class GithubGlobalSettingsValidator {
     return validate(almSettingDto.getAppId(), almSettingDto.getClientId(), almSettingDto.getClientSecret(), almSettingDto.getPrivateKey(), almSettingDto.getUrl());
   }
 
+  /**
+   * Same as {@link #validate(AlmSettingDto)}, but checks {@code requiredPermissions} instead of the
+   * default {@code GithubAppPermissions.REQUIRED_PERMISSIONS} — for callers needing a stricter (or
+   * different) check for their specific flow (SONAR-31023).
+   */
+  public GithubAppConfiguration validate(AlmSettingDto almSettingDto, Map<String, String> requiredPermissions) {
+    return validate(almSettingDto.getAppId(), almSettingDto.getClientId(), almSettingDto.getClientSecret(), almSettingDto.getPrivateKey(), almSettingDto.getUrl(),
+      requiredPermissions);
+  }
+
   public GithubAppConfiguration validate(@Nullable String applicationId, @Nullable String clientId, String clientSecret, String privateKey,  @Nullable String url) {
+    return validate(applicationId, clientId, clientSecret, privateKey, url, GithubAppPermissions.REQUIRED_PERMISSIONS);
+  }
+
+  public GithubAppConfiguration validate(@Nullable String applicationId, @Nullable String clientId, String clientSecret, String privateKey, @Nullable String url,
+    Map<String, String> requiredPermissions) {
+    GithubAppConfiguration configuration = buildConfiguration(applicationId, clientId, clientSecret, privateKey, url);
+
+    githubApplicationClient.checkApiEndpoint(configuration);
+    githubApplicationClient.checkAppPermissions(configuration, requiredPermissions);
+
+    return configuration;
+  }
+
+  /**
+   * Same permission check as {@link #validate(AlmSettingDto, Map)}, but returns the list of missing permission keys
+   * (empty when all {@code requiredPermissions} are granted) instead of throwing when some are missing — for callers
+   * that need the structured result (SONAR-31626). Still throws {@link IllegalArgumentException} on invalid
+   * configuration, authentication or connectivity failures.
+   */
+  public List<String> findMissingPermissions(AlmSettingDto almSettingDto, Map<String, String> requiredPermissions) {
+    GithubAppConfiguration configuration = buildConfiguration(almSettingDto.getAppId(), almSettingDto.getClientId(),
+      almSettingDto.getClientSecret(), almSettingDto.getPrivateKey(), almSettingDto.getUrl());
+
+    githubApplicationClient.checkApiEndpoint(configuration);
+    return githubApplicationClient.findMissingAppPermissions(configuration, requiredPermissions);
+  }
+
+  /**
+   * Builds the (decrypted) app configuration and validates the shape of its API endpoint URL, without validating any
+   * permission — for callers that then run their own, narrower permission inspection against that configuration rather
+   * than the app-level check {@link #validate(AlmSettingDto, Map)} performs (SONAR-32166). Nothing here contacts
+   * GitHub, so a well-formed URL for an unreachable host passes.
+   *
+   * @throws IllegalArgumentException if the configuration is incomplete or the URL is not a valid GitHub API endpoint
+   */
+  public GithubAppConfiguration validateApiEndpoint(AlmSettingDto almSettingDto) {
+    GithubAppConfiguration configuration = buildConfiguration(almSettingDto.getAppId(), almSettingDto.getClientId(),
+      almSettingDto.getClientSecret(), almSettingDto.getPrivateKey(), almSettingDto.getUrl());
+    githubApplicationClient.checkApiEndpoint(configuration);
+    return configuration;
+  }
+
+  private GithubAppConfiguration buildConfiguration(@Nullable String applicationId, @Nullable String clientId, String clientSecret, String privateKey,
+    @Nullable String url) {
     long appId;
     try {
       appId = Long.parseLong(Optional.ofNullable(applicationId).orElseThrow(() -> new IllegalArgumentException("Missing appId")));
@@ -59,12 +116,7 @@ public class GithubGlobalSettingsValidator {
     if (isBlank(getDecryptedSettingValue(clientSecret))) {
       throw new IllegalArgumentException("Missing Client Secret");
     }
-    GithubAppConfiguration configuration = new GithubAppConfiguration(appId, getDecryptedSettingValue(privateKey), url);
-
-    githubApplicationClient.checkApiEndpoint(configuration);
-    githubApplicationClient.checkAppPermissions(configuration);
-
-    return configuration;
+    return new GithubAppConfiguration(appId, getDecryptedSettingValue(privateKey), url);
   }
 
   private String getDecryptedSettingValue(String setting) {

@@ -1,3 +1,5 @@
+import org.sonar.build.DbAwareTest
+
 description = 'Code of the Compute Engine task processing project analysis reports'
 
 sonar {
@@ -28,6 +30,7 @@ dependencies {
   api 'com.github.spotbugs:spotbugs-annotations'
   api 'com.google.protobuf:protobuf-java'
   api 'com.googlecode.java-diff-utils:diffutils'
+  api 'org.apache.logging.log4j:log4j-api'
   api 'org.mybatis:mybatis'
   api 'org.sonarsource.api.plugin:sonar-plugin-api'
 
@@ -41,7 +44,9 @@ dependencies {
   api project(':server:sonar-server-common')
   api project(':sonar-plugin-api-impl')
   api project(':sonar-duplications')
-  api 'com.sonarsource.scanner.engine:scanner-engine-protocol-server'
+  api 'org.sonarsource.scanner.engine:scanner-engine-protocol-server'
+  implementation 'org.sonarsource.sonarqube:history-core'
+  implementation 'org.sonarsource.sonarqube:history-server-app'
 
   compileOnlyApi 'com.github.spotbugs:spotbugs-annotations'
 
@@ -70,12 +75,17 @@ dependencies {
 
   testFixturesCompileOnly 'com.github.spotbugs:spotbugs-annotations'
 
+  testRuntimeOnly 'com.h2database:h2'
+  testRuntimeOnly 'com.microsoft.sqlserver:mssql-jdbc'
+  testRuntimeOnly 'com.oracle.database.jdbc:ojdbc11'
   testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine'
   testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
   testRuntimeOnly 'org.junit.vintage:junit-vintage-engine'
+  testRuntimeOnly 'org.postgresql:postgresql'
 }
 
 test {
+  DbAwareTest.configure(it)
   // Enabling the JUnit Platform (see https://github.com/junit-team/junit5-samples/tree/master/junit5-migration-gradle)
   useJUnitPlatform()
 }

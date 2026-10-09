@@ -49,7 +49,7 @@ import static org.sonar.server.email.EmailSmtpConfiguration.EMAIL_CONFIG_SMTP_PA
 import static org.sonar.server.email.EmailSmtpConfiguration.EMAIL_CONFIG_SMTP_PORT;
 import static org.sonar.server.email.EmailSmtpConfiguration.EMAIL_CONFIG_SMTP_SECURE_CONNECTION;
 import static org.sonar.server.email.EmailSmtpConfiguration.EMAIL_CONFIG_SMTP_USERNAME;
-import static org.sonarqube.ws.WsUtils.checkArgument;
+import static org.sonar.server.exceptions.BadRequestException.checkRequest;
 
 @ServerSide
 public class EmailConfigurationService {
@@ -98,7 +98,8 @@ public class EmailConfigurationService {
       setInternalProperty(dbSession, EMAIL_CONFIG_SMTP_OAUTH_CLIENTID, configuration.oauthClientId());
       setInternalProperty(dbSession, EMAIL_CONFIG_SMTP_OAUTH_CLIENTSECRET, configuration.oauthClientSecret());
       setInternalProperty(dbSession, EMAIL_CONFIG_SMTP_OAUTH_TENANT, configuration.oauthTenant());
-      setInternalProperty(dbSession, EMAIL_CONFIG_SMTP_OAUTH_SCOPE, EMAIL_CONFIG_SMTP_OAUTH_SCOPE_DEFAULT);
+      setInternalProperty(dbSession, EMAIL_CONFIG_SMTP_OAUTH_SCOPE,
+        StringUtils.isNotEmpty(configuration.oauthScope()) ? configuration.oauthScope() : EMAIL_CONFIG_SMTP_OAUTH_SCOPE_DEFAULT);
       setInternalProperty(dbSession, EMAIL_CONFIG_SMTP_OAUTH_GRANT, EMAIL_CONFIG_SMTP_OAUTH_GRANT_DEFAULT);
 
       EmailConfiguration createdConfiguration = getConfiguration(UNIQUE_EMAIL_CONFIGURATION_ID, dbSession);
@@ -109,12 +110,18 @@ public class EmailConfigurationService {
 
   private static void throwIfParamsConstraintsAreNotMetForCreation(EmailConfiguration configuration) {
     if (configuration.authMethod().equals(EmailConfigurationAuthMethod.OAUTH)) {
-      checkArgument(StringUtils.isNotEmpty(configuration.oauthAuthenticationHost()), "OAuth authentication host is required.");
-      checkArgument(StringUtils.isNotEmpty(configuration.oauthClientId()), "OAuth client id is required.");
-      checkArgument(StringUtils.isNotEmpty(configuration.oauthClientSecret()), "OAuth client secret is required.");
-      checkArgument(StringUtils.isNotEmpty(configuration.oauthTenant()), "OAuth tenant is required.");
+      throwIfEmpty(configuration.oauthAuthenticationHost(), "OAuth authentication host is required.");
+      throwIfEmpty(configuration.oauthClientId(), "OAuth client id is required.");
+      throwIfEmpty(configuration.oauthClientSecret(), "OAuth client secret is required.");
+      throwIfEmpty(configuration.oauthTenant(), "OAuth tenant is required.");
     } else if (configuration.authMethod().equals(EmailConfigurationAuthMethod.BASIC)) {
-      checkArgument(StringUtils.isNotEmpty(configuration.basicPassword()), "Password is required.");
+      throwIfEmpty(configuration.basicPassword(), "Password is required.");
+    }
+  }
+
+  private static void throwIfEmpty(@Nullable String value, String message) {
+    if (StringUtils.isEmpty(value)) {
+      throw BadRequestException.create(message);
     }
   }
 
@@ -193,6 +200,8 @@ public class EmailConfigurationService {
       setInternalIfDefined(dbSession, EMAIL_CONFIG_SMTP_OAUTH_CLIENTID, updateRequest.oauthClientId());
       setInternalIfDefined(dbSession, EMAIL_CONFIG_SMTP_OAUTH_CLIENTSECRET, updateRequest.oauthClientSecret());
       setInternalIfDefined(dbSession, EMAIL_CONFIG_SMTP_OAUTH_TENANT, updateRequest.oauthTenant());
+      setInternalIfDefined(dbSession, EMAIL_CONFIG_SMTP_OAUTH_SCOPE,
+        updateRequest.oauthScope().map(scope -> StringUtils.isNotEmpty(scope) ? scope : EMAIL_CONFIG_SMTP_OAUTH_SCOPE_DEFAULT));
 
       dbSession.commit();
 
@@ -204,30 +213,30 @@ public class EmailConfigurationService {
     if (isOauthDefinedByExistingConfigOrRequest(existingConfig, request)) {
       // For OAuth config, we make sure that the client secret is provided when the host or authentication host is updated
       if (isRequestParameterDefined(request.host()) || isRequestParameterDefined(request.oauthAuthenticationHost())) {
-        checkArgument(isRequestParameterDefined(request.oauthClientSecret()), "For security reasons, OAuth urls can't be updated without providing the client secret.");
+        checkRequest(isRequestParameterDefined(request.oauthClientSecret()), "For security reasons, OAuth urls can't be updated without providing the client secret.");
       }
     } else {
       // For Basic config, we make sure that the password is provided when the host is updated
       if (isRequestParameterDefined(request.host())) {
-        checkArgument(isRequestParameterDefined(request.basicPassword()), "For security reasons, the host can't be updated without providing the password.");
+        checkRequest(isRequestParameterDefined(request.basicPassword()), "For security reasons, the host can't be updated without providing the password.");
       }
     }
   }
 
   private static void throwIfParamsConstraintsAreNotMetForUpdate(EmailConfiguration existingConfig, UpdateEmailConfigurationRequest updateRequest) {
-    checkArgument(isFieldDefinedByExistingConfigOrRequest(existingConfig.username(), updateRequest.username()),
+    checkRequest(isFieldDefinedByExistingConfigOrRequest(existingConfig.username(), updateRequest.username()),
       "Username is required.");
     if (isOauthDefinedByExistingConfigOrRequest(existingConfig, updateRequest)) {
-      checkArgument(isFieldDefinedByExistingConfigOrRequest(existingConfig.oauthAuthenticationHost(), updateRequest.oauthAuthenticationHost()),
+      checkRequest(isFieldDefinedByExistingConfigOrRequest(existingConfig.oauthAuthenticationHost(), updateRequest.oauthAuthenticationHost()),
         "OAuth authentication host is required.");
-      checkArgument(isFieldDefinedByExistingConfigOrRequest(existingConfig.oauthClientId(), updateRequest.oauthClientId()),
+      checkRequest(isFieldDefinedByExistingConfigOrRequest(existingConfig.oauthClientId(), updateRequest.oauthClientId()),
         "OAuth client id is required.");
-      checkArgument(isFieldDefinedByExistingConfigOrRequest(existingConfig.oauthClientSecret(), updateRequest.oauthClientSecret()),
+      checkRequest(isFieldDefinedByExistingConfigOrRequest(existingConfig.oauthClientSecret(), updateRequest.oauthClientSecret()),
         "OAuth client secret is required.");
-      checkArgument(isFieldDefinedByExistingConfigOrRequest(existingConfig.oauthTenant(), updateRequest.oauthTenant()),
+      checkRequest(isFieldDefinedByExistingConfigOrRequest(existingConfig.oauthTenant(), updateRequest.oauthTenant()),
         "OAuth tenant is required.");
     } else {
-      checkArgument(isFieldDefinedByExistingConfigOrRequest(existingConfig.basicPassword(), updateRequest.basicPassword()),
+      checkRequest(isFieldDefinedByExistingConfigOrRequest(existingConfig.basicPassword(), updateRequest.basicPassword()),
         "Password is required.");
     }
   }

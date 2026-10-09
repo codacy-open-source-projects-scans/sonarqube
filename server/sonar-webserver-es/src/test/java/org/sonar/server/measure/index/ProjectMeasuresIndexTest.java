@@ -28,6 +28,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -68,6 +69,7 @@ import static org.sonar.server.measure.index.ProjectMeasuresIndexDefinition.TYPE
 import static org.sonar.server.measure.index.ProjectMeasuresQuery.Operator;
 import static org.sonarqube.ws.client.project.ProjectsWsParameters.FILTER_QUALIFIER;
 
+@Tag("elasticsearch")
 class ProjectMeasuresIndexTest {
 
   private static final String MAINTAINABILITY_RATING = "sqale_rating";
@@ -95,6 +97,7 @@ class ProjectMeasuresIndexTest {
   private static final String NEW_DUPLICATION = "new_duplicated_lines_density";
   private static final String NCLOC = "ncloc";
   private static final String NEW_LINES = "new_lines";
+  private static final String NEW_NCLOC = "new_ncloc";
   private static final String LANGUAGES = "languages";
 
   private static final ComponentDto PROJECT1 = ComponentTesting.newPrivateProjectDto().setUuid("Project-1").setName("Project 1").setKey("key-1");
@@ -222,7 +225,7 @@ class ProjectMeasuresIndexTest {
     IntStream.rangeClosed(1, 9)
       .forEach(i -> index(newDoc(newPrivateProjectDto("P" + i))));
 
-    SearchIdResult<String> result = underTest.search(new ProjectMeasuresQuery(), new SearchOptions().setPage(2, 3));
+    SearchIdResult<String> result = underTest.searchV2(new ProjectMeasuresQuery(), new SearchOptions().setPage(2, 3));
 
     assertThat(result.getUuids()).containsExactly("P4", "P5", "P6");
     assertThat(result.getTotal()).isEqualTo(9);
@@ -379,7 +382,7 @@ class ProjectMeasuresIndexTest {
       newDoc(SECURITY_HOTSPOTS_REVIEWED, 99),
       newDoc(SECURITY_HOTSPOTS_REVIEWED, 100));
 
-    Facets facets = underTest.search(new ProjectMeasuresQuery(), new SearchOptions().addFacets(SECURITY_HOTSPOTS_REVIEWED)).getFacets();
+    Facets facets = underTest.searchV2(new ProjectMeasuresQuery(), new SearchOptions().addFacets(SECURITY_HOTSPOTS_REVIEWED)).getFacets();
     assertThat(facets.get(SECURITY_HOTSPOTS_REVIEWED)).containsExactly(
       entry("*-30.0", 3L),
       entry("30.0-50.0", 2L),
@@ -416,7 +419,7 @@ class ProjectMeasuresIndexTest {
       newDoc(NEW_SECURITY_HOTSPOTS_REVIEWED, 99),
       newDoc(NEW_SECURITY_HOTSPOTS_REVIEWED, 100));
 
-    Facets facets = underTest.search(new ProjectMeasuresQuery(), new SearchOptions().addFacets(NEW_SECURITY_HOTSPOTS_REVIEWED)).getFacets();
+    Facets facets = underTest.searchV2(new ProjectMeasuresQuery(), new SearchOptions().addFacets(NEW_SECURITY_HOTSPOTS_REVIEWED)).getFacets();
     assertThat(facets.get(NEW_SECURITY_HOTSPOTS_REVIEWED)).containsExactly(
       entry("*-30.0", 3L),
       entry("30.0-50.0", 2L),
@@ -513,7 +516,7 @@ class ProjectMeasuresIndexTest {
       .toArray(ProjectMeasuresDoc[]::new));
 
     ProjectMeasuresQuery query = new ProjectMeasuresQuery();
-    SearchIdResult<String> result = underTest.search(query, new SearchOptions());
+    SearchIdResult<String> result = underTest.searchV2(query, new SearchOptions());
     assertThat(result.getTotal()).isEqualTo(12_000);
   }
 
@@ -572,7 +575,7 @@ class ProjectMeasuresIndexTest {
       newDoc(PROJECT1, NCLOC, 10d, COVERAGE_KEY, 30d, MAINTAINABILITY_RATING, 3d)
         .setQualityGateStatus(OK.name()));
 
-    Facets facets = underTest.search(new ProjectMeasuresQuery(), new SearchOptions()).getFacets();
+    Facets facets = underTest.searchV2(new ProjectMeasuresQuery(), new SearchOptions()).getFacets();
 
     assertThat(facets.getAll()).isEmpty();
   }
@@ -602,7 +605,7 @@ class ProjectMeasuresIndexTest {
       newDoc(NCLOC, 1_000_000d),
       newDoc(NCLOC, 100_000_000_000d));
 
-    Facets facets = underTest.search(new ProjectMeasuresQuery(), new SearchOptions().addFacets(NCLOC)).getFacets();
+    Facets facets = underTest.searchV2(new ProjectMeasuresQuery(), new SearchOptions().addFacets(NCLOC)).getFacets();
 
     assertThat(facets.get(NCLOC)).containsExactly(
       entry("*-1000.0", 3L),
@@ -630,7 +633,7 @@ class ProjectMeasuresIndexTest {
       // 1 docs with ncloc>= 500K
       newDoc(NCLOC, 501_000d, COVERAGE, 81d, DUPLICATION, 20d));
 
-    Facets facets = underTest.search(new ProjectMeasuresQuery()
+    Facets facets = underTest.searchV2(new ProjectMeasuresQuery()
       .addMetricCriterion(MetricCriterion.create(NCLOC, Operator.LT, 10_000d))
       .addMetricCriterion(MetricCriterion.create(DUPLICATION, Operator.LT, 10d)),
       new SearchOptions().addFacets(NCLOC, COVERAGE)).getFacets();
@@ -674,7 +677,7 @@ class ProjectMeasuresIndexTest {
       newDoc(NCLOC, 501_000d));
 
     userSession.logIn(USER1);
-    Facets facets = underTest.search(new ProjectMeasuresQuery(), new SearchOptions().addFacets(NCLOC)).getFacets();
+    Facets facets = underTest.searchV2(new ProjectMeasuresQuery(), new SearchOptions().addFacets(NCLOC)).getFacets();
 
     assertThat(facets.get(NCLOC)).containsExactly(
       entry("*-1000.0", 3L),
@@ -709,7 +712,7 @@ class ProjectMeasuresIndexTest {
       newDoc(NEW_LINES, 1_000_000d),
       newDoc(NEW_LINES, 100_000_000_000d));
 
-    Facets facets = underTest.search(new ProjectMeasuresQuery(), new SearchOptions().addFacets(NEW_LINES)).getFacets();
+    Facets facets = underTest.searchV2(new ProjectMeasuresQuery(), new SearchOptions().addFacets(NEW_LINES)).getFacets();
 
     assertThat(facets.get(NEW_LINES)).containsExactly(
       entry("*-1000.0", 3L),
@@ -717,6 +720,20 @@ class ProjectMeasuresIndexTest {
       entry("10000.0-100000.0", 4L),
       entry("100000.0-500000.0", 2L),
       entry("500000.0-*", 5L));
+  }
+
+  @Test
+  void facet_new_ncloc() {
+    index(newDoc(NEW_NCLOC, 999d), newDoc(NEW_NCLOC, 10_000d));
+
+    Facets facets = underTest.searchV2(new ProjectMeasuresQuery(), new SearchOptions().addFacets(NEW_NCLOC)).getFacets();
+
+    assertThat(facets.get(NEW_NCLOC)).containsExactly(
+      entry("*-1000.0", 1L),
+      entry("1000.0-10000.0", 0L),
+      entry("10000.0-100000.0", 1L),
+      entry("100000.0-500000.0", 0L),
+      entry("500000.0-*", 0L));
   }
 
   @Test
@@ -746,7 +763,7 @@ class ProjectMeasuresIndexTest {
       newDoc(COVERAGE, 90.5d),
       newDoc(COVERAGE, 100d));
 
-    Facets facets = underTest.search(new ProjectMeasuresQuery(), new SearchOptions().addFacets(COVERAGE)).getFacets();
+    Facets facets = underTest.searchV2(new ProjectMeasuresQuery(), new SearchOptions().addFacets(COVERAGE)).getFacets();
 
     assertThat(facets.get(COVERAGE)).containsOnly(
       entry("NO_DATA", 1L),
@@ -779,7 +796,7 @@ class ProjectMeasuresIndexTest {
       newDoc(NCLOC, 499_000d, COVERAGE, 80d, DUPLICATION, 15d),
       newDoc(NCLOC, 501_000d, COVERAGE, 810d, DUPLICATION, 20d));
 
-    Facets facets = underTest.search(new ProjectMeasuresQuery()
+    Facets facets = underTest.searchV2(new ProjectMeasuresQuery()
       .addMetricCriterion(MetricCriterion.create(COVERAGE, Operator.LT, 30d))
       .addMetricCriterion(MetricCriterion.create(DUPLICATION, Operator.LT, 10d)),
       new SearchOptions().addFacets(COVERAGE, NCLOC)).getFacets();
@@ -828,7 +845,7 @@ class ProjectMeasuresIndexTest {
       newDoc(COVERAGE, 80d));
 
     userSession.logIn(USER1);
-    Facets facets = underTest.search(new ProjectMeasuresQuery(), new SearchOptions().addFacets(COVERAGE)).getFacets();
+    Facets facets = underTest.searchV2(new ProjectMeasuresQuery(), new SearchOptions().addFacets(COVERAGE)).getFacets();
 
     assertThat(facets.get(COVERAGE)).containsExactly(
       entry("NO_DATA", 1L),
@@ -866,7 +883,7 @@ class ProjectMeasuresIndexTest {
       newDoc(NEW_COVERAGE, 90.5d),
       newDoc(NEW_COVERAGE, 100d));
 
-    Facets facets = underTest.search(new ProjectMeasuresQuery(), new SearchOptions().addFacets(NEW_COVERAGE)).getFacets();
+    Facets facets = underTest.searchV2(new ProjectMeasuresQuery(), new SearchOptions().addFacets(NEW_COVERAGE)).getFacets();
 
     assertThat(facets.get(NEW_COVERAGE)).containsOnly(
       entry("NO_DATA", 1L),
@@ -904,7 +921,7 @@ class ProjectMeasuresIndexTest {
       newDoc(DUPLICATION, 80d),
       newDoc(DUPLICATION, 100d));
 
-    Facets facets = underTest.search(new ProjectMeasuresQuery(), new SearchOptions().addFacets(DUPLICATION)).getFacets();
+    Facets facets = underTest.searchV2(new ProjectMeasuresQuery(), new SearchOptions().addFacets(DUPLICATION)).getFacets();
 
     assertThat(facets.get(DUPLICATION)).containsOnly(
       entry("NO_DATA", 1L),
@@ -933,7 +950,7 @@ class ProjectMeasuresIndexTest {
       // docs with duplication>= 20%
       newDoc(DUPLICATION, 20d, NCLOC, 1000000d, COVERAGE, 40d));
 
-    Facets facets = underTest.search(new ProjectMeasuresQuery()
+    Facets facets = underTest.searchV2(new ProjectMeasuresQuery()
       .addMetricCriterion(MetricCriterion.create(DUPLICATION, Operator.LT, 10d))
       .addMetricCriterion(MetricCriterion.create(COVERAGE, Operator.LT, 30d)),
       new SearchOptions().addFacets(DUPLICATION, NCLOC)).getFacets();
@@ -982,7 +999,7 @@ class ProjectMeasuresIndexTest {
       newDoc(DUPLICATION, 20d));
 
     userSession.logIn(USER1);
-    Facets facets = underTest.search(new ProjectMeasuresQuery(), new SearchOptions().addFacets(DUPLICATION)).getFacets();
+    Facets facets = underTest.searchV2(new ProjectMeasuresQuery(), new SearchOptions().addFacets(DUPLICATION)).getFacets();
 
     assertThat(facets.get(DUPLICATION)).containsOnly(
       entry("NO_DATA", 1L),
@@ -1021,7 +1038,7 @@ class ProjectMeasuresIndexTest {
       newDoc(NEW_DUPLICATION, 80d),
       newDoc(NEW_DUPLICATION, 100d));
 
-    Facets facets = underTest.search(new ProjectMeasuresQuery(), new SearchOptions().addFacets(NEW_DUPLICATION)).getFacets();
+    Facets facets = underTest.searchV2(new ProjectMeasuresQuery(), new SearchOptions().addFacets(NEW_DUPLICATION)).getFacets();
 
     assertThat(facets.get(NEW_DUPLICATION)).containsExactly(
       entry("NO_DATA", 2L),
@@ -1058,7 +1075,7 @@ class ProjectMeasuresIndexTest {
       newDoc(metricKey, 5d),
       newDoc(metricKey, 5d));
 
-    Facets facets = underTest.search(new ProjectMeasuresQuery(), new SearchOptions().addFacets(metricKey)).getFacets();
+    Facets facets = underTest.searchV2(new ProjectMeasuresQuery(), new SearchOptions().addFacets(metricKey)).getFacets();
 
     assertThat(facets.get(metricKey)).containsExactly(
       entry("1", 3L),
@@ -1091,7 +1108,7 @@ class ProjectMeasuresIndexTest {
       newDoc(metricKey, 5d));
 
 
-    Facets facets = underTest.search(new ProjectMeasuresQuery(), new SearchOptions().addFacets(metricKey)).getFacets();
+    Facets facets = underTest.searchV2(new ProjectMeasuresQuery(), new SearchOptions().addFacets(metricKey)).getFacets();
 
     assertThat(facets.get(metricKey)).containsExactly(
       entry("1", 3L),
@@ -1124,7 +1141,7 @@ class ProjectMeasuresIndexTest {
       newDoc(metricKey, 5d, NCLOC, 700000d, COVERAGE, 50d),
       newDoc(metricKey, 5d, NCLOC, 800000d, COVERAGE, 60d));
 
-    Facets facets = underTest.search(new ProjectMeasuresQuery()
+    Facets facets = underTest.searchV2(new ProjectMeasuresQuery()
       .addMetricCriterion(MetricCriterion.create(metricKey, Operator.LT, 3d))
       .addMetricCriterion(MetricCriterion.create(COVERAGE, Operator.LT, 30d)),
       new SearchOptions().addFacets(metricKey, NCLOC)).getFacets();
@@ -1166,7 +1183,7 @@ class ProjectMeasuresIndexTest {
       // docs with rating E
       newDoc(metricKey, 5d, NCLOC, 120000d, COVERAGE, 0d));
 
-    Facets facets = underTest.search(new ProjectMeasuresQuery()
+    Facets facets = underTest.searchV2(new ProjectMeasuresQuery()
         .addMetricCriterion(MetricCriterion.create(metricKey, Operator.LT, 3d))
         .addMetricCriterion(MetricCriterion.create(COVERAGE, Operator.LT, 30d)),
       new SearchOptions().addFacets(metricKey, NCLOC)).getFacets();
@@ -1210,7 +1227,7 @@ class ProjectMeasuresIndexTest {
       newDoc(metricKey, 5d));
 
     userSession.logIn(USER1);
-    Facets facets = underTest.search(new ProjectMeasuresQuery(), new SearchOptions().addFacets(metricKey)).getFacets();
+    Facets facets = underTest.searchV2(new ProjectMeasuresQuery(), new SearchOptions().addFacets(metricKey)).getFacets();
 
     assertThat(facets.get(metricKey)).containsExactly(
       entry("1", 3L),
@@ -1243,7 +1260,7 @@ class ProjectMeasuresIndexTest {
       newDoc(metricKey, 5d));
 
     userSession.logIn(USER1);
-    Facets facets = underTest.search(new ProjectMeasuresQuery(), new SearchOptions().addFacets(metricKey)).getFacets();
+    Facets facets = underTest.searchV2(new ProjectMeasuresQuery(), new SearchOptions().addFacets(metricKey)).getFacets();
 
     assertThat(facets.get(metricKey)).containsExactly(
       entry("1", 3L),
@@ -1265,7 +1282,7 @@ class ProjectMeasuresIndexTest {
       newDoc().setQualityGateStatus(ERROR.name()),
       newDoc().setQualityGateStatus(ERROR.name()));
 
-    LinkedHashMap<String, Long> result = underTest.search(new ProjectMeasuresQuery(), new SearchOptions().addFacets(ALERT_STATUS_KEY)).getFacets().get(ALERT_STATUS_KEY);
+    LinkedHashMap<String, Long> result = underTest.searchV2(new ProjectMeasuresQuery(), new SearchOptions().addFacets(ALERT_STATUS_KEY)).getFacets().get(ALERT_STATUS_KEY);
 
     assertThat(result).containsOnly(
       entry(ERROR.name(), 4L),
@@ -1284,7 +1301,7 @@ class ProjectMeasuresIndexTest {
       newDoc(NCLOC, 12000d, COVERAGE, 50d).setQualityGateStatus(ERROR.name()),
       newDoc(NCLOC, 13000d, COVERAGE, 60d).setQualityGateStatus(ERROR.name()));
 
-    Facets facets = underTest.search(new ProjectMeasuresQuery()
+    Facets facets = underTest.searchV2(new ProjectMeasuresQuery()
       .setQualityGateStatus(ERROR)
       .addMetricCriterion(MetricCriterion.create(COVERAGE, Operator.LT, 55d)),
       new SearchOptions().addFacets(ALERT_STATUS_KEY, NCLOC)).getFacets();
@@ -1319,7 +1336,7 @@ class ProjectMeasuresIndexTest {
       newDoc().setQualityGateStatus(ERROR.name()));
 
     userSession.logIn(USER1);
-    LinkedHashMap<String, Long> result = underTest.search(new ProjectMeasuresQuery(), new SearchOptions().addFacets(ALERT_STATUS_KEY)).getFacets().get(ALERT_STATUS_KEY);
+    LinkedHashMap<String, Long> result = underTest.searchV2(new ProjectMeasuresQuery(), new SearchOptions().addFacets(ALERT_STATUS_KEY)).getFacets().get(ALERT_STATUS_KEY);
 
     assertThat(result).containsOnly(
       entry(ERROR.name(), 0L),
@@ -1336,7 +1353,7 @@ class ProjectMeasuresIndexTest {
       newDoc().setLanguages(asList("<null>", "java")),
       newDoc().setLanguages(asList("<null>", "java", "xoo")));
 
-    Facets facets = underTest.search(new ProjectMeasuresQuery(), new SearchOptions().addFacets(LANGUAGES)).getFacets();
+    Facets facets = underTest.searchV2(new ProjectMeasuresQuery(), new SearchOptions().addFacets(LANGUAGES)).getFacets();
 
     assertThat(facets.get(LANGUAGES)).containsOnly(
       entry("<null>", 2L),
@@ -1352,7 +1369,7 @@ class ProjectMeasuresIndexTest {
       newDoc().setLanguages(asList("xml", "php", "python", "perl", "ruby")),
       newDoc().setLanguages(asList("js", "scala")));
 
-    Facets facets = underTest.search(new ProjectMeasuresQuery(), new SearchOptions().addFacets(LANGUAGES)).getFacets();
+    Facets facets = underTest.searchV2(new ProjectMeasuresQuery(), new SearchOptions().addFacets(LANGUAGES)).getFacets();
 
     assertThat(facets.get(LANGUAGES)).hasSize(10);
   }
@@ -1367,7 +1384,7 @@ class ProjectMeasuresIndexTest {
       newDoc(NCLOC, 100d).setLanguages(asList("<null>", "java")),
       newDoc(NCLOC, 5000d).setLanguages(asList("<null>", "java", "xoo")));
 
-    Facets facets = underTest.search(
+    Facets facets = underTest.searchV2(
       new ProjectMeasuresQuery().setLanguages(Set.of("java")),
       new SearchOptions().addFacets(LANGUAGES, NCLOC)).getFacets();
 
@@ -1393,7 +1410,7 @@ class ProjectMeasuresIndexTest {
       newDoc().setLanguages(asList("xml", "php", "python", "perl", "ruby")),
       newDoc().setLanguages(asList("js", "scala")));
 
-    Facets facets = underTest.search(new ProjectMeasuresQuery().setLanguages(Set.of("xoo", "xml")),
+    Facets facets = underTest.searchV2(new ProjectMeasuresQuery().setLanguages(Set.of("xoo", "xml")),
       new SearchOptions().addFacets(LANGUAGES)).getFacets();
 
     assertThat(facets.get(LANGUAGES)).containsOnly(
@@ -1424,7 +1441,7 @@ class ProjectMeasuresIndexTest {
       newDoc().setLanguages(asList("java", "xoo")));
 
     userSession.logIn(USER1);
-    LinkedHashMap<String, Long> result = underTest.search(new ProjectMeasuresQuery(), new SearchOptions().addFacets(LANGUAGES)).getFacets().get(LANGUAGES);
+    LinkedHashMap<String, Long> result = underTest.searchV2(new ProjectMeasuresQuery(), new SearchOptions().addFacets(LANGUAGES)).getFacets().get(LANGUAGES);
 
     assertThat(result).containsOnly(
       entry("java", 2L),
@@ -1443,7 +1460,7 @@ class ProjectMeasuresIndexTest {
       newDoc().setQualifier(PROJECT),
       newDoc().setQualifier(PROJECT));
 
-    LinkedHashMap<String, Long> result = underTest.search(new ProjectMeasuresQuery(), new SearchOptions().addFacets(FILTER_QUALIFIER)).getFacets().get(FILTER_QUALIFIER);
+    LinkedHashMap<String, Long> result = underTest.searchV2(new ProjectMeasuresQuery(), new SearchOptions().addFacets(FILTER_QUALIFIER)).getFacets().get(FILTER_QUALIFIER);
 
     assertThat(result).containsOnly(
       entry(APP, 2L),
@@ -1462,7 +1479,7 @@ class ProjectMeasuresIndexTest {
       newDoc(NCLOC, 12000d, COVERAGE, 50d).setQualifier(PROJECT),
       newDoc(NCLOC, 13000d, COVERAGE, 60d).setQualifier(PROJECT));
 
-    Facets facets = underTest.search(new ProjectMeasuresQuery()
+    Facets facets = underTest.searchV2(new ProjectMeasuresQuery()
       .setQualifiers(Sets.newHashSet(PROJECT))
       .addMetricCriterion(MetricCriterion.create(COVERAGE, Operator.LT, 55d)),
       new SearchOptions().addFacets(FILTER_QUALIFIER, NCLOC)).getFacets();
@@ -1498,7 +1515,7 @@ class ProjectMeasuresIndexTest {
       newDoc().setQualifier(PROJECT));
 
     userSession.logIn(USER1);
-    LinkedHashMap<String, Long> result = underTest.search(new ProjectMeasuresQuery(), new SearchOptions().addFacets(FILTER_QUALIFIER)).getFacets().get(FILTER_QUALIFIER);
+    LinkedHashMap<String, Long> result = underTest.searchV2(new ProjectMeasuresQuery(), new SearchOptions().addFacets(FILTER_QUALIFIER)).getFacets().get(FILTER_QUALIFIER);
 
     assertThat(result).containsOnly(
       entry(APP, 2L),
@@ -1515,7 +1532,7 @@ class ProjectMeasuresIndexTest {
       newDoc().setTags(newArrayList("finance", "marketing")),
       newDoc().setTags(newArrayList("finance")));
 
-    Map<String, Long> result = underTest.search(new ProjectMeasuresQuery(), new SearchOptions().addFacets(FIELD_TAGS)).getFacets().get(FIELD_TAGS);
+    Map<String, Long> result = underTest.searchV2(new ProjectMeasuresQuery(), new SearchOptions().addFacets(FIELD_TAGS)).getFacets().get(FIELD_TAGS);
 
     assertThat(result).containsOnly(
       entry("finance", 5L),
@@ -1532,7 +1549,7 @@ class ProjectMeasuresIndexTest {
       newDoc().setTags(newArrayList("finance")).setQualityGateStatus(ERROR.name()),
       newDoc().setTags(newArrayList("cpp")).setQualityGateStatus(ERROR.name()));
 
-    Facets facets = underTest.search(
+    Facets facets = underTest.searchV2(
       new ProjectMeasuresQuery().setTags(newHashSet("cpp")),
       new SearchOptions().addFacets(FIELD_TAGS).addFacets(ALERT_STATUS_KEY))
       .getFacets();
@@ -1552,7 +1569,7 @@ class ProjectMeasuresIndexTest {
       newDoc().setTags(newArrayList("finance1", "finance2", "finance3", "finance4", "finance5", "finance6", "finance7", "finance8", "finance9", "finance10")),
       newDoc().setTags(newArrayList("solo")));
 
-    Map<String, Long> result = underTest.search(new ProjectMeasuresQuery(), new SearchOptions().addFacets(FIELD_TAGS)).getFacets().get(FIELD_TAGS);
+    Map<String, Long> result = underTest.searchV2(new ProjectMeasuresQuery(), new SearchOptions().addFacets(FIELD_TAGS)).getFacets().get(FIELD_TAGS);
 
     assertThat(result).hasSize(10).containsOnlyKeys("finance1", "finance2", "finance3", "finance4", "finance5", "finance6", "finance7", "finance8", "finance9", "finance10");
   }
@@ -1564,7 +1581,7 @@ class ProjectMeasuresIndexTest {
       newDoc().setTags(newArrayList("finance1", "finance2", "finance3", "finance4", "finance5", "finance6", "finance7", "finance8", "finance9", "finance10")),
       newDoc().setTags(newArrayList("solo", "solo2")));
 
-    Map<String, Long> result = underTest.search(new ProjectMeasuresQuery().setTags(Set.of("solo", "solo2")),
+    Map<String, Long> result = underTest.searchV2(new ProjectMeasuresQuery().setTags(Set.of("solo", "solo2")),
         new SearchOptions().addFacets(FIELD_TAGS)).getFacets()
       .get(FIELD_TAGS);
 
@@ -1582,7 +1599,7 @@ class ProjectMeasuresIndexTest {
       newDoc().setTags(newArrayList("finance", "offshore")),
       newDoc().setTags(newArrayList("offshore")));
 
-    List<String> result = underTest.searchTags("off", 1, 10);
+    List<String> result = underTest.searchTagsV2("off", 1, 10);
 
     assertThat(result).containsOnly("offshore", "official", "Madhoff");
   }
@@ -1597,7 +1614,7 @@ class ProjectMeasuresIndexTest {
       newDoc().setTags(newArrayList("finance", "offshore")),
       newDoc().setTags(newArrayList("offshore")));
 
-    List<String> result = underTest.searchTags(null, 1, 10);
+    List<String> result = underTest.searchTagsV2(null, 1, 10);
 
     assertThat(result).containsOnly("offshore", "official", "Madhoff", "finance", "marketing", "java", "javascript");
   }
@@ -1612,7 +1629,7 @@ class ProjectMeasuresIndexTest {
       newDoc().setTags(newArrayList("finance", "offshore")),
       newDoc().setTags(newArrayList("offshore")));
 
-    List<String> result = underTest.searchTags(null, 1, 10);
+    List<String> result = underTest.searchTagsV2(null, 1, 10);
 
     assertThat(result).containsExactly("Madhoff", "finance", "java", "javascript", "marketing", "official", "offshore");
   }
@@ -1627,16 +1644,16 @@ class ProjectMeasuresIndexTest {
       newDoc().setTags(newArrayList("finance", "offshore")),
       newDoc().setTags(newArrayList("offshore")));
 
-    List<String> result = underTest.searchTags(null, 1, 3);
+    List<String> result = underTest.searchTagsV2(null, 1, 3);
     assertThat(result).containsExactly("Madhoff", "finance", "java");
 
-    result = underTest.searchTags(null, 2, 3);
+    result = underTest.searchTagsV2(null, 2, 3);
     assertThat(result).containsExactly("javascript", "marketing", "official");
 
-    result = underTest.searchTags(null, 3, 3);
+    result = underTest.searchTagsV2(null, 3, 3);
     assertThat(result).containsExactly("offshore");
 
-    result = underTest.searchTags(null, 3, 4);
+    result = underTest.searchTagsV2(null, 3, 4);
     assertThat(result).isEmpty();
   }
 
@@ -1650,7 +1667,7 @@ class ProjectMeasuresIndexTest {
       newDoc().setTags(newArrayList("finance", "offshore")),
       newDoc().setTags(newArrayList("offshore")));
 
-    List<String> result = underTest.searchTags(null, 10, 2);
+    List<String> result = underTest.searchTagsV2(null, 10, 2);
 
     assertThat(result).isEmpty();
   }
@@ -1665,14 +1682,14 @@ class ProjectMeasuresIndexTest {
 
     userSession.logIn(USER1);
 
-    List<String> result = underTest.searchTags(null, 1, 10);
+    List<String> result = underTest.searchTagsV2(null, 1, 10);
 
     assertThat(result).containsOnly("finance", "marketing");
   }
 
   @Test
   void search_tags_with_no_tags() {
-    List<String> result = underTest.searchTags("whatever", 1, 10);
+    List<String> result = underTest.searchTagsV2("whatever", 1, 10);
 
     assertThat(result).isEmpty();
   }
@@ -1681,7 +1698,7 @@ class ProjectMeasuresIndexTest {
   void search_tags_with_page_size_at_0() {
     index(newDoc().setTags(newArrayList("offshore")));
 
-    List<String> result = underTest.searchTags(null, 1, 0);
+    List<String> result = underTest.searchTagsV2(null, 1, 0);
 
     assertThat(result).isEmpty();
   }
@@ -1696,7 +1713,7 @@ class ProjectMeasuresIndexTest {
         .setLanguages(Arrays.asList("java", "python", "kotlin"))
         .setNclocLanguageDistributionFromMap(Map.of("java", 300, "python", 100, "kotlin", 404)));
 
-    ProjectMeasuresStatistics result = underTest.searchSupportStatistics();
+    ProjectMeasuresStatistics result = underTest.searchSupportStatisticsV2();
 
     assertThat(result.getProjectCount()).isEqualTo(2);
     assertThat(result.getProjectNotAnalyzedCount()).isEqualTo(2);
@@ -1719,7 +1736,7 @@ class ProjectMeasuresIndexTest {
 
     es.putDocuments(TYPE_PROJECT_MEASURES, documents);
 
-    ProjectMeasuresStatistics result = underTest.searchSupportStatistics();
+    ProjectMeasuresStatistics result = underTest.searchSupportStatisticsV2();
 
     assertThat(result.getProjectCount()).isEqualTo(nbProjects);
     assertThat(result.getProjectCountByLanguage())
@@ -1754,7 +1771,7 @@ class ProjectMeasuresIndexTest {
         .setLanguages(Arrays.asList("java", "python", "kotlin"))
         .setNclocLanguageDistributionFromMap(Map.of("java", 300, "python", 100, "kotlin", 404)));
 
-    ProjectMeasuresStatistics result = underTest.searchSupportStatistics();
+    ProjectMeasuresStatistics result = underTest.searchSupportStatisticsV2();
 
     assertThat(result.getProjectCount()).isEqualTo(2);
     assertThat(result.getProjectCountByLanguage()).containsOnly(
@@ -1774,7 +1791,7 @@ class ProjectMeasuresIndexTest {
         .setLanguages(Arrays.asList("java", "python", "kotlin"))
         .setNclocLanguageDistributionFromMap(Map.of("java", 300, "python", 100, "kotlin", 404)));
 
-    ProjectMeasuresStatistics result = underTest.searchSupportStatistics();
+    ProjectMeasuresStatistics result = underTest.searchSupportStatisticsV2();
 
     assertThat(result.getProjectCount()).isZero();
     assertThat(result.getProjectCountByLanguage()).isEmpty();
@@ -1791,7 +1808,7 @@ class ProjectMeasuresIndexTest {
       // No analysedAt set - project not analyzed
     );
 
-    ProjectMeasuresStatistics result = underTest.searchSupportStatistics();
+    ProjectMeasuresStatistics result = underTest.searchSupportStatisticsV2();
 
     assertThat(result.getProjectCount()).isEqualTo(2);
     assertThat(result.getProjectNotAnalyzedCount()).isEqualTo(1);
@@ -1808,7 +1825,7 @@ class ProjectMeasuresIndexTest {
         .setAnalysedAt(new Date(2_000_000L))
     );
 
-    ProjectMeasuresStatistics result = underTest.searchSupportStatistics();
+    ProjectMeasuresStatistics result = underTest.searchSupportStatisticsV2();
 
     assertThat(result.getProjectCount()).isEqualTo(2);
     assertThat(result.getProjectNotAnalyzedCount()).isZero();
@@ -1821,7 +1838,7 @@ class ProjectMeasuresIndexTest {
         .setLanguages(Arrays.asList("java"))
     );
 
-    ProjectMeasuresStatistics result = underTest.searchSupportStatistics();
+    ProjectMeasuresStatistics result = underTest.searchSupportStatisticsV2();
 
     assertThat(result.getProjectCount()).isZero();
     assertThat(result.getProjectNotAnalyzedCount()).isZero();
@@ -1829,14 +1846,14 @@ class ProjectMeasuresIndexTest {
 
   @Test
   void fail_if_page_size_greater_than_100() {
-    assertThatThrownBy(() -> underTest.searchTags("whatever", 1, 101))
+    assertThatThrownBy(() -> underTest.searchTagsV2("whatever", 1, 101))
       .isInstanceOf(IllegalArgumentException.class)
       .hasMessageContaining("Page size must be lower than or equals to 100");
   }
 
   @Test
   void fail_if_page_greater_than_20() {
-    assertThatThrownBy(() -> underTest.searchTags("whatever", 21, 100))
+    assertThatThrownBy(() -> underTest.searchTagsV2("whatever", 21, 100))
       .isInstanceOf(IllegalArgumentException.class)
       .hasMessageContaining("Page must be between 0 and 20");
   }
@@ -1901,7 +1918,7 @@ class ProjectMeasuresIndexTest {
   }
 
   private void assertResults(ProjectMeasuresQuery query, ComponentDto... expectedProjects) {
-    List<String> result = underTest.search(query, new SearchOptions()).getUuids();
+    List<String> result = underTest.searchV2(query, new SearchOptions()).getUuids();
     assertThat(result).containsExactly(Arrays.stream(expectedProjects).map(ComponentDto::uuid).toArray(String[]::new));
   }
 

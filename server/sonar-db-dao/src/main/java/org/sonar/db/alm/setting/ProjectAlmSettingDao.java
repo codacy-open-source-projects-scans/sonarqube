@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
+import javax.annotation.Nullable;
 import org.sonar.api.utils.System2;
 import org.sonar.core.util.UuidFactory;
 import org.sonar.db.Dao;
@@ -31,6 +32,7 @@ import org.sonar.db.DbSession;
 import org.sonar.db.Pagination;
 import org.sonar.db.audit.AuditPersister;
 import org.sonar.db.audit.model.DevOpsPlatformSettingNewValue;
+import org.sonar.db.permission.ProjectPermission;
 import org.sonar.db.project.ProjectDto;
 
 import static org.sonar.db.DatabaseUtils.executeLargeInputs;
@@ -87,12 +89,12 @@ public class ProjectAlmSettingDao implements Dao {
     return getMapper(dbSession).countByAlmSettingUuid(almSetting.getUuid());
   }
 
-  public int countProjectAlmSettings(DbSession dbSession, ProjectAlmSettingQuery query) {
-    return getMapper(dbSession).countByQuery(query);
+  public int countProjectAlmSettings(DbSession dbSession, ProjectAlmSettingQuery query, String userUuid) {
+    return getMapper(dbSession).countByQuery(query, userUuid, ProjectPermission.USER.getKey());
   }
 
-  public List<ProjectAlmSettingDto> selectProjectAlmSettings(DbSession dbSession, ProjectAlmSettingQuery query, int page, int pageSize) {
-    return getMapper(dbSession).selectByQuery(query, Pagination.forPage(page).andSize(pageSize));
+  public List<ProjectAlmSettingDto> selectProjectAlmSettings(DbSession dbSession, ProjectAlmSettingQuery query, String userUuid, int page, int pageSize) {
+    return getMapper(dbSession).selectByQuery(query, Pagination.forPage(page).andSize(pageSize), userUuid, ProjectPermission.USER.getKey());
   }
 
   public Optional<ProjectAlmSettingDto> selectByUuid(DbSession dbSession, String uuid) {
@@ -132,5 +134,25 @@ public class ProjectAlmSettingDao implements Dao {
 
   public List<ProjectAlmKeyAndProject> selectAlmTypeAndUrlByProject(DbSession dbSession) {
     return getMapper(dbSession).selectAlmTypeAndUrlByProject();
+  }
+
+
+  public List<ProjectAlmSettingDto> selectByUrl(DbSession dbSession, String url) {
+    return getMapper(dbSession).selectByUrl(url);
+  }
+
+  public List<ProjectAlmSettingDto> selectByAlmSettingAndRepoIds(DbSession dbSession, AlmSettingDto almSettingDto, Set<String> repoIds) {
+    return executeLargeInputs(repoIds, ids -> getMapper(dbSession).selectByAlmSettingAndRepoIds(almSettingDto.getUuid(), ids));
+  }
+
+  /**
+   * Narrow partial update used to lazily backfill {@code url}/{@code repoId} for bindings created before these
+   * columns existed. Deliberately bypasses {@link #insertOrUpdate}: that method blanket-updates every column
+   * (risking clobbering {@code almRepo}/{@code almSlug}/{@code summaryCommentEnabled}/{@code monorepo}) and always
+   * writes an audit entry attributed to whichever user session is active — wrong here, since this is a
+   * system-triggered side effect of a read, not an admin action.
+   */
+  public void updateUrlAndRepoId(DbSession dbSession, String uuid, @Nullable String url, @Nullable String repoId) {
+    getMapper(dbSession).updateUrlAndRepoId(uuid, url, repoId, system2.now());
   }
 }

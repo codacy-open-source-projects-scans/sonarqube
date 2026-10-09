@@ -77,6 +77,7 @@ public class ProcessProperties {
     LOG_LEVEL_WEB("sonar.log.level.web"),
     LOG_LEVEL_CE("sonar.log.level.ce"),
     LOG_LEVEL_ES("sonar.log.level.es"),
+    LOG_LEVEL_UNIFIED("sonar.log.level.unified"),
     LOG_ROLLING_POLICY("sonar.log.rollingPolicy"),
     LOG_MAX_FILES("sonar.log.maxFiles"),
     LOG_CONSOLE("sonar.log.console"),
@@ -92,7 +93,7 @@ public class ProcessProperties {
     SONAR_ES_BOOTSTRAP_CHECKS_DISABLE("sonar.es.bootstrap.checks.disable"),
 
     WEB_HOST("sonar.web.host"),
-    WEB_JAVA_OPTS("sonar.web.javaOpts", "-Xmx512m -Xms128m -XX:+HeapDumpOnOutOfMemoryError"),
+    WEB_JAVA_OPTS("sonar.web.javaOpts", "-Xmx1G -Xms128m -XX:+HeapDumpOnOutOfMemoryError"),
     WEB_JAVA_ADDITIONAL_OPTS("sonar.web.javaAdditionalOpts", ""),
     WEB_CONTEXT("sonar.web.context"),
     WEB_PORT("sonar.web.port"),
@@ -101,6 +102,7 @@ public class ProcessProperties {
     WEB_HTTP_MAX_THREADS("sonar.web.http.maxThreads"),
     WEB_HTTP_ACCEPT_COUNT("sonar.web.http.acceptCount"),
     WEB_HTTP_KEEP_ALIVE_TIMEOUT("sonar.web.http.keepAliveTimeout"),
+    WEB_HTTP_MAX_POST_SIZE("sonar.web.http.maxPostSize"),
     // The  time a user can remain idle (no activity) before the session ends.
     WEB_INACTIVE_SESSION_TIMEOUT_IN_MIN("sonar.web.sessionTimeoutInMinutes"),
     // The time a user can remain logged in, regardless of activity
@@ -108,8 +110,11 @@ public class ProcessProperties {
     WEB_SYSTEM_PASS_CODE("sonar.web.systemPasscode"),
     WEB_ACCESSLOGS_ENABLE("sonar.web.accessLogs.enable"),
     WEB_ACCESSLOGS_PATTERN("sonar.web.accessLogs.pattern"),
+    WEB_ACCESSLOGS_TARGET("sonar.web.accessLogs.target", "file"),
 
-    CE_JAVA_OPTS("sonar.ce.javaOpts", "-Xmx512m -Xms128m -XX:+HeapDumpOnOutOfMemoryError"),
+    PERFORMANCE_MONITORING_ENABLED("sonar.performanceMonitoring.enabled", Boolean.FALSE.toString()),
+
+    CE_JAVA_OPTS("sonar.ce.javaOpts", "-Xmx1536m -Xms128m -XX:+HeapDumpOnOutOfMemoryError"),
     CE_JAVA_ADDITIONAL_OPTS("sonar.ce.javaAdditionalOpts", ""),
     CE_GRACEFUL_STOP_TIMEOUT("sonar.ce.gracefulStopTimeOutInMs", "" + 6 * 60 * 60 * 1_000L),
 
@@ -191,7 +196,9 @@ public class ProcessProperties {
      */
     ENABLE_STOP_COMMAND("sonar.enableStopCommand"),
 
-    AUTO_DATABASE_UPGRADE("sonar.autoDatabaseUpgrade", DEFAULT_FALSE);
+    AUTO_DATABASE_UPGRADE("sonar.autoDatabaseUpgrade", DEFAULT_FALSE),
+
+    DEPRECATION_LOGS_LOGIN_ENABLED("sonar.deprecationLogs.loginEnabled", DEFAULT_FALSE);
 
     /**
      * Properties that are defined for each LDAP server from the `ldap.servers` property

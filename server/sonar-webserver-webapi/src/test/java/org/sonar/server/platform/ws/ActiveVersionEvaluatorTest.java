@@ -19,8 +19,14 @@
  */
 package org.sonar.server.platform.ws;
 
-import java.util.Calendar;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.Month;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.Collections;
+import java.util.Date;
+import java.util.List;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import org.junit.jupiter.api.BeforeEach;
@@ -46,7 +52,7 @@ class ActiveVersionEvaluatorTest {
   private final UpdateCenter updateCenter = mock(UpdateCenter.class);
   private static final Sonar sonar = mock(Sonar.class);
   private final System2 system2 = mock(System2.class);
-  private final ActiveVersionEvaluator underTest = new ActiveVersionEvaluator(sonarQubeVersion, system2);
+  private final ActiveVersionEvaluator underTest = new ActiveVersionEvaluator(sonarQubeVersion, system2, new DefaultLicenseSupportTypeReader());
 
   @BeforeEach
   void setup() {
@@ -65,14 +71,146 @@ class ActiveVersionEvaluatorTest {
   }
 
   @Test
+  void evaluateIfActiveVersion_whenInstalledVersionIsLtaLineWithFutureEolDate_shouldReturnActive() {
+    when(sonarQubeVersion.get()).thenReturn(parse("2026.1"));
+    when(system2.now()).thenReturn(LocalDate.of(2027, Month.JANUARY, 1).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli());
+    Release installedLtaRelease = ltaReleaseWithEolDate("2026.1", LocalDate.of(2027, Month.JULY, 27));
+    Release newerLtaRelease = ltaReleaseWithEolDate("2026.5", LocalDate.of(2028, Month.JANUARY, 1));
+    when(sonar.getLtaVersions()).thenReturn(List.of(installedLtaRelease, newerLtaRelease));
+
+    assertThat(underTest.evaluateIfActiveVersion(updateCenter)).isTrue();
+  }
+
+  @Test
+  void evaluateIfActiveVersion_whenInstalledVersionIsLtaLineWithEolDateExactlyToday_shouldReturnActive() {
+    when(sonarQubeVersion.get()).thenReturn(parse("2026.1"));
+    // noon, not midnight: the whole eolDate day must stay active regardless of the current time-of-day
+    Instant laterOnEolDate = LocalDate.of(2027, Month.JULY, 27).atTime(12, 0).atZone(ZoneId.systemDefault()).toInstant();
+    when(system2.now()).thenReturn(laterOnEolDate.toEpochMilli());
+    when(sonar.getLtaVersions()).thenReturn(List.of(ltaReleaseWithEolDate("2026.1", LocalDate.of(2027, Month.JULY, 27))));
+
+    assertThat(underTest.evaluateIfActiveVersion(updateCenter)).isTrue();
+  }
+
+  @Test
+  void evaluateIfActiveVersion_whenInstalledVersionIsLtaLineWithPastEolDate_shouldReturnNotActive() {
+    when(sonarQubeVersion.get()).thenReturn(parse("2026.1"));
+    when(system2.now()).thenReturn(LocalDate.of(2027, Month.AUGUST, 1).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli());
+    when(sonar.getLtaVersions()).thenReturn(List.of(ltaReleaseWithEolDate("2026.1", LocalDate.of(2027, Month.JULY, 27))));
+
+    assertThat(underTest.evaluateIfActiveVersion(updateCenter)).isFalse();
+  }
+
+  @Test
+  void evaluateIfActiveVersion_whenInstalledVersionIsSecondOldestOfThreeLtaLinesButNotYetEol_shouldReturnActive() {
+    // reproduces the SONAR-30922 bug scenario: with 3 concurrently supported LTAs, the middle one must stay
+    // active based on its own eolDate, independently of the newest LTA's release date.
+    when(sonarQubeVersion.get()).thenReturn(parse("2026.1"));
+    when(system2.now()).thenReturn(LocalDate.of(2027, Month.MARCH, 1).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli());
+    Release oldestLtaRelease = ltaReleaseWithEolDate("2025.4", LocalDate.of(2026, Month.JULY, 1));
+    Release installedLtaRelease = ltaReleaseWithEolDate("2026.1", LocalDate.of(2027, Month.JULY, 27));
+    Release newestLtaRelease = ltaReleaseWithEolDate("2026.5", LocalDate.of(2028, Month.JANUARY, 1));
+    when(sonar.getLtaVersions()).thenReturn(List.of(oldestLtaRelease, installedLtaRelease, newestLtaRelease));
+
+    assertThat(underTest.evaluateIfActiveVersion(updateCenter)).isTrue();
+  }
+
+  @Test
+  void evaluateIfActiveVersion_whenInstalledVersionMatchesLtaLineWithoutEolDateYet_shouldFallBackToLegacySixMonthLogic() {
+    Date fiveMonthsAgo = Date.from(LocalDate.of(2024, Month.JANUARY, 1).minusMonths(5).atStartOfDay(ZoneOffset.UTC).toInstant());
+    when(system2.now()).thenReturn(LocalDate.of(2024, Month.JANUARY, 1).atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli());
+    when(sonarQubeVersion.get()).thenReturn(parse("8.9.5"));
+    // an ltaVersions entry exists for the installed line, but has no eolDate yet (e.g. an update-center.properties
+    // file mid-rollout) - the legacy relative algorithm must still apply, exactly as if the entry weren't there.
+    when(sonar.getLtaVersions()).thenReturn(List.of(new Release(sonar, Version.create("8.9"))));
+    SortedSet<Release> releases = getReleases();
+    releases.stream().filter(r -> r.getVersion().equals(Version.create("9.9"))).findFirst().get().setDate(fiveMonthsAgo);
+    when(sonar.getAllReleases(any())).thenReturn(releases);
+
+    assertThat(underTest.evaluateIfActiveVersion(updateCenter)).isTrue();
+  }
+
+  private static Release ltaReleaseWithEolDate(String version, LocalDate eolDate) {
+    return new Release(sonar, Version.create(version)).setEolDate(Date.from(eolDate.atStartOfDay(ZoneId.systemDefault()).toInstant()));
+  }
+
+  private static Release ltaReleaseWithBothEolDates(String version, LocalDate eolDate, LocalDate premiumEolDate) {
+    return new Release(sonar, Version.create(version))
+      .setEolDate(Date.from(eolDate.atStartOfDay(ZoneId.systemDefault()).toInstant()))
+      .setPremiumEolDate(Date.from(premiumEolDate.atStartOfDay(ZoneId.systemDefault()).toInstant()));
+  }
+
+  @Test
+  void evaluateIfActiveVersion_whenStandardCustomerAndEolDateNotPassed_shouldReturnActive() {
+    ActiveVersionEvaluator standardEvaluator = new ActiveVersionEvaluator(sonarQubeVersion, system2, () -> null);
+    when(sonarQubeVersion.get()).thenReturn(parse("2026.1"));
+    when(system2.now()).thenReturn(LocalDate.of(2026, Month.DECEMBER, 1).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli());
+    when(sonar.getLtaVersions()).thenReturn(List.of(
+      ltaReleaseWithBothEolDates("2026.1", LocalDate.of(2027, Month.JANUARY, 27), LocalDate.of(2027, Month.AUGUST, 1))));
+
+    // standard customer (isPremiumSupport=false) uses standard eolDate — still active in Dec 2026
+    assertThat(standardEvaluator.evaluateIfActiveVersion(updateCenter)).isTrue();
+  }
+
+  @Test
+  void evaluateIfActiveVersion_whenPremiumCustomerAndPremiumEolDateNotPassed_shouldReturnActive() {
+    ActiveVersionEvaluator premiumEvaluator = new ActiveVersionEvaluator(sonarQubeVersion, system2, () -> SupportType.PREMIUM);
+    when(sonarQubeVersion.get()).thenReturn(parse("2026.1"));
+    // Feb 2027: standard eolDate (2027-01-27) has passed but premiumEolDate (2027-08-01) has not
+    when(system2.now()).thenReturn(LocalDate.of(2027, Month.FEBRUARY, 1).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli());
+    when(sonar.getLtaVersions()).thenReturn(List.of(
+      ltaReleaseWithBothEolDates("2026.1", LocalDate.of(2027, Month.JANUARY, 27), LocalDate.of(2027, Month.AUGUST, 1))));
+
+    // premium customer uses premiumEolDate — still active in Feb 2027
+    assertThat(premiumEvaluator.evaluateIfActiveVersion(updateCenter)).isTrue();
+  }
+
+  @Test
+  void evaluateIfActiveVersion_whenStandardCustomerAndEolDatePassed_shouldReturnNotActive() {
+    ActiveVersionEvaluator standardEvaluator = new ActiveVersionEvaluator(sonarQubeVersion, system2, () -> null);
+    when(sonarQubeVersion.get()).thenReturn(parse("2026.1"));
+    // Feb 2027: standard eolDate has passed
+    when(system2.now()).thenReturn(LocalDate.of(2027, Month.FEBRUARY, 1).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli());
+    when(sonar.getLtaVersions()).thenReturn(List.of(
+      ltaReleaseWithBothEolDates("2026.1", LocalDate.of(2027, Month.JANUARY, 27), LocalDate.of(2027, Month.AUGUST, 1))));
+
+    // standard customer uses eolDate — inactive in Feb 2027 (past 2027-01-27)
+    assertThat(standardEvaluator.evaluateIfActiveVersion(updateCenter)).isFalse();
+  }
+
+  @Test
+  void evaluateIfActiveVersion_whenPremiumCustomerAndPremiumEolDatePassed_shouldReturnNotActive() {
+    ActiveVersionEvaluator premiumEvaluator = new ActiveVersionEvaluator(sonarQubeVersion, system2, () -> SupportType.PREMIUM);
+    when(sonarQubeVersion.get()).thenReturn(parse("2026.1"));
+    when(system2.now()).thenReturn(LocalDate.of(2027, Month.SEPTEMBER, 1).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli());
+    when(sonar.getLtaVersions()).thenReturn(List.of(
+      ltaReleaseWithBothEolDates("2026.1", LocalDate.of(2027, Month.JANUARY, 27), LocalDate.of(2027, Month.AUGUST, 1))));
+
+    // premium customer uses premiumEolDate — inactive in Sep 2027 (past 2027-08-01)
+    assertThat(premiumEvaluator.evaluateIfActiveVersion(updateCenter)).isFalse();
+  }
+
+  @Test
+  void evaluateIfActiveVersion_whenPremiumCustomerButNoPremiumEolDate_shouldFallBackToStandardEolDate() {
+    ActiveVersionEvaluator premiumEvaluator = new ActiveVersionEvaluator(sonarQubeVersion, system2, () -> SupportType.PREMIUM);
+    when(sonarQubeVersion.get()).thenReturn(parse("2026.1"));
+    when(system2.now()).thenReturn(LocalDate.of(2026, Month.DECEMBER, 1).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli());
+    when(sonar.getLtaVersions()).thenReturn(List.of(
+      ltaReleaseWithEolDate("2026.1", LocalDate.of(2027, Month.JANUARY, 27))));
+
+    // premium flag is true but no premiumEolDate set — falls back to eolDate, still active in Dec 2026
+    assertThat(premiumEvaluator.evaluateIfActiveVersion(updateCenter)).isTrue();
+  }
+
+  @Test
   void evaluateIfActiveVersion_whenInstalledVersionIsPastLtaAndWithinSixMonthFromLta_shouldReturnVersionIsActive() {
-    Calendar calendar = Calendar.getInstance();
-    calendar.add(Calendar.MONTH, -5);
-    calendar.set(Calendar.DAY_OF_MONTH, 1);
+    Date fiveMonthsAgo = Date.from(LocalDate.of(2024, Month.JANUARY, 1).minusMonths(5).atStartOfDay(ZoneOffset.UTC).toInstant());
+
+    when(system2.now()).thenReturn(LocalDate.of(2024, Month.JANUARY, 1).atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli());
 
     when(sonarQubeVersion.get()).thenReturn(parse("8.9.5"));
     SortedSet<Release> releases = getReleases();
-    releases.stream().filter(r -> r.getVersion().equals(Version.create("9.9"))).findFirst().get().setDate(calendar.getTime());
+    releases.stream().filter(r -> r.getVersion().equals(Version.create("9.9"))).findFirst().get().setDate(fiveMonthsAgo);
     when(sonar.getAllReleases(any())).thenReturn(releases);
 
     assertThat(underTest.evaluateIfActiveVersion(updateCenter)).isTrue();
@@ -80,15 +218,13 @@ class ActiveVersionEvaluatorTest {
 
   @Test
   void evaluateIfActiveVersion_whenInstalledVersionIsPastLtaAndAfterSixMonthFromLta_shouldReturnVersionNotActive() {
-    Calendar calendar = Calendar.getInstance();
-    calendar.add(Calendar.MONTH, -7);
-    calendar.set(Calendar.DAY_OF_MONTH, 1);
+    Date sevenMonthsAgo = Date.from(LocalDate.of(2024, Month.JANUARY, 1).minusMonths(7).atStartOfDay(ZoneOffset.UTC).toInstant());
 
-    when(system2.now()).thenCallRealMethod();
+    when(system2.now()).thenReturn(LocalDate.of(2024, Month.JANUARY, 1).atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli());
 
     when(sonarQubeVersion.get()).thenReturn(parse("8.9.5"));
     SortedSet<Release> releases = getReleases();
-    releases.stream().filter(r -> r.getVersion().equals(Version.create("9.9"))).findFirst().get().setDate(calendar.getTime());
+    releases.stream().filter(r -> r.getVersion().equals(Version.create("9.9"))).findFirst().get().setDate(sevenMonthsAgo);
     when(sonar.getAllReleases(any())).thenReturn(releases);
 
     assertThat(underTest.evaluateIfActiveVersion(updateCenter)).isFalse();

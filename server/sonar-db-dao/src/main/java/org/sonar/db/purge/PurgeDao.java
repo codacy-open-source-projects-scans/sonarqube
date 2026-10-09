@@ -43,10 +43,10 @@ import org.sonar.db.component.ComponentDto;
 import org.sonar.db.component.ComponentQualifiers;
 import org.sonarsource.compliancereports.dao.AggregationType;
 
-import static java.util.Collections.emptyList;
 import static java.util.Optional.ofNullable;
 import static org.sonar.api.utils.DateUtils.dateToLong;
 import static org.sonar.db.DatabaseUtils.executeLargeInputs;
+import static org.sonar.db.DatabaseUtils.executeLargeUpdates;
 
 public class PurgeDao implements Dao {
   private static final Logger LOG = LoggerFactory.getLogger(PurgeDao.class);
@@ -76,7 +76,7 @@ public class PurgeDao implements Dao {
     deleteOldAnticipatedTransitions(commands, conf, conf.projectUuid());
 
     deleteOldDisabledComponents(commands, mapper, rootUuid);
-    purgeStaleBranches(commands, conf, mapper, rootUuid);
+    purgeStaleBranches(commands, conf, mapper, rootUuid, listener);
 
   }
 
@@ -94,9 +94,10 @@ public class PurgeDao implements Dao {
     return branchDtos.stream().filter(branchDto -> !branchDto.getUuid().equals(rootUuid)).toList();
   }
 
-  private void purgeStaleBranches(PurgeCommands commands, PurgeConfiguration conf, PurgeMapper mapper, String rootUuid) {
+  private void purgeStaleBranches(PurgeCommands commands, PurgeConfiguration conf, PurgeMapper mapper,
+    String rootUuid, PurgeListener listener) {
     getStaleBranchesToPurge(conf, mapper, rootUuid).forEach(branchDto -> deleteBranch(branchDto.getUuid(), commands,
-      AggregationType.PROJECT));
+      AggregationType.PROJECT, listener));
   }
 
   private static void purgeAnalyses(PurgeCommands commands, String rootUuid) {
@@ -131,25 +132,18 @@ public class PurgeDao implements Dao {
   }
 
   private static void deleteIssues(PurgeMapper mapper, Collection<String> issueKeys) {
-    executeLargeInputs(issueKeys, input -> {
-      mapper.deleteIssueChangesFromIssueKeys(input);
-      return emptyList();
-    });
+    // Hunter Agent issues share a small, fixed set of rules; each issue's write-up is its own group of
+    // rule_desc_sections rows (root_cause, how_to_fix, ...) identified by the issue's context_key. That
+    // table has no back-pointer to issues, so it's captured here, before the issues are deleted below.
+    List<String> sectionUuids = executeLargeInputs(issueKeys, mapper::selectHunterAgentRuleDescSectionUuidsByIssueKeys);
 
-    executeLargeInputs(issueKeys, input -> {
-      mapper.deleteNewCodeReferenceIssuesFromKeys(input);
-      return emptyList();
-    });
+    executeLargeUpdates(issueKeys, mapper::deleteIssueChangesFromIssueKeys);
+    executeLargeUpdates(issueKeys, mapper::deleteNewCodeReferenceIssuesFromKeys);
+    executeLargeUpdates(issueKeys, mapper::deleteIssuesImpactsFromKeys);
+    executeLargeUpdates(issueKeys, mapper::deleteIssuesFromKeys);
 
-    executeLargeInputs(issueKeys, input -> {
-      mapper.deleteIssuesImpactsFromKeys(input);
-      return emptyList();
-    });
-
-    executeLargeInputs(issueKeys, input -> {
-      mapper.deleteIssuesFromKeys(input);
-      return emptyList();
-    });
+    // Runs after the issue deletes above, which are visible in the same uncommitted transaction.
+    executeLargeUpdates(sectionUuids, mapper::deleteUnreferencedRuleDescSectionsByUuids);
   }
 
   private static void deleteAbortedAnalyses(String rootUuid, PurgeCommands commands) {
@@ -228,7 +222,7 @@ public class PurgeDao implements Dao {
   public void deleteBranch(DbSession session, String uuid) {
     PurgeProfiler profiler = new PurgeProfiler();
     PurgeCommands purgeCommands = new PurgeCommands(session, profiler, system2);
-    deleteBranch(uuid, purgeCommands, AggregationType.PROJECT);
+    deleteBranch(uuid, purgeCommands, AggregationType.PROJECT, PurgeListener.EMPTY);
   }
 
   public void deleteProject(DbSession session, String uuid, String qualifier, String name, String key) {
@@ -244,7 +238,7 @@ public class PurgeDao implements Dao {
       .toList();
     AggregationType aggregationType = toAggregationType(qualifier);
 
-    branchUuids.forEach(id -> deleteBranch(id, purgeCommands, aggregationType));
+    branchUuids.forEach(id -> deleteBranch(id, purgeCommands, aggregationType, PurgeListener.EMPTY));
 
     deleteProject(uuid, purgeMapper, purgeCommands, aggregationType);
     auditPersister.deleteComponent(session, new ComponentNewValue(uuid, name, key, qualifier));
@@ -268,11 +262,14 @@ public class PurgeDao implements Dao {
     }
   }
 
-  private static void deleteBranch(String branchUuid, PurgeCommands commands, AggregationType aggregationType) {
+  private static void deleteBranch(String branchUuid, PurgeCommands commands, AggregationType aggregationType,
+    PurgeListener listener) {
     commands.deleteScannerCache(branchUuid);
     commands.deleteAnalyses(branchUuid);
     commands.deleteIssues(branchUuid);
     commands.deleteFileSources(branchUuid);
+    // must run before deleteCeActivity/deleteCeQueue: arch_scanner_data is only reachable through their ce task uuids
+    commands.deleteArchScannerDataForRoot(branchUuid);
     commands.deleteCeActivity(branchUuid);
     commands.deleteCeQueue(branchUuid);
     commands.deleteMeasures(branchUuid);
@@ -284,9 +281,10 @@ public class PurgeDao implements Dao {
     commands.deleteBranchInPortfolios(branchUuid);
     commands.deleteReportSubscriptions(branchUuid);
     commands.deleteIssuesFixed(branchUuid);
-    commands.deleteScaActivity(branchUuid);
-    commands.deleteArchitectureGraphs(branchUuid);
+    commands.deleteArchitectureBranchData(branchUuid);
     commands.deleteIssueStatsByRuleKey(aggregationType, branchUuid);
+    commands.deleteDashboardHistory(branchUuid);
+    listener.onBranchDeleted(branchUuid);
   }
 
   private static void deleteProject(String projectUuid, PurgeMapper mapper, PurgeCommands commands, AggregationType aggregationType) {
@@ -298,6 +296,8 @@ public class PurgeDao implements Dao {
     commands.deleteByRootAndSubviews(rootAndSubviews);
     commands.deleteIssues(projectUuid);
     commands.deleteFileSources(projectUuid);
+    // must run before deleteCeActivity/deleteCeQueue: arch_scanner_data is only reachable through their ce task uuids
+    commands.deleteArchScannerDataForRoot(projectUuid);
     commands.deleteCeActivity(projectUuid);
     commands.deleteCeQueue(projectUuid);
     commands.deleteWebhooks(projectUuid);
@@ -319,8 +319,9 @@ public class PurgeDao implements Dao {
     commands.deleteOutdatedProperties(projectUuid);
     commands.deleteReportSchedules(projectUuid);
     commands.deleteReportSubscriptions(projectUuid);
-    commands.deleteScaLicenseProfiles(projectUuid);
+    commands.deleteArchitectureProjectData(projectUuid);
     commands.deleteIssueStatsByRuleKey(aggregationType, projectUuid);
+    commands.deleteDashboardHistory(projectUuid);
   }
 
   /**

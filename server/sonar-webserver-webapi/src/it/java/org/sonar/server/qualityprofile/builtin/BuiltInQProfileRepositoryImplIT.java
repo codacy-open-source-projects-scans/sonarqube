@@ -22,15 +22,22 @@ package org.sonar.server.qualityprofile.builtin;
 import java.util.List;
 import org.junit.Rule;
 import org.junit.Test;
+import org.sonar.api.issue.impact.Severity;
+import org.sonar.api.issue.impact.SoftwareQuality;
 import org.sonar.api.resources.Language;
 import org.sonar.api.resources.Languages;
 import org.sonar.api.rule.RuleKey;
 import org.sonar.api.server.profile.BuiltInQualityProfilesDefinition;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbTester;
+import org.sonar.db.issue.ImpactDto;
+import org.sonar.db.qualityprofile.QualityProfileTesting;
 import org.sonar.db.rule.RuleDto;
+import org.sonar.db.rule.RuleTesting;
 import org.sonar.server.language.LanguageTesting;
 import org.sonar.server.qualityprofile.builtin.BuiltInQProfile.ActiveRule;
+import org.sonar.server.qualityprofile.builtin.sonarwayvariants.SonarWayCoreProfileDefinition;
+import org.sonar.server.qualityprofile.builtin.sonarwayvariants.SonarWayExtendedProfileDefinition;
 import org.sonar.server.rule.DefaultRuleFinder;
 import org.sonar.server.rule.RuleDescriptionFormatter;
 import org.sonar.server.rule.ServerRuleFinder;
@@ -189,6 +196,120 @@ public class BuiltInQProfileRepositoryImplIT {
       .containsExactlyInAnyOrder(
         tuple(rule1.getUuid(), rule1.getKey()),
         tuple(rule2.getUuid(), rule2.getKey()));
+  }
+
+  @Test
+  public void derive_core_and_extended_variants_from_Sonar_way_based_on_impact_severity() {
+    RuleDto blockerMaintainabilityRule = db.rules().insert(RuleTesting.setImpacts(List.of(new ImpactDto(SoftwareQuality.MAINTAINABILITY, Severity.BLOCKER))));
+    RuleDto mediumReliabilityRule = db.rules().insert(RuleTesting.setImpacts(List.of(new ImpactDto(SoftwareQuality.RELIABILITY, Severity.MEDIUM))));
+    RuleDto lowReliabilityRule = db.rules().insert(RuleTesting.setImpacts(List.of(new ImpactDto(SoftwareQuality.RELIABILITY, Severity.LOW))));
+    RuleDto noImpactRule = db.rules().insert(RuleTesting.setImpacts(List.of()));
+    DummyProfileDefinition sonarWay = new DummyProfileDefinition("foo", SONAR_WAY_QP_NAME, true,
+      asList(blockerMaintainabilityRule.getKey(), mediumReliabilityRule.getKey(), lowReliabilityRule.getKey(), noImpactRule.getKey()));
+    BuiltInQProfileRepository underTest = new BuiltInQProfileRepositoryImpl(dbClient, ruleFinder, new Languages(FOO_LANGUAGE), sonarWay);
+
+    underTest.initialize();
+
+    assertThat(underTest.get())
+      .extracting(BuiltInQProfile::getName)
+      .containsExactlyInAnyOrder(SONAR_WAY_QP_NAME, SonarWayCoreProfileDefinition.NAME, SonarWayExtendedProfileDefinition.NAME);
+
+    BuiltInQProfile core = findProfile(underTest, SonarWayCoreProfileDefinition.NAME);
+    assertThat(core.getLanguage()).isEqualTo("foo");
+    assertThat(core.isDefault()).isFalse();
+    assertThat(core.getActiveRules())
+      .extracting(ActiveRule::getRuleKey)
+      .containsExactlyInAnyOrder(blockerMaintainabilityRule.getKey(), mediumReliabilityRule.getKey());
+
+    BuiltInQProfile extended = findProfile(underTest, SonarWayExtendedProfileDefinition.NAME);
+    assertThat(extended.getLanguage()).isEqualTo("foo");
+    assertThat(extended.isDefault()).isFalse();
+    assertThat(extended.getActiveRules())
+      .extracting(ActiveRule::getRuleKey)
+      .containsExactlyInAnyOrder(blockerMaintainabilityRule.getKey(), mediumReliabilityRule.getKey(), lowReliabilityRule.getKey());
+  }
+
+  @Test
+  public void do_not_derive_variants_when_no_profile_is_named_Sonar_way() {
+    RuleDto rule = db.rules().insert(RuleTesting.setImpacts(List.of(new ImpactDto(SoftwareQuality.MAINTAINABILITY, Severity.BLOCKER))));
+    DummyProfileDefinition definition = new DummyProfileDefinition("foo", "foo", false, singletonList(rule.getKey()));
+    BuiltInQProfileRepository underTest = new BuiltInQProfileRepositoryImpl(dbClient, ruleFinder, new Languages(FOO_LANGUAGE), definition);
+
+    underTest.initialize();
+
+    assertThat(underTest.get())
+      .extracting(BuiltInQProfile::getName)
+      .containsExactly("foo");
+  }
+
+  @Test
+  public void do_not_create_variant_when_no_rule_meets_the_impact_threshold() {
+    RuleDto noImpactRule = db.rules().insert(RuleTesting.setImpacts(List.of()));
+    DummyProfileDefinition sonarWay = new DummyProfileDefinition("foo", SONAR_WAY_QP_NAME, true, singletonList(noImpactRule.getKey()));
+    BuiltInQProfileRepository underTest = new BuiltInQProfileRepositoryImpl(dbClient, ruleFinder, new Languages(FOO_LANGUAGE), sonarWay);
+
+    underTest.initialize();
+
+    assertThat(underTest.get())
+      .extracting(BuiltInQProfile::getName)
+      .containsExactly(SONAR_WAY_QP_NAME);
+  }
+
+  @Test
+  public void keep_security_hotspot_rules_in_variants_even_though_they_carry_no_default_impact() {
+    RuleDto hotspotRule = db.rules().insertHotspotRule(RuleTesting.setImpacts(List.of()));
+    RuleDto noImpactRule = db.rules().insert(RuleTesting.setImpacts(List.of()));
+    DummyProfileDefinition sonarWay = new DummyProfileDefinition("foo", SONAR_WAY_QP_NAME, true,
+      asList(hotspotRule.getKey(), noImpactRule.getKey()));
+    BuiltInQProfileRepository underTest = new BuiltInQProfileRepositoryImpl(dbClient, ruleFinder, new Languages(FOO_LANGUAGE), sonarWay);
+
+    underTest.initialize();
+
+    BuiltInQProfile core = findProfile(underTest, SonarWayCoreProfileDefinition.NAME);
+    assertThat(core.getActiveRules()).extracting(ActiveRule::getRuleKey).containsExactly(hotspotRule.getKey());
+    BuiltInQProfile extended = findProfile(underTest, SonarWayExtendedProfileDefinition.NAME);
+    assertThat(extended.getActiveRules()).extracting(ActiveRule::getRuleKey).containsExactly(hotspotRule.getKey());
+  }
+
+  @Test
+  public void do_not_duplicate_a_variant_already_declared_by_a_plugin() {
+    RuleDto sonarWayRule = db.rules().insert(RuleTesting.setImpacts(List.of(new ImpactDto(SoftwareQuality.MAINTAINABILITY, Severity.BLOCKER))));
+    RuleDto pluginDeclaredCoreRule = db.rules().insert();
+    DummyProfileDefinition sonarWay = new DummyProfileDefinition("foo", SONAR_WAY_QP_NAME, true, singletonList(sonarWayRule.getKey()));
+    DummyProfileDefinition pluginDeclaredCore = new DummyProfileDefinition("foo", SonarWayCoreProfileDefinition.NAME, false,
+      singletonList(pluginDeclaredCoreRule.getKey()));
+    BuiltInQProfileRepository underTest = new BuiltInQProfileRepositoryImpl(dbClient, ruleFinder, new Languages(FOO_LANGUAGE), sonarWay, pluginDeclaredCore);
+
+    underTest.initialize();
+
+    assertThat(underTest.get())
+      .extracting(BuiltInQProfile::getName)
+      .containsExactlyInAnyOrder(SONAR_WAY_QP_NAME, SonarWayCoreProfileDefinition.NAME, SonarWayExtendedProfileDefinition.NAME);
+
+    BuiltInQProfile core = findProfile(underTest, SonarWayCoreProfileDefinition.NAME);
+    assertThat(core.getActiveRules()).extracting(ActiveRule::getRuleKey).containsExactly(pluginDeclaredCoreRule.getKey());
+  }
+
+  @Test
+  public void keep_a_persisted_variant_with_no_active_rules_so_it_gets_reconciled_instead_of_stranded() {
+    dbClient.qualityProfileDao().insert(db.getSession(), QualityProfileTesting.newRuleProfileDto(
+      rp -> rp.setName(SonarWayCoreProfileDefinition.NAME).setLanguage("foo").setIsBuiltIn(true)));
+    db.commit();
+    RuleDto noImpactRule = db.rules().insert(RuleTesting.setImpacts(List.of()));
+    DummyProfileDefinition sonarWay = new DummyProfileDefinition("foo", SONAR_WAY_QP_NAME, true, singletonList(noImpactRule.getKey()));
+    BuiltInQProfileRepository underTest = new BuiltInQProfileRepositoryImpl(dbClient, ruleFinder, new Languages(FOO_LANGUAGE), sonarWay);
+
+    underTest.initialize();
+
+    BuiltInQProfile core = findProfile(underTest, SonarWayCoreProfileDefinition.NAME);
+    assertThat(core.getActiveRules()).isEmpty();
+  }
+
+  private static BuiltInQProfile findProfile(BuiltInQProfileRepository repository, String name) {
+    return repository.get().stream()
+      .filter(profile -> name.equals(profile.getName()))
+      .findFirst()
+      .orElseThrow(() -> new AssertionError("No profile named '" + name + "' found"));
   }
 
   @Test

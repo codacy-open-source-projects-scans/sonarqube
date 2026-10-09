@@ -24,8 +24,6 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.JsonParseException;
 import jakarta.inject.Inject;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.util.Base64;
 import java.util.Objects;
 import java.util.function.Function;
 import java.util.function.UnaryOperator;
@@ -56,15 +54,12 @@ public class BitbucketCloudRestClient {
   private static final String VERSION = "2.0";
   protected static final String ERROR_BBC_SERVERS = "Error returned by Bitbucket Cloud";
   protected static final String UNABLE_TO_CONTACT_BBC_SERVERS = "Unable to contact Bitbucket Cloud servers";
-  protected static final String MISSING_PULL_REQUEST_READ_PERMISSION = "The OAuth consumer in the Bitbucket workspace is not configured with the permission to read pull requests.";
+  protected static final String MISSING_PULL_REQUEST_READ_PERMISSION = "The OAuth client in the Bitbucket workspace is not configured with the permission to read pull requests.";
   protected static final String SCOPE = "Scope is: %s";
   protected static final String UNAUTHORIZED_CLIENT = "Check your credentials";
-  protected static final String OAUTH_CONSUMER_NOT_PRIVATE = "Configure the OAuth consumer in the Bitbucket workspace to be a private consumer";
+  protected static final String OAUTH_CONSUMER_NOT_PRIVATE = "Configure the OAuth client in the Bitbucket workspace to be a private client";
   protected static final String BBC_FAIL_WITH_RESPONSE = "Bitbucket Cloud API call to [%s] failed with %s http code. Bitbucket Cloud response content : [%s]";
   protected static final String BBC_FAIL_WITH_ERROR = "Bitbucket Cloud API call to [%s] failed with error: %s";
-  protected static final String APP_PASSWORD_DEPRECATION_MESSAGE = """
-     - Note: Bitbucket App Passwords are deprecated and may cause authentication failures. Consider updating to API tokens using the SonarQube UI.
-    """;
 
   protected static final MediaType JSON_MEDIA_TYPE = MediaType.parse("application/json; charset=utf-8");
 
@@ -120,15 +115,9 @@ public class BitbucketCloudRestClient {
   /**
    * Validate parameters provided.
    */
-  public void validateAppPassword(String encodedCredentials, String workspace) {
-    // Validate token format - App Passwords are no longer supported
-    if (isLikelyAppPassword(encodedCredentials)) {
-      throw new IllegalArgumentException(
-        "Bitbucket App Passwords are no longer supported. Please update your configuration to use API tokens");
-    }
-
+  public void validateApiToken(String encodedApiTokenCredentials, String workspace) {
     try {
-      doGetWithBasicAuth(encodedCredentials, buildUrl("/repositories/" + workspace), r -> null);
+      doGetWithApiToken(encodedApiTokenCredentials, buildUrl("/repositories/" + workspace), r -> null);
     } catch (NotFoundException | IllegalStateException e) {
       throw new IllegalArgumentException(e.getMessage());
     }
@@ -167,15 +156,37 @@ public class BitbucketCloudRestClient {
     }
   }
 
-  public RepositoryList searchRepos(String encodedCredentials, String workspace, @Nullable String repoName, Integer page, Integer pageSize) {
+  public RepositoryList searchRepos(String encodedApiTokenCredentials, String workspace, @Nullable String repoName, Integer page, Integer pageSize) {
     String filterQuery = String.format("q=name~\"%s\"", repoName != null ? repoName : "");
     HttpUrl url = buildUrl(String.format("/repositories/%s?%s&page=%s&pagelen=%s", workspace, filterQuery, page, pageSize));
-    return doGetWithBasicAuth(encodedCredentials, url, r -> buildGson().fromJson(r.body().charStream(), RepositoryList.class));
+    return doGetWithApiToken(encodedApiTokenCredentials, url, r -> buildGson().fromJson(r.body().charStream(), RepositoryList.class));
   }
 
-  public Repository getRepo(String encodedCredentials, String workspace, String slug) {
+  /**
+   * Same as {@link #searchRepos}, but authenticates with an OAuth access token (see
+   * {@link #createAccessToken(String, String)}) instead of a user's Basic-auth API token — for
+   * callers with no per-user PAT available (e.g. a session-less lazy resolution).
+   */
+  public RepositoryList searchReposWithAccessToken(String accessToken, String workspace, @Nullable String repoName, Integer page, Integer pageSize) {
+    String filterQuery = String.format("q=name~\"%s\"", repoName != null ? repoName : "");
+    HttpUrl url = buildUrl(String.format("/repositories/%s?%s&page=%s&pagelen=%s", workspace, filterQuery, page, pageSize));
+    return doGet(accessToken, url, r -> buildGson().fromJson(r.body().charStream(), RepositoryList.class));
+  }
+
+  public Repository getRepo(String encodedApiTokenCredentials, String workspace, String slug) {
     HttpUrl url = buildUrl(String.format("/repositories/%s/%s", workspace, slug));
-    return doGetWithBasicAuth(encodedCredentials, url, r -> buildGson().fromJson(r.body().charStream(), Repository.class));
+    return doGetWithApiToken(encodedApiTokenCredentials, url, r -> buildGson().fromJson(r.body().charStream(), Repository.class));
+  }
+
+
+  /**
+   * Same as {@link #getRepo(String, String, String)}, but authenticates with an OAuth access token
+   * (see {@link #createAccessToken(String, String)}) instead of a user's Basic-auth API token —
+   * for callers with no per-user PAT available (e.g. a session-less lazy resolution).
+   */
+  public Repository getRepoWithAccessToken(String accessToken, String workspace, String slug) {
+    HttpUrl url = buildUrl(String.format("/repositories/%s/%s", workspace, slug));
+    return doGet(accessToken, url, r -> buildGson().fromJson(r.body().charStream(), Repository.class));
   }
 
   public String createAccessToken(String clientId, String clientSecret) {
@@ -189,7 +200,7 @@ public class BitbucketCloudRestClient {
       .build();
     HttpUrl url = HttpUrl.parse(accessTokenEndpoint);
     String credential = Credentials.basic(clientId, clientSecret);
-    return prepareRequestWithBasicAuthCredentials(credential, "POST", url, body);
+    return prepareRequestWithAuthorizationHeader(credential, "POST", url, body);
   }
 
   protected HttpUrl buildUrl(String relativeUrl) {
@@ -201,15 +212,12 @@ public class BitbucketCloudRestClient {
     return doCall(request, handler);
   }
 
-  protected <G> G doGetWithBasicAuth(String encodedCredentials, HttpUrl url, Function<Response, G> handler) {
-    Request request = prepareRequestWithBasicAuthCredentials("Basic " + encodedCredentials, GET, url, null);
+  protected <G> G doGetWithApiToken(String encodedApiTokenCredentials, HttpUrl url, Function<Response, G> handler) {
+    // Bitbucket Cloud expects API tokens to be transported as Basic authorization with base64(email:apiToken).
+    Request request = prepareRequestWithAuthorizationHeader("Basic " + encodedApiTokenCredentials, GET, url, null);
     try {
       return doCall(request, handler);
     } catch (BitbucketCloudException e) {
-      // Check if this might be due to app password deprecation
-      if ((e.getHttpCode() == 401 || e.getHttpCode() == 403 || e.getHttpCode() == 404) && isLikelyAppPassword(encodedCredentials)) {
-        throw new IllegalArgumentException(e.getMessage() + APP_PASSWORD_DEPRECATION_MESSAGE, e);
-      }
       throw new IllegalStateException(e.getMessage(), e);
     }
   }
@@ -306,31 +314,16 @@ public class BitbucketCloudRestClient {
       .build();
   }
 
-  protected static Request prepareRequestWithBasicAuthCredentials(String encodedCredentials, String method,
+  protected static Request prepareRequestWithAuthorizationHeader(String authorizationHeader, String method,
     HttpUrl url, @Nullable RequestBody body) {
     return new Request.Builder()
       .method(method, body)
       .url(url)
-      .header(AUTHORIZATION, encodedCredentials)
+      .header(AUTHORIZATION, authorizationHeader)
       .build();
   }
 
   public static Gson buildGson() {
     return new GsonBuilder().create();
-  }
-
-  private static boolean isLikelyAppPassword(String encodedCredentials) {
-    try {
-      String decoded = new String(Base64.getDecoder().decode(encodedCredentials), StandardCharsets.UTF_8);
-      int colonIndex = decoded.indexOf(':');
-      if (colonIndex == -1) {
-        return false;
-      }
-      String password = decoded.substring(colonIndex + 1);
-      // API tokens start with ATAT, access tokens start with ATCT
-      return !password.startsWith("ATAT") && !password.startsWith("ATCT");
-    } catch (IllegalArgumentException e) {
-      return false;
-    }
   }
 }

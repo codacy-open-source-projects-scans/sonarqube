@@ -170,6 +170,53 @@ public class ServerMonitoringMetricsTest {
       labelNames, labelValues)).isEqualTo(10);
   }
 
+  @Test
+  public void observeDbQueryDurationTest() {
+    ServerMonitoringMetrics metrics = new ServerMonitoringMetrics();
+    String[] labelNames = {"mapper_method"};
+    String[] labelValues = {"org.sonar.db.user.UserMapper.selectByUuid"};
+
+    metrics.observeDbQueryDuration(0.123, labelValues[0]);
+
+    assertThat(CollectorRegistry.defaultRegistry.getSampleValue("sonarqube_db_query_duration_seconds_sum",
+      labelNames, labelValues)).isEqualTo(0.123);
+    assertThat(CollectorRegistry.defaultRegistry.getSampleValue("sonarqube_db_query_duration_seconds_count",
+      labelNames, labelValues)).isEqualTo(1);
+  }
+
+  @Test
+  public void setDbLatencyTest() {
+    ServerMonitoringMetrics metrics = new ServerMonitoringMetrics();
+
+    metrics.setDbLatency(0.0042);
+
+    assertThat(CollectorRegistry.defaultRegistry.getSampleValue("sonarqube_db_latency_seconds")).isEqualTo(0.0042);
+  }
+
+  @Test
+  public void observeWebApiV1RequestDurationTest() {
+    ServerMonitoringMetrics metrics = new ServerMonitoringMetrics();
+    String[] labelNames = {"endpoint"};
+    String[] labelValues = {"api/issues/search"};
+
+    metrics.observeWebApiV1RequestDuration(0.42, labelValues[0]);
+
+    assertThat(CollectorRegistry.defaultRegistry.getSampleValue("sonarqube_web_api_v1_request_duration_seconds_sum",
+      labelNames, labelValues)).isEqualTo(0.42);
+  }
+
+  @Test
+  public void observeWebApiV2RequestDurationTest() {
+    ServerMonitoringMetrics metrics = new ServerMonitoringMetrics();
+    String[] labelNames = {"endpoint", "http_method"};
+    String[] labelValues = {"/api/v2/users", "GET"};
+
+    metrics.observeWebApiV2RequestDuration(0.25, labelValues[0], labelValues[1]);
+
+    assertThat(CollectorRegistry.defaultRegistry.getSampleValue("sonarqube_web_api_v2_request_duration_seconds_sum",
+      labelNames, labelValues)).isEqualTo(0.25);
+  }
+
   private int sizeOfDefaultRegistry() {
     Enumeration<Collector.MetricFamilySamples> metrics = CollectorRegistry.defaultRegistry.metricFamilySamples();
     return Collections.list(metrics).size();

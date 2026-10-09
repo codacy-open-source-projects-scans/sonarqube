@@ -238,6 +238,7 @@ public class SearchResponseFormat {
     issueBuilder.setPrioritizedRule(dto.isPrioritizedRule());
     issueBuilder.setLinkedTicketStatus(dto.getLinkedTicketStatus());
     issueBuilder.setFromSonarQubeUpdate(dto.isFromSonarQubeUpdate());
+    ofNullable(dto.getDeferralDate()).map(DateUtils::formatDateTime).ifPresent(issueBuilder::setDeferralDate);
   }
 
   private static void addAdditionalFieldsToIssueBuilder(Collection<SearchAdditionalField> fields, SearchResponseData data, IssueDto dto,
@@ -257,8 +258,10 @@ public class SearchResponseFormat {
   }
 
   private static String engineNameFrom(RuleKey ruleKey) {
-    checkState(ruleKey.repository().startsWith(EXTERNAL_RULE_REPO_PREFIX));
-    return ruleKey.repository().replace(EXTERNAL_RULE_REPO_PREFIX, "");
+    if (ruleKey.repository().startsWith(EXTERNAL_RULE_REPO_PREFIX)) {
+      return ruleKey.repository().replace(EXTERNAL_RULE_REPO_PREFIX, "");
+    }
+    return ruleKey.repository();
   }
 
   private void completeIssueLocations(IssueDto dto, Issue.Builder issueBuilder, SearchResponseData data) {

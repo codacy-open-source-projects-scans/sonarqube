@@ -22,9 +22,11 @@ package org.sonar.server.permission.ws;
 import org.junit.Before;
 import org.junit.Test;
 import org.sonar.db.component.ComponentDto;
+import org.sonar.db.component.ProjectData;
 import org.sonar.db.component.ComponentQualifiers;
 import org.sonar.db.permission.GlobalPermission;
 import org.sonar.db.permission.ProjectPermission;
+import org.sonar.db.portfolio.PortfolioDto;
 import org.sonar.db.project.ProjectDto;
 import org.sonar.db.user.GroupDto;
 import org.sonar.db.user.UserDto;
@@ -109,12 +111,12 @@ public class RemoveUserActionIT extends BasePermissionWsIT<RemoveUserAction> {
   public void wsAction_whenProjectAdminRemoveOwnProjectAdminRight_shouldFail() {
     loginAsAdmin();
     UserDto admin = db.users().insertUser(userSession.getLogin());
-    ComponentDto project = db.components().insertPrivateProject().getMainBranchComponent();
+    ProjectDto project = db.components().insertPrivateProject().getProjectDto();
     db.users().insertProjectPermissionOnUser(admin, GlobalPermission.ADMINISTER.getKey(), project);
 
     TestRequest request = newRequest()
       .setParam(PARAM_USER_LOGIN, userSession.getLogin())
-      .setParam(PARAM_PROJECT_ID, project.uuid())
+      .setParam(PARAM_PROJECT_ID, project.getUuid())
       .setParam(PARAM_PERMISSION, GlobalPermission.ADMINISTER.getKey());
 
     assertThatThrownBy(request::execute)
@@ -229,7 +231,7 @@ public class RemoveUserActionIT extends BasePermissionWsIT<RemoveUserAction> {
 
   @Test
   public void wsAction_whenUsingViewUuid_shouldRemovePermission() {
-    ComponentDto view = db.components().insertPrivatePortfolio();
+    PortfolioDto view = db.components().insertPrivatePortfolioDto();
     db.users().insertProjectPermissionOnUser(user, ProjectPermission.ISSUE_ADMIN, view);
     db.users().insertProjectPermissionOnUser(user, ProjectPermission.ADMIN, view);
     loginAsAdmin();
@@ -240,7 +242,7 @@ public class RemoveUserActionIT extends BasePermissionWsIT<RemoveUserAction> {
       .setParam(PARAM_PERMISSION, ProjectPermission.ISSUE_ADMIN.getKey())
       .execute();
 
-    assertThat(db.users().selectEntityPermissionOfUser(user, view.uuid())).containsOnly(ProjectPermission.ADMIN.getKey());
+    assertThat(db.users().selectEntityPermissionOfUser(user, view.getUuid())).containsOnly(ProjectPermission.ADMIN.getKey());
   }
 
   @Test
@@ -452,8 +454,9 @@ public class RemoveUserActionIT extends BasePermissionWsIT<RemoveUserAction> {
 
   @Test
   public void wsAction_whenUsingBranchUuid_shouldFail() {
-    ComponentDto project = db.components().insertPublicProject().getMainBranchComponent();
-    userSession.logIn().addProjectPermission(ProjectPermission.ADMIN, project);
+    ProjectData projectData = db.components().insertPublicProject();
+    ComponentDto project = projectData.getMainBranchComponent();
+    userSession.logIn().addProjectPermission(ProjectPermission.ADMIN, projectData.getProjectDto());
     ComponentDto branch = db.components().insertProjectBranch(project);
 
     TestRequest testRequest = newRequest()

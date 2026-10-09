@@ -23,9 +23,10 @@ import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import java.io.IOException;
 import java.net.URI;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -47,7 +48,10 @@ import org.sonar.alm.client.gitlab.GsonApp;
 import org.sonar.auth.github.ExpiringAppInstallationToken;
 import org.sonar.auth.github.GitHubSettings;
 import org.sonar.auth.github.GithubAppConfiguration;
+import org.sonar.auth.github.GithubAppCredentials;
 import org.sonar.auth.github.GithubAppInstallation;
+import org.sonar.auth.github.GithubAppInstallationDetails;
+import org.sonar.auth.github.GithubAppPermissions;
 import org.sonar.auth.github.GithubApplicationClient;
 import org.sonar.auth.github.GithubBinding;
 import org.sonar.auth.github.GithubBinding.GsonGithubRepository;
@@ -62,6 +66,7 @@ import org.sonarqube.ws.client.HttpException;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static java.lang.String.format;
+import static java.net.HttpURLConnection.HTTP_CREATED;
 import static java.net.HttpURLConnection.HTTP_FORBIDDEN;
 import static java.net.HttpURLConnection.HTTP_INTERNAL_ERROR;
 import static java.net.HttpURLConnection.HTTP_OK;
@@ -73,15 +78,18 @@ public class GithubApplicationClientImpl implements GithubApplicationClient {
   private static final Pattern TRAILING_SLASH_PATTERN = Pattern.compile("/$");
 
   protected static final Gson GSON = new Gson();
-  protected static final String WRITE_PERMISSION_NAME = "write";
-  protected static final String READ_PERMISSION_NAME = "read";
   protected static final String FAILED_TO_REQUEST_BEGIN_MSG = "Failed to request ";
+
+  private static final Map<String, String> STATELESS_TOKEN_HEADER = Map.of(
+    GithubHeaders.STATELESS_INSTALLATION_TOKEN_HEADER, GithubHeaders.STATELESS_INSTALLATION_TOKEN_HEADER_VALUE);
 
   private static final TypeToken<List<GsonRepositoryTeam>> REPOSITORY_TEAM_LIST_TYPE = new TypeToken<>() {
   };
   private static final TypeToken<List<GsonRepositoryCollaborator>> REPOSITORY_COLLABORATORS_LIST_TYPE = new TypeToken<>() {
   };
   private static final TypeToken<List<GithubBinding.GsonInstallation>> ORGANIZATION_LIST_TYPE = new TypeToken<>() {
+  };
+  private static final TypeToken<List<GithubBinding.GsonInstallationDetails>> INSTALLATION_DETAILS_LIST_TYPE = new TypeToken<>() {
   };
   private final Clock clock;
   protected final GithubApplicationHttpClient githubApplicationHttpClient;
@@ -107,14 +115,34 @@ public class GithubApplicationClientImpl implements GithubApplicationClient {
   public Optional<ExpiringAppInstallationToken> createAppInstallationToken(GithubAppConfiguration githubAppConfiguration, long installationId) {
     AppToken appToken = appSecurity.createAppToken(githubAppConfiguration.getId(), githubAppConfiguration.getPrivateKey());
     String endPoint = "/app/installations/" + installationId + "/access_tokens";
-    return post(githubAppConfiguration.getApiEndpoint(), appToken, endPoint, GithubBinding.GsonInstallationToken.class)
+    return post(githubAppConfiguration.getApiEndpoint(), appToken, endPoint, STATELESS_TOKEN_HEADER, GithubBinding.GsonInstallationToken.class)
       .filter(token -> token.getToken() != null)
       .map(appInstallToken -> new ExpiringAppInstallationToken(clock, appInstallToken.getToken(), appInstallToken.getExpiresAt()));
   }
 
-  private <T> Optional<T> post(String baseUrl, AccessToken token, String endPoint, Class<T> gsonClass) {
+  @Override
+  public Optional<ExpiringAppInstallationToken> createAppInstallationToken(GithubAppConfiguration githubAppConfiguration, long installationId, String repositoryName) {
+    AppToken appToken = appSecurity.createAppToken(githubAppConfiguration.getId(), githubAppConfiguration.getPrivateKey());
+    String endPoint = "/app/installations/" + installationId + "/access_tokens";
+    String json = GSON.toJson(Map.of("repositories", List.of(repositoryName)));
+    return postWithBody(githubAppConfiguration.getApiEndpoint(), appToken, endPoint, json, STATELESS_TOKEN_HEADER, GithubBinding.GsonInstallationToken.class)
+      .filter(token -> token.getToken() != null)
+      .map(appInstallToken -> new ExpiringAppInstallationToken(clock, appInstallToken.getToken(), appInstallToken.getExpiresAt()));
+  }
+
+  private <T> Optional<T> postWithBody(String baseUrl, AccessToken token, String endPoint, String json, Map<String, String> extraHeaders, Class<T> gsonClass) {
     try {
-      ApplicationHttpClient.Response response = githubApplicationHttpClient.post(baseUrl, token, endPoint);
+      ApplicationHttpClient.Response response = githubApplicationHttpClient.post(baseUrl, token, endPoint, json, extraHeaders);
+      return handleResponse(response, endPoint, gsonClass);
+    } catch (Exception e) {
+      LOG.warn(FAILED_TO_REQUEST_BEGIN_MSG + endPoint, e);
+      return Optional.empty();
+    }
+  }
+
+  private <T> Optional<T> post(String baseUrl, AccessToken token, String endPoint, Map<String, String> extraHeaders, Class<T> gsonClass) {
+    try {
+      ApplicationHttpClient.Response response = githubApplicationHttpClient.post(baseUrl, token, endPoint, extraHeaders);
       return handleResponse(response, endPoint, gsonClass);
     } catch (Exception e) {
       LOG.warn(FAILED_TO_REQUEST_BEGIN_MSG + endPoint, e);
@@ -166,12 +194,30 @@ public class GithubApplicationClientImpl implements GithubApplicationClient {
 
   @Override
   public void checkAppPermissions(GithubAppConfiguration githubAppConfiguration) {
-    AppToken appToken = appSecurity.createAppToken(githubAppConfiguration.getId(), githubAppConfiguration.getPrivateKey());
+    checkAppPermissions(githubAppConfiguration, GithubAppPermissions.REQUIRED_PERMISSIONS);
+  }
 
-    Map<String, String> permissions = new HashMap<>();
-    permissions.put("checks", WRITE_PERMISSION_NAME);
-    permissions.put("pull_requests", WRITE_PERMISSION_NAME);
-    permissions.put("metadata", READ_PERMISSION_NAME);
+  @Override
+  public void checkAppPermissions(GithubAppConfiguration githubAppConfiguration, Map<String, String> permissions) {
+    Map<String, String> grantedPermissions = getAppPermissions(githubAppConfiguration);
+    List<String> missingPermissions = computeMissingPermissions(permissions, grantedPermissions);
+    if (!missingPermissions.isEmpty()) {
+      String message = missingPermissions.stream()
+        .map(perm -> perm + " is '" + grantedPermissions.get(perm) + "', should be '" + permissions.get(perm) + "'")
+        .collect(Collectors.joining(", "));
+
+      throw new IllegalArgumentException("Missing permissions; permission granted on " + message);
+    }
+  }
+
+  @Override
+  public List<String> findMissingAppPermissions(GithubAppConfiguration githubAppConfiguration, Map<String, String> permissions) {
+    return computeMissingPermissions(permissions, getAppPermissions(githubAppConfiguration));
+  }
+
+  @Override
+  public Map<String, String> getAppPermissions(GithubAppConfiguration githubAppConfiguration) {
+    AppToken appToken = appSecurity.createAppToken(githubAppConfiguration.getId(), githubAppConfiguration.getPrivateKey());
 
     String endPoint = "/app";
     GetResponse response;
@@ -182,26 +228,23 @@ public class GithubApplicationClientImpl implements GithubApplicationClient {
       throw new IllegalArgumentException("Failed to validate configuration, check URL and Private Key");
     }
     if (response.getCode() == HTTP_OK) {
-      Map<String, String> perms = handleResponse(response, endPoint, GsonApp.class)
+      return handleResponse(response, endPoint, GsonApp.class)
         .map(GsonApp::getPermissions)
         .orElseThrow(() -> new IllegalArgumentException("Failed to get app permissions, unexpected response body"));
-      List<String> missingPermissions = permissions.entrySet().stream()
-        .filter(permission -> !Objects.equals(permission.getValue(), perms.get(permission.getKey())))
-        .map(Map.Entry::getKey)
-        .toList();
-
-      if (!missingPermissions.isEmpty()) {
-        String message = missingPermissions.stream()
-          .map(perm -> perm + " is '" + perms.get(perm) + "', should be '" + permissions.get(perm) + "'")
-          .collect(Collectors.joining(", "));
-
-        throw new IllegalArgumentException("Missing permissions; permission granted on " + message);
-      }
     } else if (response.getCode() == HTTP_UNAUTHORIZED || response.getCode() == HTTP_FORBIDDEN) {
       throw new IllegalArgumentException("Authentication failed, verify the Client Id, Client Secret and Private Key fields");
     } else {
       throw new IllegalArgumentException("Failed to check permissions with Github, check the configuration");
     }
+  }
+
+  private static List<String> computeMissingPermissions(Map<String, String> requiredPermissions, Map<String, String> grantedPermissions) {
+    return requiredPermissions.entrySet().stream()
+      .filter(permission -> !Objects.equals(permission.getValue(), grantedPermissions.get(permission.getKey())))
+      .map(Map.Entry::getKey)
+      // sorted for a deterministic message: REQUIRED_PERMISSIONS is a Map.of, whose iteration order is randomized per JVM
+      .sorted()
+      .toList();
   }
 
   @Override
@@ -275,6 +318,47 @@ public class GithubApplicationClientImpl implements GithubApplicationClient {
     return executePaginatedQuery(githubAppConfiguration.getApiEndpoint(), appToken, endpoint, resp -> GSON.fromJson(resp, ORGANIZATION_LIST_TYPE));
   }
 
+  @Override
+  public List<GithubAppInstallationDetails> getAllAppInstallations(GithubAppConfiguration githubAppConfiguration) {
+    AppToken appToken = appSecurity.createAppToken(githubAppConfiguration.getId(), githubAppConfiguration.getPrivateKey());
+    List<GithubBinding.GsonInstallationDetails> installations = executeStrictPaginatedQuery(githubAppConfiguration.getApiEndpoint(), appToken, "/app/installations",
+      resp -> GSON.fromJson(resp, INSTALLATION_DETAILS_LIST_TYPE));
+    return installations.stream()
+      .map(GithubApplicationClientImpl::toInstallationDetails)
+      .toList();
+  }
+
+  @Override
+  public GithubAppInstallationDetails getRepositoryInstallation(GithubAppConfiguration githubAppConfiguration, String repositorySlug) {
+    AppToken appToken = appSecurity.createAppToken(githubAppConfiguration.getId(), githubAppConfiguration.getPrivateKey());
+    String endpoint = format("/repos/%s/installation", repositorySlug);
+    return toInstallationDetails(getOrThrowIfNotHttpOk(githubAppConfiguration.getApiEndpoint(), appToken, endpoint, GithubBinding.GsonInstallationDetails.class));
+  }
+
+  /**
+   * Anything the remediation permission comparison depends on being present is required here: a payload missing an id,
+   * an account or its permission map cannot be judged, and silently treating it as "no permissions granted" would
+   * invent deficits, while skipping it would hide real ones. Both are worse than reporting the check as failed.
+   */
+  private static GithubAppInstallationDetails toInstallationDetails(@Nullable GithubBinding.GsonInstallationDetails installation) {
+    if (installation == null || installation.id() == 0L || installation.account() == null
+      || StringUtils.isBlank(installation.account().getLogin()) || installation.permissions() == null) {
+      throw new IllegalStateException("GitHub returned an installation without a usable id, account or permission set");
+    }
+    if (!GithubAppInstallationDetails.isKnownAccountType(installation.account().getType())) {
+      // Not a detail to shrug off: an unrecognised type would be read as a personal account, and the Remediation Agent
+      // would then send an organization's owner to a personal settings page where they can approve nothing.
+      throw new IllegalStateException("GitHub returned an installation whose account type is missing or not recognised");
+    }
+    return new GithubAppInstallationDetails(
+      installation.id(),
+      installation.account().getLogin(),
+      installation.account().getType(),
+      installation.htmlUrl(),
+      StringUtils.isNotEmpty(installation.suspendedAt()),
+      installation.permissions());
+  }
+
   protected <T> Optional<T> get(String baseUrl, AccessToken token, String endPoint, Class<T> gsonClass) {
     try {
       GetResponse response = githubApplicationHttpClient.get(baseUrl, token, endPoint);
@@ -340,14 +424,17 @@ public class GithubApplicationClientImpl implements GithubApplicationClient {
       ApplicationHttpClient.Response response = githubApplicationHttpClient.post(baseAppUrl, null, endpoint);
 
       if (response.getCode() != HTTP_OK) {
-        throw new IllegalStateException("Failed to create GitHub's user access token. GitHub returned code " + code + ". " + response.getContent().orElse(""));
+        if (LOG.isDebugEnabled()) {
+          LOG.debug("Failed to create GitHub's user access token, response body: {}", response.getContent().orElse(""));
+        }
+        throw new IllegalStateException("Failed to create GitHub's user access token. GitHub returned code " + response.getCode() + ".");
       }
 
       Optional<String> content = response.getContent();
       Optional<UserAccessToken> accessToken = content.flatMap(c -> Arrays.stream(c.split("&"))
-        .filter(t -> t.startsWith("access_token="))
-        .map(t -> t.split("=")[1])
-        .findAny())
+          .filter(t -> t.startsWith("access_token="))
+          .map(t -> t.split("=")[1])
+          .findAny())
         .map(UserAccessToken::new);
 
       if (accessToken.isPresent()) {
@@ -359,6 +446,29 @@ public class GithubApplicationClientImpl implements GithubApplicationClient {
       throw new IllegalArgumentException();
     } catch (IOException e) {
       throw new IllegalStateException("Failed to create GitHub's user access token", e);
+    }
+  }
+
+  @Override
+  public GithubAppCredentials convertAppManifest(String apiEndpoint, String code) {
+    String endpoint = "/app-manifests/" + URLEncoder.encode(code, StandardCharsets.UTF_8) + "/conversions";
+    try {
+      // Unauthenticated call: the GitHub App does not exist yet, so no JWT/app token is available.
+      ApplicationHttpClient.Response response = githubApplicationHttpClient.post(apiEndpoint, null, endpoint);
+
+      if (response.getCode() != HTTP_CREATED && response.getCode() != HTTP_OK) {
+        if (LOG.isDebugEnabled()) {
+          LOG.debug("GitHub manifest conversion failed, response body: {}", response.getContent().orElse(""));
+        }
+        throw new IllegalStateException(
+          "Failed to create the GitHub App from manifest. GitHub returned code " + response.getCode());
+      }
+
+      return response.getContent()
+        .map(content -> GSON.fromJson(content, GithubAppCredentials.class))
+        .orElseThrow(() -> new IllegalStateException("Failed to create the GitHub App from manifest, response body was empty"));
+    } catch (IOException e) {
+      throw new IllegalStateException("Failed to create the GitHub App from manifest", e);
     }
   }
 
@@ -409,6 +519,14 @@ public class GithubApplicationClientImpl implements GithubApplicationClient {
 
   protected <E> List<E> executePaginatedQuery(String appUrl, AccessToken token, String query, Function<String, List<E>> responseDeserializer) {
     return githubPaginatedHttpClient.get(appUrl, token, query, responseDeserializer);
+  }
+
+  /**
+   * Counterpart to {@link #executePaginatedQuery} that fails on an incomplete listing instead of returning the pages it
+   * managed to read (SONAR-32166).
+   */
+  protected <E> List<E> executeStrictPaginatedQuery(String appUrl, AccessToken token, String query, Function<String, List<E>> responseDeserializer) {
+    return githubPaginatedHttpClient.getStrict(appUrl, token, query, responseDeserializer);
   }
 
   /**

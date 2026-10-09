@@ -21,6 +21,7 @@ package org.sonar.ce.configuration;
 
 import java.util.Random;
 import org.junit.Test;
+import org.sonar.api.config.Configuration;
 import org.sonar.api.config.internal.ConfigurationBridge;
 import org.sonar.api.config.internal.MapSettings;
 import org.sonar.api.utils.MessageException;
@@ -93,6 +94,21 @@ public class CeConfigurationImplTest {
   }
 
   @Test
+  public void getQueuePollingDelay_returns_2000_by_default() {
+    assertThat(new CeConfigurationImpl(EMPTY_CONFIGURATION).getQueuePollingDelay())
+      .isEqualTo(2_000L);
+  }
+
+  @Test
+  public void getQueuePollingDelay_returns_configured_value_when_set() {
+    Configuration configuration = new ConfigurationBridge(new MapSettings()
+      .setProperty(CeConfigurationImpl.PROPERTY_QUEUE_POLLING_DELAY, 100L));
+
+    assertThat(new CeConfigurationImpl(configuration).getQueuePollingDelay())
+      .isEqualTo(100L);
+  }
+
+  @Test
   public void getCleanCeTasksInitialDelay_returns_0() {
     assertThat(new CeConfigurationImpl(EMPTY_CONFIGURATION).getCleanTasksInitialDelay())
       .isZero();
@@ -102,11 +118,20 @@ public class CeConfigurationImplTest {
   }
 
   @Test
-  public void getCleanCeTasksDelay_returns_2() {
+  public void getCleanCeTasksDelay_returns_120_by_default() {
     assertThat(new CeConfigurationImpl(EMPTY_CONFIGURATION).getCleanTasksDelay())
-      .isEqualTo(2L);
+      .isEqualTo(120L);
     workerCountProvider.set(1);
     assertThat(new CeConfigurationImpl(EMPTY_CONFIGURATION, workerCountProvider).getCleanTasksDelay())
+      .isEqualTo(120L);
+  }
+
+  @Test
+  public void getCleanCeTasksDelay_returns_configured_value_when_set() {
+    Configuration configuration = new ConfigurationBridge(new MapSettings()
+      .setProperty(CeConfigurationImpl.PROPERTY_CLEAN_TASKS_DELAY, 2L));
+
+    assertThat(new CeConfigurationImpl(configuration).getCleanTasksDelay())
       .isEqualTo(2L);
   }
 

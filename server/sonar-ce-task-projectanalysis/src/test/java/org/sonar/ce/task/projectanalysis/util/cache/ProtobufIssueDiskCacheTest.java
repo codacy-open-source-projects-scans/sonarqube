@@ -83,6 +83,48 @@ public class ProtobufIssueDiskCacheTest {
   }
 
   @Test
+  public void toDefaultIssue_whenDetectionDatePresent_shouldSetItInDefaultIssue() {
+    IssueCache.Issue issue = prepareIssueWithCompulsoryFields()
+      .setDetectionDate(1_704_067_200_000L)
+      .build();
+
+    DefaultIssue defaultIssue = ProtobufIssueDiskCache.toDefaultIssue(issue);
+
+    assertThat(defaultIssue.detectionDate()).isEqualTo(new Date(1_704_067_200_000L));
+  }
+
+  @Test
+  public void toDefaultIssue_whenDetectionDateAbsent_shouldNotSetItInDefaultIssue() {
+    IssueCache.Issue issue = prepareIssueWithCompulsoryFields()
+      .build();
+
+    DefaultIssue defaultIssue = ProtobufIssueDiskCache.toDefaultIssue(issue);
+
+    assertThat(defaultIssue.detectionDate()).isNull();
+  }
+
+  @Test
+  public void toDefaultIssue_whenDeferralDatePresent_shouldSetItInDefaultIssue() {
+    IssueCache.Issue issue = prepareIssueWithCompulsoryFields()
+      .setDeferralDate(1_704_067_200_000L)
+      .build();
+
+    DefaultIssue defaultIssue = ProtobufIssueDiskCache.toDefaultIssue(issue);
+
+    assertThat(defaultIssue.deferralDate()).isEqualTo(1_704_067_200_000L);
+  }
+
+  @Test
+  public void toDefaultIssue_whenDeferralDateAbsent_shouldNotSetItInDefaultIssue() {
+    IssueCache.Issue issue = prepareIssueWithCompulsoryFields()
+      .build();
+
+    DefaultIssue defaultIssue = ProtobufIssueDiskCache.toDefaultIssue(issue);
+
+    assertThat(defaultIssue.deferralDate()).isNull();
+  }
+
+  @Test
   public void toProto_whenRuleDescriptionContextKeySet_shouldCopyToIssueProto() {
     DefaultIssue defaultIssue = createDefaultIssueWithMandatoryFields();
     defaultIssue.setRuleDescriptionContextKey(TEST_CONTEXT_KEY);
@@ -126,6 +168,46 @@ public class ProtobufIssueDiskCacheTest {
     assertThat(issue.getCleanCodeAttribute()).isEqualTo(CleanCodeAttribute.FOCUSED.name());
   }
 
+  @Test
+  public void toProto_whenDetectionDateSet_shouldCopyToIssueProto() {
+    DefaultIssue defaultIssue = createDefaultIssueWithMandatoryFields();
+    defaultIssue.setDetectionDate(new Date(1_704_067_200_000L));
+
+    IssueCache.Issue issue = ProtobufIssueDiskCache.toProto(IssueCache.Issue.newBuilder(), defaultIssue);
+
+    assertThat(issue.hasDetectionDate()).isTrue();
+    assertThat(issue.getDetectionDate()).isEqualTo(1_704_067_200_000L);
+  }
+
+  @Test
+  public void toProto_whenDetectionDateNotSet_shouldCopyToIssueProto() {
+    DefaultIssue defaultIssue = createDefaultIssueWithMandatoryFields();
+
+    IssueCache.Issue issue = ProtobufIssueDiskCache.toProto(IssueCache.Issue.newBuilder(), defaultIssue);
+
+    assertThat(issue.hasDetectionDate()).isFalse();
+  }
+
+  @Test
+  public void toProto_whenDeferralDateSet_shouldCopyToIssueProto() {
+    DefaultIssue defaultIssue = createDefaultIssueWithMandatoryFields();
+    defaultIssue.setDeferralDate(1_704_067_200_000L);
+
+    IssueCache.Issue issue = ProtobufIssueDiskCache.toProto(IssueCache.Issue.newBuilder(), defaultIssue);
+
+    assertThat(issue.hasDeferralDate()).isTrue();
+    assertThat(issue.getDeferralDate()).isEqualTo(1_704_067_200_000L);
+  }
+
+  @Test
+  public void toProto_whenDeferralDateNotSet_shouldCopyToIssueProto() {
+    DefaultIssue defaultIssue = createDefaultIssueWithMandatoryFields();
+
+    IssueCache.Issue issue = ProtobufIssueDiskCache.toProto(IssueCache.Issue.newBuilder(), defaultIssue);
+
+    assertThat(issue.hasDeferralDate()).isFalse();
+  }
+
   private IssueCache.Impact toImpact(SoftwareQuality softwareQuality, Severity severity, boolean manualSeverity) {
     return IssueCache.Impact.newBuilder().setSoftwareQuality(softwareQuality.name()).setSeverity(severity.name()).setManualSeverity(manualSeverity).build();
   }
@@ -139,7 +221,7 @@ public class ProtobufIssueDiskCacheTest {
     defaultIssue.setProjectKey("project_key");
     defaultIssue.setRuleKey(RuleKey.of("ruleRepo", "rule1"));
     defaultIssue.setStatus("open");
-    defaultIssue.setCreationDate(new Date());
+    defaultIssue.setCreationDate(new Date(1_704_067_200_000L));
     return defaultIssue;
   }
 

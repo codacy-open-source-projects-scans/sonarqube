@@ -22,11 +22,14 @@ package org.sonar.server.platform.ws;
 import com.google.common.io.Resources;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 import org.sonar.api.server.ws.Change;
 import org.sonar.api.server.ws.Request;
 import org.sonar.api.server.ws.Response;
 import org.sonar.api.server.ws.WebService;
 import org.sonar.api.utils.text.JsonWriter;
+import org.sonar.core.documentation.DocumentationLinkGenerator;
 import org.sonar.server.plugins.UpdateCenterMatrixFactory;
 import org.sonar.server.ui.VersionFormatter;
 import org.sonar.updatecenter.common.Plugin;
@@ -58,6 +61,7 @@ public class UpgradesAction implements SystemWsAction {
   private static final String PROPERTY_ENTERPRISE_DOWNLOAD_URL = "downloadEnterpriseUrl";
   private static final String PROPERTY_DATACENTER_DOWNLOAD_URL = "downloadDatacenterUrl";
   private static final String PROPERTY_PRODUCT = "product";
+  private static final String PROPERTY_LTA = "lta";
   private static final String OBJECT_PLUGINS = "plugins";
   private static final String ARRAY_REQUIRE_UPDATE = "requireUpdate";
   private static final String ARRAY_INCOMPATIBLE = "incompatible";
@@ -71,17 +75,22 @@ public class UpgradesAction implements SystemWsAction {
   private static final String PROPERTY_ISSUE_TRACKER_URL = "issueTrackerUrl";
   private static final String PROPERTY_EDITION_BUNDLED = "editionBundled";
   private static final String PROPERTY_TERMS_AND_CONDITIONS_URL = "termsAndConditionsUrl";
+  private static final String PROPERTY_DOCUMENTATION_URL = "documentationUrl";
+  private static final String DOCUMENTATION_UPGRADE_SUFFIX = "/server-update-and-maintenance/update/roadmap";
   public static final String INSTALLED_VERSION_ACTIVE = "installedVersionActive";
 
   private final UpdateCenterMatrixFactory updateCenterFactory;
   private final ActiveVersionEvaluator activeVersionEvaluator;
+  private final DocumentationLinkGenerator documentationLinkGenerator;
 
-  public UpgradesAction(UpdateCenterMatrixFactory updateCenterFactory, ActiveVersionEvaluator activeVersionEvaluator) {
+  public UpgradesAction(UpdateCenterMatrixFactory updateCenterFactory, ActiveVersionEvaluator activeVersionEvaluator,
+    DocumentationLinkGenerator documentationLinkGenerator) {
     this.updateCenterFactory = updateCenterFactory;
     this.activeVersionEvaluator = activeVersionEvaluator;
+    this.documentationLinkGenerator = documentationLinkGenerator;
   }
 
-  private static void writeMetadata(JsonWriter jsonWriter, Release release) {
+  private void writeMetadata(JsonWriter jsonWriter, Release release, Set<String> ltaMajorMinors) {
     jsonWriter.prop(PROPERTY_VERSION, VersionFormatter.format(release.getVersion().getName()));
     jsonWriter.prop(PROPERTY_DESCRIPTION, release.getDescription());
     jsonWriter.propDate(PROPERTY_RELEASE_DATE, release.getDate());
@@ -91,6 +100,27 @@ public class UpgradesAction implements SystemWsAction {
     jsonWriter.prop(PROPERTY_ENTERPRISE_DOWNLOAD_URL, release.getDownloadUrl(Release.Edition.ENTERPRISE));
     jsonWriter.prop(PROPERTY_DATACENTER_DOWNLOAD_URL, release.getDownloadUrl(Release.Edition.DATACENTER));
     jsonWriter.prop(PROPERTY_PRODUCT, release.getProduct().name());
+    jsonWriter.prop(PROPERTY_DOCUMENTATION_URL, buildDocumentationUrl(release.getVersion()));
+    jsonWriter.prop(PROPERTY_LTA, isLtaRelease(release, ltaMajorMinors));
+  }
+
+  private static boolean isLtaRelease(Release release, Set<String> ltaMajorMinors) {
+    Version version = release.getVersion();
+    return ltaMajorMinors.contains(version.getMajor() + "." + version.getMinor());
+  }
+
+  private static Set<String> ltaMajorMinors(UpdateCenter updateCenter) {
+    return updateCenter.getSonar().getLtaVersions().stream()
+      .map(release -> release.getVersion().getMajor() + "." + release.getVersion().getMinor())
+      .collect(Collectors.toSet());
+  }
+
+  private String buildDocumentationUrl(Version version) {
+    String installedBaseUrl = documentationLinkGenerator.getDocumentationLink(null);
+    int lastSlash = installedBaseUrl.lastIndexOf('/');
+    String docRoot = lastSlash > 0 ? installedBaseUrl.substring(0, lastSlash) : installedBaseUrl;
+    String targetVersion = version.getMajor() + "." + version.getMinor();
+    return docRoot + "/" + targetVersion + DOCUMENTATION_UPGRADE_SUFFIX;
   }
 
   @Override
@@ -106,7 +136,9 @@ public class UpgradesAction implements SystemWsAction {
       .setResponseExample(Resources.getResource(this.getClass(), "example-upgrades_plugins.json"))
       .setChangelog(new Change("10.5", "The field 'ltsVersion' is deprecated from the response"))
       .setChangelog(new Change("10.5", "The field 'ltaVersion' is added to indicate the Long-Term Active Version"))
-      .setChangelog(new Change("10.5", "The field 'installedVersionActive' is added to indicate if the installed version is an active version"));
+      .setChangelog(new Change("10.5", "The field 'installedVersionActive' is added to indicate if the installed version is an active version"))
+      .setChangelog(new Change("2026.2", "The field 'documentationUrl' is added to each upgrade entry to point to the target version's documentation"))
+      .setChangelog(new Change("2026.5", "The field 'lta' is added to each upgrade entry to indicate whether it belongs to a Long-Term Active line"));
   }
 
   @Override
@@ -152,22 +184,23 @@ public class UpgradesAction implements SystemWsAction {
     }
   }
 
-  private static void writeUpgrades(JsonWriter jsonWriter, Optional<UpdateCenter> updateCenter) {
+  private void writeUpgrades(JsonWriter jsonWriter, Optional<UpdateCenter> updateCenter) {
     jsonWriter.name(ARRAY_UPGRADES).beginArray();
 
     if (updateCenter.isPresent()) {
+      Set<String> ltaMajorMinors = ltaMajorMinors(updateCenter.get());
       for (SonarUpdate sonarUpdate : updateCenter.get().findSonarUpdates()) {
-        writeUpgrade(jsonWriter, sonarUpdate);
+        writeUpgrade(jsonWriter, sonarUpdate, ltaMajorMinors);
       }
     }
 
     jsonWriter.endArray();
   }
 
-  private static void writeUpgrade(JsonWriter jsonWriter, SonarUpdate sonarUpdate) {
+  private void writeUpgrade(JsonWriter jsonWriter, SonarUpdate sonarUpdate, Set<String> ltaMajorMinors) {
     jsonWriter.beginObject();
 
-    writeMetadata(jsonWriter, sonarUpdate.getRelease());
+    writeMetadata(jsonWriter, sonarUpdate.getRelease(), ltaMajorMinors);
 
     writePlugins(jsonWriter, sonarUpdate);
 

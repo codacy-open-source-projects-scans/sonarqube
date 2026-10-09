@@ -11,11 +11,21 @@ sonarqube {
 
 dependencies {
     // please keep the list grouped by configuration and ordered by name
+    api 'org.apache.httpcomponents:httpclient'
     api 'org.springdoc:springdoc-openapi-starter-webmvc-api'
     api 'org.springframework.security:spring-security-config'
     api 'org.springframework.security:spring-security-web'
 
+    api project(':server:sonar-alm-client')
+    api project(':server:sonar-auth-github')
     api project(':server:sonar-db-dao')
+    api project(':server:sonar-webserver-monitoring')
+    implementation 'org.sonarsource.sonarqube:dashboards-api'
+    implementation 'org.sonarsource.sonarqube:dashboards-built-in-server-app'
+    implementation 'org.sonarsource.sonarqube:history-api'
+    implementation 'org.sonarsource.sonarqube:history-core'
+    implementation 'org.sonarsource.sonarqube:history-server-app'
+    api 'org.sonarsource.sonarqube:onboarding-unified-app'
     api 'org.sonarsource.sonarqube:sonar-spring'
     api project(':server:sonar-webserver-common')
 
@@ -33,6 +43,8 @@ dependencies {
 
     testImplementation testFixtures(project(':server:sonar-server-common'))
     testImplementation testFixtures(project(':server:sonar-webserver-auth'))
+    testImplementation 'org.sonarsource.sonarqube:organizations-api'
+    testImplementation 'org.sonarsource.sonarqube:organizations-server-app'
 
     testFixturesApi 'org.springframework:spring-test'
 

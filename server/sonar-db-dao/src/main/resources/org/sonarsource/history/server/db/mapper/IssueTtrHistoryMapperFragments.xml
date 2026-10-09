@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!--
+  ~ SonarQube
+  ~ Copyright (C) 2026 SonarSource Sàrl
+  ~ mailto:info AT sonarsource DOT com
+  ~
+  ~ This program is free software; you can redistribute it and/or
+  ~ modify it under the terms of the GNU Lesser General Public License
+  ~ as published by the Free Software Foundation; either version 3 of the
+  ~ License, or (at your option) any later version.
+  ~
+  ~ This program is distributed in the hope that it will be useful,
+  ~ but WITHOUT ANY WARRANTY; without even the implied warranty of
+  ~ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+  ~ Lesser General Public License for more details.
+  ~
+  ~ You should have received a copy of the GNU Lesser General Public License
+  ~ along with this program; if not, write to the Free Software Foundation,
+  ~ Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+  -->
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="org.sonarsource.history.server.db.mapper.IssueTtrHistoryMapperFragments">
+
+<!--
+    SELECT ...
+    FROM
+    <include refid="org.sonarsource.history.server.db.mapper.IssueTtrHistoryMapperFragments.aggregationBranchesFrom"/>
+    JOIN issue_ttr_history history
+      ON history.entity_id = <include refid="org.sonarsource.history.server.db.mapper.IssueTtrHistoryMapperFragments.aggregationChildEntityIdColumn"/>
+     AND history.recorded_at_epoch = #{recordedAtEpoch}
+    WHERE
+    <include refid="org.sonarsource.history.server.db.mapper.IssueTtrHistoryMapperFragments.aggregationIdClause"/>
+    GROUP BY history.dimension_id, history.recorded_at_epoch
+-->
+
+  <sql id="aggregationBranchesFrom">
+    (
+      <if test="entityType.name() == 'PORTFOLIO'">
+        <bind name="portfolioUuidPath" value="'%.'.concat(entityId).concat('.%')"/>
+        SELECT DISTINCT portfolio_branches.copy_component_uuid AS child_entity_id
+        FROM portfolios aggregation_portfolio
+        JOIN components portfolio_branches
+          ON portfolio_branches.branch_uuid = aggregation_portfolio.root_uuid
+        WHERE aggregation_portfolio.uuid = #{entityId}
+          AND portfolio_branches.uuid_path LIKE #{portfolioUuidPath}
+          AND portfolio_branches.qualifier = 'TRK'
+          AND portfolio_branches.copy_component_uuid IS NOT NULL
+      </if>
+      <if test="entityType.name() == 'APPLICATION'">
+        SELECT DISTINCT copy_component_uuid AS child_entity_id
+        FROM components
+        WHERE branch_uuid = #{entityId}
+          AND qualifier = 'TRK'
+          AND copy_component_uuid IS NOT NULL
+      </if>
+    ) aggregation_branches
+  </sql>
+
+  <sql id="aggregationChildEntityIdColumn">
+    aggregation_branches.child_entity_id
+  </sql>
+
+  <sql id="aggregationIdClause">
+    <!--
+      Entity scoping is applied by aggregationBranchesFrom.
+      This fragment is retained for compatibility with the history library's WHERE clause.
+    -->
+    1 = 1
+  </sql>
+
+</mapper>

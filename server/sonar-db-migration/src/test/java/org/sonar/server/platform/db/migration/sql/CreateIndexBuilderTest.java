@@ -114,6 +114,20 @@ public class CreateIndexBuilderTest {
       "CREATE UNIQUE INDEX rules_key ON rules (COALESCE(repository, ''), rule_key)");
   }
 
+  @Test
+  public void build_whenDialectPostgres14OrLower_shouldHaveCoalesceConditionsOnNullableDescendingColumns() throws SQLException {
+    PostgreSql postgreSql = new PostgreSql();
+    postgreSql.init(getMetadataForDbVersion(14, 0));
+
+    verifySql(new CreateIndexBuilder(postgreSql)
+        .setTable("rules")
+        .setName("rules_key")
+        .addColumn("repository", true, true)
+        .addColumn("rule_key", false)
+        .setUnique(true),
+      "CREATE UNIQUE INDEX rules_key ON rules (COALESCE(repository, '') DESC, rule_key)");
+  }
+
   private static DatabaseMetaData getMetadataForDbVersion(int major, int minor) throws SQLException {
     DatabaseMetaData databaseMetaData = Mockito.mock(DatabaseMetaData.class);
     Mockito.when(databaseMetaData.getDatabaseMajorVersion()).thenReturn(major);
@@ -182,6 +196,42 @@ public class CreateIndexBuilderTest {
     assertThatThrownBy(builder::build)
       .isInstanceOf(IllegalArgumentException.class)
       .hasMessage("Table name must be lower case and contain only alphanumeric chars or '_', got '(not valid)'");
+  }
+
+  @Test
+  public void create_index_with_descending_column() {
+    verifySql(new CreateIndexBuilder(new Oracle())
+        .setTable("issues")
+        .setName("issues_key")
+        .addColumn(newVarcharColumnDefBuilder().setColumnName("kee").setLimit(10).build())
+        .addColumn("recorded_at", false, true),
+      "CREATE INDEX issues_key ON issues (kee, recorded_at DESC)");
+  }
+
+  @Test
+  public void create_unique_index_with_descending_column() {
+    verifySql(new CreateIndexBuilder(new Oracle())
+        .setTable("measure_history")
+        .setName("msr_hist_epoch_uq_idx2")
+        .addColumn("entity_id", false)
+        .addColumn("entity_type", false)
+        .addColumn("metric_id", false)
+        .addColumn("recorded_at_epoch", false, true)
+        .setUnique(true),
+      "CREATE UNIQUE INDEX msr_hist_epoch_uq_idx2 ON measure_history (entity_id, entity_type, metric_id, recorded_at_epoch DESC)");
+  }
+
+  @Test
+  public void build_whenPostgres14AndDescendingNullableColumn_shouldApplyCoalesceWithDesc() throws SQLException {
+    PostgreSql postgreSql = new PostgreSql();
+    postgreSql.init(getMetadataForDbVersion(14, 0));
+
+    verifySql(new CreateIndexBuilder(postgreSql)
+        .setTable("issues")
+        .setName("issues_key")
+        .addColumn("kee", true, true)
+        .setUnique(true),
+      "CREATE UNIQUE INDEX issues_key ON issues (COALESCE(kee, '') DESC)");
   }
 
   @Test

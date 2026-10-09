@@ -46,7 +46,6 @@ import org.sonar.server.ws.TestRequest;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
-import static org.sonar.api.security.DefaultGroups.ANYONE;
 import static org.sonar.db.permission.GlobalPermission.PROVISION_PROJECTS;
 import static org.sonar.db.permission.GlobalPermission.SCAN;
 import static org.sonar.db.permission.ProjectPermission.CODEVIEWER;
@@ -87,6 +86,7 @@ public class RemoveGroupFromTemplateActionIT extends BasePermissionWsIT<RemoveGr
     assertThat(wsDef.since()).isEqualTo("5.2");
     assertThat(wsDef.isPost()).isTrue();
     assertThat(wsDef.changelog()).extracting(Change::getVersion, Change::getDescription).containsOnly(
+      tuple("2026.6", "Parameter 'groupName' no longer accepts 'Anyone', which is not a recognized group name anymore."),
       tuple("10.0", "Parameter 'groupId' is removed. Use 'groupName' instead."),
       tuple("8.4", "Parameter 'groupId' is deprecated. Format changes from integer to string. Use 'groupName' instead."));
   }
@@ -115,15 +115,6 @@ public class RemoveGroupFromTemplateActionIT extends BasePermissionWsIT<RemoveGr
     newRequest(group.getName(), template.getUuid(), PERMISSION);
 
     assertThat(getGroupNamesInTemplateAndPermission(template, PERMISSION)).isEmpty();
-  }
-
-  @Test
-  public void remove_anyone_group_from_template() {
-    addGroupToTemplate(template, null, PERMISSION, null);
-
-    newRequest(ANYONE, template.getUuid(), PERMISSION);
-
-    assertThat(getGroupNamesInTemplateAndPermission(template, PERMISSION)).containsExactly(group.getName());
   }
 
   @Test

@@ -21,6 +21,7 @@ package org.sonar.server.log;
 
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.LoggerContext;
 import com.google.common.annotations.VisibleForTesting;
 import jakarta.inject.Inject;
 import java.io.File;
@@ -29,10 +30,13 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Comparator;
+import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
+import javax.annotation.CheckForNull;
 import org.slf4j.LoggerFactory;
 import org.sonar.api.Startable;
 import org.sonar.api.ce.ComputeEngineSide;
@@ -45,13 +49,22 @@ import org.sonar.process.ProcessProperties;
 import org.sonar.process.logging.LogbackHelper;
 
 import static org.sonar.api.utils.log.LoggerLevel.TRACE;
+import static org.sonar.process.ProcessProperties.Property.LOG_LEVEL_UNIFIED;
 import static org.sonar.process.ProcessProperties.Property.PATH_LOGS;
 
 @ServerSide
 @ComputeEngineSide
 public class ServerLogging implements Startable {
+  static final List<String> UNIFIED_PREFIXES = List.of("com.sonarsource", "org.sonarsource");
+  /**
+   * Allowed values of {@link ProcessProperties.Property#LOG_LEVEL_UNIFIED}. Unlike the root level, this only
+   * affects the {@link #UNIFIED_PREFIXES} loggers, so the full range of Logback levels is allowed, including
+   * {@link Level#WARN} and {@link Level#OFF}.
+   */
+  private static final List<String> ALLOWED_UNIFIED_PREFIX_LEVELS = List.of("TRACE", "DEBUG", "INFO", "WARN", "ERROR", "OFF");
   /** Used for Hazelcast's distributed queries in cluster mode */
   private static ServerLogging instance;
+
   private final LogbackHelper helper;
   private final Configuration config;
   private final ServerProcessLogging serverProcessLogging;
@@ -68,6 +81,36 @@ public class ServerLogging implements Startable {
     this.config = config;
     this.serverProcessLogging = serverProcessLogging;
     this.database = database;
+  }
+
+  /**
+   * The level applied to the {@link #UNIFIED_PREFIXES} loggers: {@code unifiedPrefixLevelOverride} if set (see
+   * {@link ProcessProperties.Property#LOG_LEVEL_UNIFIED}), otherwise the default of capping to
+   * {@link Level#WARN} when the root level is {@link Level#INFO}, or following the root level otherwise.
+   */
+  static Level toUnifiedLevel(Level rootLevel, @CheckForNull Level unifiedPrefixLevelOverride) {
+    if (unifiedPrefixLevelOverride != null) {
+      return unifiedPrefixLevelOverride;
+    }
+    return Level.INFO.equals(rootLevel) ? Level.WARN : rootLevel;
+  }
+
+  /**
+   * Resolves the value of {@link ProcessProperties.Property#LOG_LEVEL_UNIFIED}, if any. An unsupported value
+   * is logged as a warning and ignored rather than failing startup.
+   */
+  @CheckForNull
+  static Level resolveUnifiedPrefixLevelOverride(@CheckForNull String rawValue) {
+    if (rawValue == null) {
+      return null;
+    }
+    String normalized = rawValue.trim().toUpperCase(Locale.ROOT);
+    if (!ALLOWED_UNIFIED_PREFIX_LEVELS.contains(normalized)) {
+      LoggerFactory.getLogger(ServerLogging.class).warn("Ignoring property {}: log level {} is not a supported value (allowed levels are {})",
+        LOG_LEVEL_UNIFIED.getKey(), rawValue, ALLOWED_UNIFIED_PREFIX_LEVELS);
+      return null;
+    }
+    return Level.toLevel(normalized);
   }
 
   @Override
@@ -105,6 +148,9 @@ public class ServerLogging implements Startable {
     Level logbackLevel = Level.toLevel(level.name());
     database.enableSqlLogging(level == TRACE);
     helper.changeRoot(serverProcessLogging.getLogLevelConfig(), logbackLevel);
+    LoggerContext ctx = helper.getRootContext();
+    Level unifiedPrefixLevelOverride = resolveUnifiedPrefixLevelOverride(config.get(LOG_LEVEL_UNIFIED.getKey()).orElse(null));
+    UNIFIED_PREFIXES.forEach(prefix -> ctx.getLogger(prefix).setLevel(toUnifiedLevel(logbackLevel, unifiedPrefixLevelOverride)));
     LoggerFactory.getLogger(ServerLogging.class).info("Level of logs changed to {}", level);
   }
 

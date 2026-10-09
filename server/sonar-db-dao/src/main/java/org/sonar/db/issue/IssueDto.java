@@ -22,6 +22,7 @@ package org.sonar.db.issue;
 import com.google.common.base.Preconditions;
 import java.util.Collection;
 import java.util.Date;
+import java.util.EnumMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.Map;
@@ -32,9 +33,10 @@ import org.sonar.api.issue.impact.Severity;
 import org.sonar.api.issue.impact.SoftwareQuality;
 import org.sonar.api.rule.RuleKey;
 import org.sonar.api.rules.CleanCodeAttribute;
-import org.sonar.core.rule.RuleType;
 import org.sonar.api.utils.Duration;
 import org.sonar.core.issue.DefaultIssue;
+import org.sonar.core.issue.IssueProducer;
+import org.sonar.core.rule.RuleType;
 import org.sonar.db.component.ComponentDto;
 import org.sonar.db.protobuf.DbIssues;
 import org.sonar.db.rule.RuleDto;
@@ -42,7 +44,7 @@ import org.sonar.db.rule.RuleDto;
 import static java.util.stream.Collectors.toUnmodifiableMap;
 import static org.sonar.api.utils.DateUtils.longToDate;
 
-public final class IssueDto extends IssueWithoutRuleInfoDto {
+public class IssueDto extends IssueWithoutRuleInfoDto {
 
   private String securityStandards;
 
@@ -100,6 +102,7 @@ public final class IssueDto extends IssueWithoutRuleInfoDto {
       .setCleanCodeAttribute(issue.getCleanCodeAttribute())
       .setPrioritizedRule(issue.isPrioritizedRule())
       .setFromSonarQubeUpdate(issue.isFromSonarQubeUpdate())
+      .setDeferralDate(issue.deferralDate())
       // technical dates
       .setCreatedAt(now)
       .setUpdatedAt(now);
@@ -154,6 +157,7 @@ public final class IssueDto extends IssueWithoutRuleInfoDto {
       .setCleanCodeAttribute(issue.getCleanCodeAttribute())
       .setPrioritizedRule(issue.isPrioritizedRule())
       .setFromSonarQubeUpdate(issue.isFromSonarQubeUpdate())
+      .setDeferralDate(issue.deferralDate())
       // technical date
       .setUpdatedAt(now);
 
@@ -398,6 +402,12 @@ public final class IssueDto extends IssueWithoutRuleInfoDto {
   }
 
   @Override
+  public IssueDto setBranchUuid(String s) {
+    super.setBranchUuid(s);
+    return this;
+  }
+
+  @Override
   public IssueDto setSelectedAt(@Nullable Long d) {
     super.setSelectedAt(d);
     return this;
@@ -492,6 +502,12 @@ public final class IssueDto extends IssueWithoutRuleInfoDto {
     return this;
   }
 
+  @Override
+  public IssueDto setIssueProducer(IssueProducer issueProducer) {
+    super.setIssueProducer(issueProducer);
+    return this;
+  }
+
   @CheckForNull
   public CleanCodeAttribute getEffectiveCleanCodeAttribute() {
     if (cleanCodeAttribute != null) {
@@ -570,6 +586,12 @@ public final class IssueDto extends IssueWithoutRuleInfoDto {
     return this;
   }
 
+  @Override
+  public IssueDto setDeferralDate(@Nullable Long deferralDate) {
+    super.setDeferralDate(deferralDate);
+    return this;
+  }
+
   public DefaultIssue toDefaultIssue() {
     DefaultIssue issue = new DefaultIssue();
     issue.setKey(kee);
@@ -583,8 +605,11 @@ public final class IssueDto extends IssueWithoutRuleInfoDto {
     issue.setLine(line);
     issue.setChecksum(checksum);
     issue.setSeverity(severity);
+    issue.setDefaultRuleImpacts(convertImpactSetToMap(ruleDefaultImpacts));
+    issue.setOverriddenImpacts(convertImpactSetToMap(impacts));
     issue.setPrioritizedRule(prioritizedRule);
     issue.setFromSonarQubeUpdate(fromSonarQubeUpdate);
+    issue.setDeferralDate(deferralDate);
     issue.setAssigneeUuid(assigneeUuid);
     issue.setAssigneeLogin(assigneeLogin);
     issue.setComponentKey(componentKey);
@@ -600,6 +625,7 @@ public final class IssueDto extends IssueWithoutRuleInfoDto {
     issue.setAuthorLogin(authorLogin);
     issue.setNew(false);
     issue.setCreationDate(longToDate(issueCreationDate));
+    issue.setDetectionDate(longToDate(createdAt));
     issue.setCloseDate(longToDate(issueCloseDate));
     issue.setUpdateDate(longToDate(issueUpdateDate));
     issue.setSelectedAt(selectedAt);
@@ -609,7 +635,14 @@ public final class IssueDto extends IssueWithoutRuleInfoDto {
     issue.setIsNewCodeReferenceIssue(isNewCodeReferenceIssue);
     issue.setCodeVariants(getCodeVariants());
     issue.setCleanCodeAttribute(cleanCodeAttribute);
+    issue.setBranchUuid(branchUuid);
     impacts.forEach(i -> issue.addImpact(i.getSoftwareQuality(), i.getSeverity(), i.isManualSeverity()));
     return issue;
+  }
+
+  private static Map<SoftwareQuality, Severity> convertImpactSetToMap(Set<ImpactDto> set) {
+    Map<SoftwareQuality, Severity> impacts = new EnumMap<>(SoftwareQuality.class);
+    set.forEach(impactDto -> impacts.put(impactDto.getSoftwareQuality(), impactDto.getSeverity()));
+    return impacts;
   }
 }

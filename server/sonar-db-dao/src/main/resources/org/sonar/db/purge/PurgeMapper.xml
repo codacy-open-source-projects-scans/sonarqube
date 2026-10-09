@@ -305,6 +305,32 @@
       )
   </delete>
 
+  <!-- Must run before deleteIssuesByProjectUuid for the same (branch) uuid; restricted to hunter-agent
+       issues, since plugin rules and scanner issues use context_key too. -->
+  <delete id="deleteUnreferencedRuleDescSectionsByProjectUuid" parameterType="map">
+    delete from rule_desc_sections
+    where
+      uuid in (
+        select
+          s.uuid
+        from rule_desc_sections s
+          inner join issues i on i.rule_uuid = s.rule_uuid and i.rule_description_context_key = s.context_key
+        where
+          s.context_key is not null
+          and i.project_uuid = #{projectUuid,jdbcType=VARCHAR}
+          and coalesce(i.producer, 1) = 2
+      )
+      and rule_desc_sections.context_key is not null
+      and not exists (
+        select 1 from issues o
+        where
+          o.rule_uuid = rule_desc_sections.rule_uuid
+          and o.rule_description_context_key = rule_desc_sections.context_key
+          <!-- project_uuid is nullable; without this a live section on a null-project issue would be deleted. -->
+          and (o.project_uuid is null or o.project_uuid != #{projectUuid,jdbcType=VARCHAR})
+      )
+  </delete>
+
   <delete id="deleteFileSourcesByProjectUuid">
     delete from file_sources where project_uuid=#{rootProjectUuid,jdbcType=VARCHAR}
   </delete>
@@ -444,6 +470,160 @@
     WHERE issue_key IN
     <foreach collection="issueKeys" open="(" close=")" item="issueKey" separator=",">
       #{issueKey,jdbcType=VARCHAR}
+    </foreach>
+  </delete>
+
+  <!-- Captured before the issues are deleted; restricted to hunter-agent issues, since plugin rules and
+       scanner issues use context_key too. -->
+  <select id="selectHunterAgentRuleDescSectionUuidsByIssueKeys" parameterType="map" resultType="String">
+    SELECT DISTINCT s.uuid
+    FROM rule_desc_sections s
+      INNER JOIN issues i ON i.rule_uuid = s.rule_uuid AND i.rule_description_context_key = s.context_key
+    WHERE
+      s.context_key IS NOT NULL
+      AND coalesce(i.producer, 1) = 2
+      AND i.kee IN
+      <foreach collection="issueKeys" open="(" close=")" item="issueKey" separator=",">
+        #{issueKey,jdbcType=VARCHAR}
+      </foreach>
+  </select>
+
+  <!-- Must run after the issue deletes above, in the same transaction; guard is global (not project-scoped)
+       since rule_desc_sections has no project column. Table name never aliased: SQL Server rejects an
+       alias on a DELETE target, and issues also has a rule_uuid column so a bare one would bind wrong. -->
+  <delete id="deleteUnreferencedRuleDescSectionsByUuids" parameterType="map">
+    DELETE FROM rule_desc_sections
+    WHERE
+      uuid IN
+      <foreach collection="uuids" open="(" close=")" item="uuid" separator=",">
+        #{uuid,jdbcType=VARCHAR}
+      </foreach>
+      AND rule_desc_sections.context_key IS NOT NULL
+      AND NOT EXISTS (
+        SELECT 1 FROM issues i
+        WHERE
+          i.rule_uuid = rule_desc_sections.rule_uuid
+          AND i.rule_description_context_key = rule_desc_sections.context_key
+      )
+  </delete>
+
+  <select id="selectCeActivityUuidsByRootUuidOrBeforeWithLimit" resultType="String">
+    select uuid from ce_activity
+    <include refid="whereClauseCeActivityByRootUuidOrBefore"/>
+    limit #{limit,jdbcType=INTEGER}
+  </select>
+
+  <select id="selectCeActivityUuidsByRootUuidOrBeforeWithLimit" resultType="String" databaseId="oracle">
+    select uuid from (
+      select uuid from ce_activity
+      <include refid="whereClauseCeActivityByRootUuidOrBefore"/>
+    ) where rownum &lt;= #{limit,jdbcType=INTEGER}
+  </select>
+
+  <select id="selectCeActivityUuidsByRootUuidOrBeforeWithLimit" resultType="String" databaseId="mssql">
+    select top (#{limit,jdbcType=INTEGER}) uuid from ce_activity
+    <include refid="whereClauseCeActivityByRootUuidOrBefore"/>
+  </select>
+
+  <select id="selectCeScannerContextUuidsByRootUuidOrBeforeWithLimit" resultType="String">
+    select task_uuid from ce_scanner_context
+    where task_uuid in (
+      select uuid from ce_activity
+      <include refid="whereClauseCeActivityByRootUuidOrBefore"/>
+    )
+    limit #{limit,jdbcType=INTEGER}
+  </select>
+
+  <select id="selectCeScannerContextUuidsByRootUuidOrBeforeWithLimit" resultType="String" databaseId="oracle">
+    select task_uuid from (
+      select task_uuid from ce_scanner_context
+      where task_uuid in (
+        select uuid from ce_activity
+        <include refid="whereClauseCeActivityByRootUuidOrBefore"/>
+      )
+    ) where rownum &lt;= #{limit,jdbcType=INTEGER}
+  </select>
+
+  <select id="selectCeScannerContextUuidsByRootUuidOrBeforeWithLimit" resultType="String" databaseId="mssql">
+    select top (#{limit,jdbcType=INTEGER}) task_uuid from ce_scanner_context
+    where task_uuid in (
+      select uuid from ce_activity
+      <include refid="whereClauseCeActivityByRootUuidOrBefore"/>
+    )
+  </select>
+
+  <delete id="deleteCeScannerContextOfCeActivityByUuids">
+    delete from ce_scanner_context
+    where task_uuid in
+    <foreach collection="ceActivityUuids" open="(" close=")" item="ceActivityUuid" separator=",">
+      #{ceActivityUuid,jdbcType=VARCHAR}
+    </foreach>
+  </delete>
+
+  <delete id="deleteCeTaskCharacteristicsOfCeActivityByUuids">
+    delete from ce_task_characteristics
+    where task_uuid in
+    <foreach collection="ceActivityUuids" open="(" close=")" item="ceActivityUuid" separator=",">
+      #{ceActivityUuid,jdbcType=VARCHAR}
+    </foreach>
+  </delete>
+
+  <delete id="deleteCeTaskInputOfCeActivityByUuids">
+    delete from ce_task_input
+    where task_uuid in
+    <foreach collection="ceActivityUuids" open="(" close=")" item="ceActivityUuid" separator=",">
+      #{ceActivityUuid,jdbcType=VARCHAR}
+    </foreach>
+  </delete>
+
+  <delete id="deleteCeTaskMessageOfCeActivityByUuids">
+    delete from ce_task_message
+    where task_uuid in
+    <foreach collection="ceActivityUuids" open="(" close=")" item="ceActivityUuid" separator=",">
+      #{ceActivityUuid,jdbcType=VARCHAR}
+    </foreach>
+  </delete>
+
+  <select id="selectCeActivityUuidsByAnalysisUuids" parameterType="map" resultType="String">
+    select uuid from ce_activity
+    where analysis_uuid in
+    <foreach collection="analysisUuids" open="(" close=")" item="analysisUuid" separator=",">
+      #{analysisUuid,jdbcType=VARCHAR}
+    </foreach>
+  </select>
+
+  <delete id="deleteArchScannerDataOfCeActivityByUuids">
+    delete from arch_scanner_data
+    where name in
+    <foreach collection="ceActivityUuids" open="(" close=")" item="ceActivityUuid" separator=",">
+      CONCAT('upload/', #{ceActivityUuid,jdbcType=VARCHAR})
+    </foreach>
+  </delete>
+
+  <delete id="deleteArchGraphBlobsOfCeActivityByUuids">
+    delete from arch_graph_blobs
+    where name in (
+      select uuid from arch_graph_metadata
+      where analysis_id in
+      <foreach collection="ceActivityUuids" open="(" close=")" item="ceActivityUuid" separator=",">
+        #{ceActivityUuid,jdbcType=VARCHAR}
+      </foreach>
+    )
+  </delete>
+
+  <delete id="deleteArchGraphMetadataOfCeActivityByUuids">
+    delete from arch_graph_metadata
+    where analysis_id in
+    <foreach collection="ceActivityUuids" open="(" close=")" item="ceActivityUuid" separator=",">
+      #{ceActivityUuid,jdbcType=VARCHAR}
+    </foreach>
+  </delete>
+
+  <delete id="deleteCeActivityByUuids">
+    delete from ce_activity
+    where uuid in
+    <foreach collection="ceActivityUuids" open="(" close=")" item="ceActivityUuid" separator=",">
+      #{ceActivityUuid,jdbcType=VARCHAR}
     </foreach>
   </delete>
 
@@ -659,31 +839,71 @@
     delete from issues_fixed where pull_request_uuid = #{branchUuid,jdbcType=VARCHAR}
   </delete>
 
-  <delete id="deleteArchitectureGraphsByBranchUuid">
-    delete from architecture_graphs where branch_uuid = #{branchUuid,jdbcType=VARCHAR}
+  <delete id="deleteArchScannerDataByRootUuid">
+    delete from arch_scanner_data
+    where name in (
+      select CONCAT('upload/', uuid) from ce_activity where component_uuid = #{rootUuid,jdbcType=VARCHAR}
+      union
+      select CONCAT('upload/', uuid) from ce_queue where component_uuid = #{rootUuid,jdbcType=VARCHAR}
+    )
   </delete>
-
-  <delete id="deleteScaAnalysesByComponentUuid">
-    delete from sca_analyses where component_uuid = #{componentUuid,jdbcType=VARCHAR}
+  <delete id="deleteArchGraphBlobsByBranchUuid">
+    delete from arch_graph_blobs where name in (select uuid from arch_graph_metadata where branch_id = #{branchUuid,jdbcType=VARCHAR})
   </delete>
-  <delete id="deleteScaDependenciesByComponentUuid">
-    delete from sca_dependencies where sca_release_uuid in (select uuid from sca_releases where component_uuid = #{componentUuid,jdbcType=VARCHAR})
+  <delete id="deleteArchGraphMetadataByBranchUuid">
+    delete from arch_graph_metadata where branch_id = #{branchUuid,jdbcType=VARCHAR}
   </delete>
-  <delete id="deleteScaIssuesReleasesByComponentUuid">
-    delete from sca_issues_releases where sca_release_uuid in (select uuid from sca_releases where component_uuid = #{componentUuid,jdbcType=VARCHAR})
+  <delete id="deleteArchGraphBlobsByProjectUuid">
+    delete from arch_graph_blobs where name in (select uuid from arch_graph_metadata where project_id = #{projectUuid,jdbcType=VARCHAR})
   </delete>
-  <delete id="deleteScaIssuesReleasesChangesByComponentUuid">
-    delete from sca_issue_rels_changes where sca_issues_releases_uuid in
-    (select sca_issues_releases.uuid from sca_issues_releases join sca_releases on sca_releases.uuid = sca_issues_releases.sca_release_uuid
-     where sca_releases.component_uuid = #{componentUuid,jdbcType=VARCHAR})
+  <delete id="deleteArchGraphMetadataByProjectUuid">
+    delete from arch_graph_metadata where project_id = #{projectUuid,jdbcType=VARCHAR}
   </delete>
-  <delete id="deleteScaReleasesByComponentUuid">
-    delete from sca_releases where component_uuid = #{componentUuid,jdbcType=VARCHAR}
+  <delete id="deleteArchDirectivesByProjectUuid">
+    delete from arch_directives where project_id = #{projectUuid,jdbcType=VARCHAR}
   </delete>
-  <delete id="deleteScaLicenseProfileProjectsByProjectUuid">
-    delete from sca_lic_prof_projects where project_uuid = #{projectUuid,jdbcType=VARCHAR}
+  <delete id="deleteArchModelPatternsByProjectUuid">
+    delete from arch_model_patterns where model_id in (select uuid from arch_models where project_id = #{projectUuid,jdbcType=VARCHAR})
+  </delete>
+  <delete id="deleteArchModelsByProjectUuid">
+    delete from arch_models where project_id = #{projectUuid,jdbcType=VARCHAR}
+  </delete>
+  <delete id="deleteArchBoundaryDescriptorsByProjectUuid">
+    delete from arch_boundary_descriptors where project_id = #{projectUuid,jdbcType=VARCHAR}
+  </delete>
+  <delete id="deleteArchBoundariesByProjectUuid">
+    delete from arch_boundaries where project_id = #{projectUuid,jdbcType=VARCHAR}
+  </delete>
+  <delete id="deleteArchProjRelationsByProjectUuid">
+    delete from arch_proj_relations
+    <where>
+      project_id = #{projectUuid,jdbcType=VARCHAR}
+    </where>
+  </delete>
+  <delete id="deleteArchProjRelationsByTargetProjectUuid">
+    delete from arch_proj_relations where target_component_id in
+      (select org_component_uuid from arch_proj_org_compo where project_id = #{projectUuid,jdbcType=VARCHAR})
+  </delete>
+  <update id="clearArchOrgSdksTargetComponentIdByProjectUuid">
+    update arch_org_sdks set target_component_id = null where target_component_id in
+      (select org_component_uuid from arch_proj_org_compo where project_id = #{projectUuid,jdbcType=VARCHAR})
+  </update>
+  <delete id="deleteArchProjOrgCompoByProjectUuid">
+    delete from arch_proj_org_compo where project_id = #{projectUuid,jdbcType=VARCHAR}
   </delete>
   <delete id="deleteIssueStatsByRuleKey">
     delete from issue_stats_by_rule_key where aggregation_type = #{aggregationType,jdbcType=VARCHAR} and aggregation_id = #{aggregationId,jdbcType=VARCHAR}
+  </delete>
+  <delete id="deleteMeasureHistoryByEntityUuid">
+    delete from measure_history where entity_id = #{entityUuid,jdbcType=VARCHAR}
+  </delete>
+  <delete id="deleteIssueTtrHistoryByEntityUuid">
+    delete from issue_ttr_history where entity_id = #{entityUuid,jdbcType=VARCHAR}
+  </delete>
+  <delete id="deleteScaTtrHistoryByEntityUuid">
+    delete from sca_ttr_history where entity_id = #{entityUuid,jdbcType=VARCHAR}
+  </delete>
+  <delete id="deleteIssueCountHistoryByEntityUuid">
+    delete from issue_count_history where entity_id = #{entityUuid,jdbcType=VARCHAR}
   </delete>
 </mapper>

@@ -43,6 +43,7 @@ import org.sonar.ce.CeTaskCommonsModule;
 import org.sonar.ce.StandaloneCeDistributedInformation;
 import org.sonar.ce.analysis.cache.cleaning.AnalysisCacheCleaningModule;
 import org.sonar.ce.async.SynchronousAsyncExecution;
+import org.sonar.ce.cleaning.CeActivitiesPurgeModule;
 import org.sonar.ce.cleaning.CeCleaningModule;
 import org.sonar.ce.issue.index.NoAsyncIssueIndexing;
 import org.sonar.ce.logging.CeProcessLogging;
@@ -50,12 +51,12 @@ import org.sonar.ce.monitoring.CEQueueStatusImpl;
 import org.sonar.ce.platform.CECoreExtensionsInstaller;
 import org.sonar.ce.platform.ComputeEngineExtensionInstaller;
 import org.sonar.ce.platform.DatabaseCompatibility;
-import org.sonar.ce.queue.PurgeCeActivities;
 import org.sonar.ce.task.projectanalysis.ProjectAnalysisTaskModule;
 import org.sonar.ce.task.projectanalysis.analysis.ProjectConfigurationFactory;
 import org.sonar.ce.task.projectanalysis.issue.AdHocRuleCreator;
 import org.sonar.ce.task.projectanalysis.notification.ReportAnalysisFailureNotificationModule;
 import org.sonar.ce.task.projectanalysis.taskprocessor.AuditPurgeTaskModule;
+import org.sonar.ce.task.projectanalysis.taskprocessor.HistoryPurgeTaskModule;
 import org.sonar.ce.task.projectanalysis.taskprocessor.IssueSyncTaskModule;
 import org.sonar.ce.taskprocessor.CeProcessingScheduler;
 import org.sonar.ce.taskprocessor.CeTaskProcessorModule;
@@ -85,6 +86,7 @@ import org.sonar.db.report.IssueStatsByRuleKeyDaoImpl;
 import org.sonar.process.NetworkUtilsImpl;
 import org.sonar.process.Props;
 import org.sonar.process.logging.LogbackHelper;
+import org.sonar.server.common.graphql.GraphQlClient;
 import org.sonar.server.component.ComponentTypes;
 import org.sonar.server.component.DefaultComponentTypes;
 import org.sonar.server.component.index.EntityDefinitionIndexer;
@@ -92,6 +94,7 @@ import org.sonar.server.config.ConfigurationProvider;
 import org.sonar.server.email.EmailSmtpConfiguration;
 import org.sonar.server.es.EsModule;
 import org.sonar.server.es.IndexersImpl;
+import org.sonar.server.events.EventsCeComponents;
 import org.sonar.server.extension.CoreExtensionBootstraper;
 import org.sonar.server.extension.CoreExtensionStopper;
 import org.sonar.server.favorite.FavoriteUpdater;
@@ -126,6 +129,7 @@ import org.sonar.server.notification.email.EmailNotificationChannel;
 import org.sonar.server.oauth.OAuthMicrosoftRestClient;
 import org.sonar.server.permission.index.PermissionIndexer;
 import org.sonar.server.platform.DefaultNodeInformation;
+import org.sonar.server.platform.InstallationDateProviderImpl;
 import org.sonar.server.platform.OfficialDistribution;
 import org.sonar.server.platform.ServerFileSystemImpl;
 import org.sonar.server.platform.ServerImpl;
@@ -155,15 +159,22 @@ import org.sonar.server.rule.index.RuleIndexer;
 import org.sonar.server.setting.DatabaseSettingLoader;
 import org.sonar.server.setting.DatabaseSettingsEnabler;
 import org.sonar.server.setting.ThreadLocalSettings;
+import org.sonar.server.telemetry.gessie.GessieFlushExecutorServiceImpl;
+import org.sonar.server.telemetry.gessie.GessieIngestorExecutorServiceImpl;
+import org.sonar.server.telemetry.gessie.GessieMetadataSourceImpl;
 import org.sonar.server.util.OkHttpClientProvider;
 import org.sonar.server.util.Paths2Impl;
 import org.sonar.server.view.index.ViewIndex;
 import org.sonar.server.view.index.ViewIndexer;
 import org.sonar.server.webhook.WebhookModule;
+import org.sonar.telemetry.core.event.AnalyticsEventPublisher;
 import org.sonarqube.ws.Rules;
 import org.sonarsource.compliancereports.ingestion.IssueIngestionService;
+import org.sonarsource.gessie.server.GessieProperties;
+import org.sonarsource.gessie.server.telemetry.GessieTelemetryCeConfiguration;
+import org.sonarsource.history.server.bean.HistoryServerPlatformLevel1Module;
+import org.sonarsource.history.server.db.mapper.IssueTtrHistoryMapperFragments;
 import org.sonarsource.users.server.bean.UsersServerComponents;
-import org.sonar.server.events.EventsCeComponents;
 
 import static java.util.Objects.requireNonNull;
 import static org.sonar.core.extension.CoreExtensionsInstaller.noAdditionalSideFilter;
@@ -271,6 +282,8 @@ public class ComputeEngineContainerImpl implements ComputeEngineContainer {
     Version sqVersion = MetadataLoader.loadSQVersion(System2.INSTANCE);
     SonarEdition edition = MetadataLoader.loadEdition(System2.INSTANCE);
     SonarRuntime sonarRuntime = SonarRuntimeImpl.forSonarQube(apiVersion, SonarQubeSide.COMPUTE_ENGINE, edition);
+
+    level1Container.add(toArray(HistoryServerPlatformLevel1Module.components(IssueTtrHistoryMapperFragments.class)));
 
     level1Container.add(
       props.rawProperties(),
@@ -461,6 +474,7 @@ public class ComputeEngineContainerImpl implements ComputeEngineContainer {
       new ProjectAnalysisTaskModule(),
       new IssueSyncTaskModule(),
       new AuditPurgeTaskModule(),
+      new HistoryPurgeTaskModule(),
       new CeTaskProcessorModule(),
       OfficialDistribution.class,
 
@@ -475,7 +489,9 @@ public class ComputeEngineContainerImpl implements ComputeEngineContainer {
       QualityGateFinder.class,
       QualityGateEvaluatorImpl.class,
 
-      new AnalysisCacheCleaningModule()
+      new AnalysisCacheCleaningModule(),
+
+      GraphQlClient.class
 
     );
 
@@ -484,10 +500,33 @@ public class ComputeEngineContainerImpl implements ComputeEngineContainer {
 
     // registered via sonar-unified-events
     level4Container.add(toArray(EventsCeComponents.components()));
+    // publishes Analytics.* cross-domain events onto the unified event bus
+    level4Container.add(AnalyticsEventPublisher.class);
 
+    // registered via gessie-server-app
+    level4Container.add(GessieProperties.getPropertyDefinitions().toArray());
+    level4Container.add(GessieFlushExecutorServiceImpl.class);
+    level4Container.add(GessieIngestorExecutorServiceImpl.class);
+    level4Container.add(GessieTelemetryCeConfiguration.class);
+    level4Container.add(InstallationDateProviderImpl.class);
+    level4Container.add(GessieMetadataSourceImpl.class);
+
+    addClusterOrStandaloneComponents(level4Container, props);
+
+    level4Container.getParent().getOptionalComponentByType(CECoreExtensionsInstaller.class)
+      .orElseThrow(() -> new IllegalStateException("Core extension loading mechanism is not available"))
+      .install(level4Container, hasPlatformLevel4OrNone(), noAdditionalSideFilter());
+
+    level4Container.getParent().getOptionalComponentByType(ServerExtensionInstaller.class)
+      .orElseThrow(() -> new IllegalStateException("Core extension loading mechanism is not available"))
+      .installExtensions(level4Container);
+  }
+
+  private static void addClusterOrStandaloneComponents(SpringComponentContainer level4Container, Props props) {
     if (props.valueAsBoolean(CLUSTER_ENABLED.getKey())) {
       level4Container.add(
         new CeCleaningModule(),
+        new CeActivitiesPurgeModule(),
 
         // system health
         CeDistributedInformationImpl.class,
@@ -499,23 +538,15 @@ public class ComputeEngineContainerImpl implements ComputeEngineContainer {
     } else {
       level4Container.add(
         new CeCleaningModule(),
+        new CeActivitiesPurgeModule(),
         ServerLogging.class,
         StandaloneCeDistributedInformation.class);
     }
-
-    level4Container.getParent().getOptionalComponentByType(CECoreExtensionsInstaller.class)
-      .orElseThrow(() -> new IllegalStateException("Core extension loading mechanism is not available"))
-      .install(level4Container, hasPlatformLevel4OrNone(), noAdditionalSideFilter());
-
-    level4Container.getParent().getOptionalComponentByType(ServerExtensionInstaller.class)
-      .orElseThrow(() -> new IllegalStateException("Core extension loading mechanism is not available"))
-      .installExtensions(level4Container);
   }
 
   private static Object[] startupComponents() {
     return new Object[]{
-      ServerLifecycleNotifier.class,
-      PurgeCeActivities.class
+      ServerLifecycleNotifier.class
     };
   }
 

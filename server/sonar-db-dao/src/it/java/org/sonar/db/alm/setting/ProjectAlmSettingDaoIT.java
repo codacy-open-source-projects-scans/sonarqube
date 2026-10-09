@@ -28,16 +28,25 @@ import java.util.UUID;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.IntStream;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.sonar.api.impl.utils.TestSystem2;
 import org.sonar.core.util.UuidFactory;
+import org.sonar.core.util.Uuids;
 import org.sonar.db.DbSession;
 import org.sonar.db.DbTester;
 import org.sonar.db.audit.NoOpAuditPersister;
+import org.sonar.db.permission.GlobalPermission;
+import org.sonar.db.permission.GroupPermissionDao;
+import org.sonar.db.permission.GroupPermissionDto;
+import org.sonar.db.permission.ProjectPermission;
+import org.sonar.db.permission.UserPermissionDto;
 import org.sonar.db.project.ProjectDto;
+import org.sonar.db.user.GroupDto;
+import org.sonar.db.user.UserDto;
 
 import static java.util.Arrays.stream;
 import static java.util.Collections.emptyMap;
@@ -45,12 +54,14 @@ import static java.util.Collections.emptySet;
 import static java.util.stream.Collectors.toMap;
 import static java.util.stream.Collectors.toSet;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.sonar.db.almsettings.AlmSettingsTesting.newAzureProjectAlmSettingDto;
 import static org.sonar.db.almsettings.AlmSettingsTesting.newBitbucketProjectAlmSettingDto;
 import static org.sonar.db.almsettings.AlmSettingsTesting.newGithubProjectAlmSettingDto;
+import static org.sonar.db.almsettings.AlmSettingsTesting.newGitlabProjectAlmSettingDto;
 
 class ProjectAlmSettingDaoIT {
 
@@ -66,6 +77,12 @@ class ProjectAlmSettingDaoIT {
   private final DbSession dbSession = db.getSession();
   private final UuidFactory uuidFactory = mock(UuidFactory.class);
   private final ProjectAlmSettingDao underTest = new ProjectAlmSettingDao(system2, uuidFactory, new NoOpAuditPersister());
+  private UserDto testUser;
+
+  @BeforeEach
+  void setUp() {
+    testUser = db.users().insertUser();
+  }
 
   @Test
   void select_by_project() {
@@ -73,7 +90,9 @@ class ProjectAlmSettingDaoIT {
     AlmSettingDto githubAlmSettingDto = db.almSettings().insertGitHubAlmSetting();
     ProjectDto project = db.components().insertPrivateProject().getProjectDto();
     ProjectDto anotherProject = db.components().insertPrivateProject().getProjectDto();
-    ProjectAlmSettingDto githubProjectAlmSettingDto = newGithubProjectAlmSettingDto(githubAlmSettingDto, project);
+    ProjectAlmSettingDto githubProjectAlmSettingDto = newGithubProjectAlmSettingDto(githubAlmSettingDto, project)
+      .setUrl("https://github.com/foo/bar")
+      .setRepoId("123456");
     underTest.insertOrUpdate(dbSession, githubProjectAlmSettingDto, githubAlmSettingDto.getKey(), anotherProject.getName(),
       anotherProject.getKey());
 
@@ -82,10 +101,11 @@ class ProjectAlmSettingDaoIT {
         ProjectAlmSettingDto::getAlmRepo, ProjectAlmSettingDto::getAlmSlug,
         ProjectAlmSettingDto::getCreatedAt, ProjectAlmSettingDto::getUpdatedAt,
         ProjectAlmSettingDto::getSummaryCommentEnabled, ProjectAlmSettingDto::getInlineAnnotationsEnabled,
-        ProjectAlmSettingDto::getMonorepo)
+        ProjectAlmSettingDto::getMonorepo, ProjectAlmSettingDto::getUrl, ProjectAlmSettingDto::getRepoId)
       .containsExactly(A_UUID, githubAlmSettingDto.getUuid(), project.getUuid(),
         githubProjectAlmSettingDto.getAlmRepo(), githubProjectAlmSettingDto.getAlmSlug(),
-        A_DATE, A_DATE, githubProjectAlmSettingDto.getSummaryCommentEnabled(), null, false);
+        A_DATE, A_DATE, githubProjectAlmSettingDto.getSummaryCommentEnabled(), null, false,
+        "https://github.com/foo/bar", "123456");
 
     assertThat(underTest.selectByProject(dbSession, anotherProject)).isNotPresent();
   }
@@ -215,7 +235,7 @@ class ProjectAlmSettingDaoIT {
 
   @Test
   void selectProjectAlmSettings_whenNoResult_returnsEmptyList() {
-    List<ProjectAlmSettingDto> dtos = underTest.selectProjectAlmSettings(dbSession, new ProjectAlmSettingQuery("repository", "almSettingUuid"), 1, 100);
+    List<ProjectAlmSettingDto> dtos = underTest.selectProjectAlmSettings(dbSession, new ProjectAlmSettingQuery("repository", "almSettingUuid"), testUser.getUuid(), 1, 100);
     assertThat(dtos).isEmpty();
   }
 
@@ -229,8 +249,8 @@ class ProjectAlmSettingDaoIT {
     createAlmProject(notMatchingAlmSettingDto, dto -> dto.setAlmRepo("matchingRepo")); // not matching alm setting
 
     ProjectAlmSettingQuery query = new ProjectAlmSettingQuery("matchingRepo", matchingAlmSettingDto.getUuid());
-    List<ProjectAlmSettingDto> results = underTest.selectProjectAlmSettings(dbSession, query, 1, 100);
-    
+    List<ProjectAlmSettingDto> results = underTest.selectProjectAlmSettings(dbSession, query, testUser.getUuid(), 1, 100);
+
     assertThat(results)
       .usingRecursiveFieldByFieldElementComparator()
       .containsExactlyInAnyOrder(matchingRepo, matchingAlmSetting);
@@ -253,12 +273,12 @@ class ProjectAlmSettingDaoIT {
     Map<String, ProjectAlmSettingDto> allProjectAlmSettingsDtos = generateProjectAlmSettingsDtos(numberToGenerate);
 
     ProjectAlmSettingQuery query = new ProjectAlmSettingQuery(null, null);
-    List<ProjectAlmSettingDto> projectAlmSettingDtos = underTest.selectProjectAlmSettings(dbSession, query, offset, limit);
+    List<ProjectAlmSettingDto> projectAlmSettingDtos = underTest.selectProjectAlmSettings(dbSession, query, testUser.getUuid(), offset, limit);
 
     Set<ProjectAlmSettingDto> expectedDtos = getExpectedProjectAlmSettingDtos(offset, limit, allProjectAlmSettingsDtos);
 
     assertThat(projectAlmSettingDtos).usingRecursiveFieldByFieldElementComparator().containsExactlyInAnyOrderElementsOf(expectedDtos);
-    assertThat(underTest.countProjectAlmSettings(dbSession, query)).isEqualTo(numberToGenerate);
+    assertThat(underTest.countProjectAlmSettings(dbSession, query, testUser.getUuid())).isEqualTo(numberToGenerate);
   }
 
   private Map<String, ProjectAlmSettingDto> generateProjectAlmSettingsDtos(int numberToGenerate) {
@@ -266,15 +286,26 @@ class ProjectAlmSettingDaoIT {
       return emptyMap();
     }
     Map<String, ProjectAlmSettingDto> result = IntStream.range(1000, 1000 + numberToGenerate)
-      .mapToObj(i -> underTest.insertOrUpdate(dbSession, new ProjectAlmSettingDto()
-        .setAlmRepo("repo_" + i)
-        .setAlmSettingUuid("almSettingUuid_" + i)
-        .setProjectUuid("projectUuid_" + i)
-        .setMonorepo(false),
-        "key_" + i, "projectName_" + i, "projectKey_" + i))
+      .mapToObj(i -> {
+        String projectUuid = "projectUuid_" + i;
+        grantUserPermissionOnProjectUuid(testUser, projectUuid);
+        return underTest.insertOrUpdate(dbSession, new ProjectAlmSettingDto()
+          .setAlmRepo("repo_" + i)
+          .setAlmSettingUuid("almSettingUuid_" + i)
+          .setProjectUuid(projectUuid)
+          .setMonorepo(false),
+          "key_" + i, "projectName_" + i, "projectKey_" + i);
+      })
       .collect(toMap(ProjectAlmSettingDto::getAlmRepo, Function.identity()));
     db.commit();
     return result;
+  }
+
+  private void grantUserPermissionOnProjectUuid(UserDto user, String projectUuid) {
+    db.getDbClient().userPermissionDao().insert(dbSession,
+      new UserPermissionDto(Uuids.create(), ProjectPermission.USER.getKey(), user.getUuid(), projectUuid),
+      null, user, null);
+    db.commit();
   }
 
   private Set<ProjectAlmSettingDto> getExpectedProjectAlmSettingDtos(int offset, int limit, Map<String, ProjectAlmSettingDto> allProjectAlmSettingsDtos) {
@@ -296,17 +327,51 @@ class ProjectAlmSettingDaoIT {
 
     system2.setNow(A_DATE_LATER);
     ProjectAlmSettingDto newProjectAlmSettingDto = newGithubProjectAlmSettingDto(anotherGithubAlmSetting, project)
-      .setSummaryCommentEnabled(false);
+      .setSummaryCommentEnabled(false)
+      .setUrl("https://github.com/foo/bar")
+      .setRepoId("123456");
     underTest.insertOrUpdate(dbSession, newProjectAlmSettingDto, githubAlmSetting.getKey(), project.getName(), project.getKey());
 
     assertThat(underTest.selectByProject(dbSession, project).get())
       .extracting(ProjectAlmSettingDto::getUuid, ProjectAlmSettingDto::getAlmSettingUuid, ProjectAlmSettingDto::getProjectUuid,
         ProjectAlmSettingDto::getAlmRepo, ProjectAlmSettingDto::getAlmSlug,
         ProjectAlmSettingDto::getCreatedAt, ProjectAlmSettingDto::getUpdatedAt,
-        ProjectAlmSettingDto::getSummaryCommentEnabled)
+        ProjectAlmSettingDto::getSummaryCommentEnabled, ProjectAlmSettingDto::getUrl, ProjectAlmSettingDto::getRepoId)
       .containsExactly(projectAlmSettingDto.getUuid(), anotherGithubAlmSetting.getUuid(), project.getUuid(),
         newProjectAlmSettingDto.getAlmRepo(), newProjectAlmSettingDto.getAlmSlug(),
-        A_DATE, A_DATE_LATER, newProjectAlmSettingDto.getSummaryCommentEnabled());
+        A_DATE, A_DATE_LATER, newProjectAlmSettingDto.getSummaryCommentEnabled(),
+        "https://github.com/foo/bar", "123456");
+  }
+
+  @Test
+  void update_existing_github_binding_whenNewDtoHasNoUrlAndRepoId_clearsStaleValues() {
+    when(uuidFactory.create()).thenReturn(A_UUID);
+    AlmSettingDto githubAlmSetting = db.almSettings().insertGitHubAlmSetting();
+    ProjectDto project = db.components().insertPrivateProject().getProjectDto();
+    db.almSettings().insertGitHubProjectAlmSetting(githubAlmSetting, project,
+      dto -> dto.setUrl("https://github.com/foo/bar").setRepoId("123456"));
+
+    system2.setNow(A_DATE_LATER);
+    ProjectAlmSettingDto rebindProjectAlmSettingDto = newGithubProjectAlmSettingDto(githubAlmSetting, project);
+    underTest.insertOrUpdate(dbSession, rebindProjectAlmSettingDto, githubAlmSetting.getKey(), project.getName(), project.getKey());
+
+    assertThat(underTest.selectByProject(dbSession, project).get())
+      .extracting(ProjectAlmSettingDto::getUrl, ProjectAlmSettingDto::getRepoId)
+      .containsExactly(null, null);
+  }
+
+  @Test
+  void select_by_project_whenGitlabPathWithNamespace_roundTripsAlmSlug() {
+    when(uuidFactory.create()).thenReturn(A_UUID);
+    AlmSettingDto gitlabAlmSetting = db.almSettings().insertGitlabAlmSetting();
+    ProjectDto project = db.components().insertPrivateProject().getProjectDto();
+    ProjectAlmSettingDto gitlabProjectAlmSettingDto = newGitlabProjectAlmSettingDto(gitlabAlmSetting, project)
+      .setAlmSlug("my-group/my-subgroup/my-project");
+    underTest.insertOrUpdate(dbSession, gitlabProjectAlmSettingDto, gitlabAlmSetting.getKey(), project.getName(), project.getKey());
+
+    assertThat(underTest.selectByProject(dbSession, project).get())
+      .extracting(ProjectAlmSettingDto::getAlmSlug)
+      .isEqualTo("my-group/my-subgroup/my-project");
   }
 
   @Test
@@ -375,7 +440,7 @@ class ProjectAlmSettingDaoIT {
     createAlmProject(almSetting, dto -> dto.setAlmSlug("target-repo")); // slug should not match
 
     ProjectAlmSettingQuery query = ProjectAlmSettingQuery.forAlmRepo("target-repo");
-    List<ProjectAlmSettingDto> results = underTest.selectProjectAlmSettings(dbSession, query, 1, 100);
+    List<ProjectAlmSettingDto> results = underTest.selectProjectAlmSettings(dbSession, query, testUser.getUuid(), 1, 100);
 
     assertThat(results)
       .usingRecursiveFieldByFieldElementComparator()
@@ -391,7 +456,7 @@ class ProjectAlmSettingDaoIT {
     createAlmProject(almSetting, dto -> dto.setAlmRepo("target-repo")); // missing slug
 
     ProjectAlmSettingQuery query = ProjectAlmSettingQuery.forAlmRepoAndSlug("target-repo", "target-project");
-    List<ProjectAlmSettingDto> results = underTest.selectProjectAlmSettings(dbSession, query, 1, 100);
+    List<ProjectAlmSettingDto> results = underTest.selectProjectAlmSettings(dbSession, query, testUser.getUuid(), 1, 100);
 
     assertThat(results)
       .usingRecursiveFieldByFieldElementComparator()
@@ -406,7 +471,7 @@ class ProjectAlmSettingDaoIT {
     createAlmProject(almSetting, dto -> dto.setAlmRepo("other-repo"));
 
     ProjectAlmSettingQuery query = ProjectAlmSettingQuery.forAlmRepo("Target-Repo");
-    List<ProjectAlmSettingDto> results = underTest.selectProjectAlmSettings(dbSession, query, 1, 100);
+    List<ProjectAlmSettingDto> results = underTest.selectProjectAlmSettings(dbSession, query, testUser.getUuid(), 1, 100);
 
     assertThat(results)
       .usingRecursiveFieldByFieldElementComparator()
@@ -421,7 +486,7 @@ class ProjectAlmSettingDaoIT {
     createAlmProject(almSetting, dto -> dto.setAlmRepo("other-repo"));
 
     ProjectAlmSettingQuery query = ProjectAlmSettingQuery.forAlmRepo("target-repo");
-    int count = underTest.countProjectAlmSettings(dbSession, query);
+    int count = underTest.countProjectAlmSettings(dbSession, query, testUser.getUuid());
 
     assertThat(count).isEqualTo(2);
   }
@@ -439,11 +504,114 @@ class ProjectAlmSettingDaoIT {
 
   private ProjectAlmSettingDto createAlmProject(AlmSettingDto almSettingsDto, Consumer<ProjectAlmSettingDto> customizer, Function<ProjectDto, ProjectAlmSettingDto> dtoFactory) {
     ProjectDto project = db.components().insertPrivateProject().getProjectDto();
+    db.users().insertProjectPermissionOnUser(testUser, ProjectPermission.USER, project);
+    return createAlmProjectBinding(almSettingsDto, project, customizer, dtoFactory);
+  }
+
+  private ProjectAlmSettingDto createAlmProjectBinding(AlmSettingDto almSettingsDto, ProjectDto project, Consumer<ProjectAlmSettingDto> customizer,
+    Function<ProjectDto, ProjectAlmSettingDto> dtoFactory) {
     when(uuidFactory.create()).thenReturn(project.getUuid() + "_set");
     ProjectAlmSettingDto projectAlmSettingDto = dtoFactory.apply(project);
     customizer.accept(projectAlmSettingDto);
     underTest.insertOrUpdate(dbSession, projectAlmSettingDto, almSettingsDto.getKey(), project.getName(), project.getKey());
     return projectAlmSettingDto;
+  }
+
+  private enum PermissionGrant {
+    NONE, DIRECT_ON_USER, VIA_GROUP, DIRECT_ON_ANOTHER_USER, GLOBAL_PROVISION_ONLY
+  }
+
+  private static Object[][] authorizationScenarios() {
+    return new Object[][] {
+      {false, PermissionGrant.DIRECT_ON_USER, true},
+      {false, PermissionGrant.VIA_GROUP, true},
+      {false, PermissionGrant.DIRECT_ON_ANOTHER_USER, false},
+      {false, PermissionGrant.NONE, false},
+      {false, PermissionGrant.GLOBAL_PROVISION_ONLY, false},
+      {true, PermissionGrant.NONE, true},
+    };
+  }
+
+  @ParameterizedTest
+  @MethodSource("authorizationScenarios")
+  void selectProjectAlmSettings_and_countProjectAlmSettings_applyIdenticalAuthorization(boolean isPublic, PermissionGrant grant, boolean expectVisible) {
+    AlmSettingDto almSetting = db.almSettings().insertGitHubAlmSetting();
+    ProjectDto project = isPublic
+      ? db.components().insertPublicProject().getProjectDto()
+      : db.components().insertPrivateProject().getProjectDto();
+    ProjectAlmSettingDto projectAlmSettingDto = createAlmProjectBinding(almSetting, project, dto -> dto.setAlmRepo("target-repo"),
+      p -> newGithubProjectAlmSettingDto(almSetting, p));
+    applyPermissionGrant(grant, project);
+
+    ProjectAlmSettingQuery query = ProjectAlmSettingQuery.forAlmRepo("target-repo");
+    List<ProjectAlmSettingDto> results = underTest.selectProjectAlmSettings(dbSession, query, testUser.getUuid(), 1, 100);
+    int count = underTest.countProjectAlmSettings(dbSession, query, testUser.getUuid());
+
+    if (expectVisible) {
+      assertThat(results).usingRecursiveFieldByFieldElementComparator().containsExactly(projectAlmSettingDto);
+      assertThat(count).isEqualTo(1);
+    } else {
+      assertThat(results).isEmpty();
+      assertThat(count).isZero();
+    }
+  }
+
+  @Test
+  void selectProjectAlmSettings_whenPagination_appliesAuthorizationBeforePaging() {
+    AlmSettingDto almSetting = db.almSettings().insertGitHubAlmSetting();
+    List<ProjectAlmSettingDto> authorizedProjects = IntStream.range(0, 5)
+      .mapToObj(i -> createAlmProject(almSetting, dto -> dto.setAlmRepo("target-repo")))
+      .toList();
+    // unauthorized noise: same repo, but the test user has no permission on these private projects
+    IntStream.range(0, 5).forEach(i -> {
+      ProjectDto unauthorizedProject = db.components().insertPrivateProject().getProjectDto();
+      createAlmProjectBinding(almSetting, unauthorizedProject, dto -> dto.setAlmRepo("target-repo"),
+        p -> newGithubProjectAlmSettingDto(almSetting, p));
+    });
+
+    ProjectAlmSettingQuery query = ProjectAlmSettingQuery.forAlmRepo("target-repo");
+    List<ProjectAlmSettingDto> firstPage = underTest.selectProjectAlmSettings(dbSession, query, testUser.getUuid(), 1, 3);
+    List<ProjectAlmSettingDto> secondPage = underTest.selectProjectAlmSettings(dbSession, query, testUser.getUuid(), 2, 3);
+    int count = underTest.countProjectAlmSettings(dbSession, query, testUser.getUuid());
+
+    assertThat(firstPage).hasSize(3);
+    assertThat(secondPage).hasSize(2);
+    assertThat(firstPage).doesNotContainAnyElementsOf(secondPage);
+    assertThat(count).isEqualTo(authorizedProjects.size());
+  }
+
+  private void applyPermissionGrant(PermissionGrant grant, ProjectDto project) {
+    switch (grant) {
+      case DIRECT_ON_USER -> db.users().insertProjectPermissionOnUser(testUser, ProjectPermission.USER, project);
+      case VIA_GROUP -> {
+        GroupDto group = db.users().insertGroup();
+        db.users().insertMember(group, testUser);
+        db.users().insertEntityPermissionOnGroup(group, ProjectPermission.USER, project);
+      }
+      case DIRECT_ON_ANOTHER_USER -> {
+        UserDto anotherUser = db.users().insertUser();
+        db.users().insertProjectPermissionOnUser(anotherUser, ProjectPermission.USER, project);
+      }
+      case GLOBAL_PROVISION_ONLY -> db.users().insertGlobalPermissionOnUser(testUser, GlobalPermission.PROVISION_PROJECTS);
+      case NONE -> {
+        // no permission granted
+      }
+    }
+  }
+
+  @Test
+  void groupPermissionDao_insert_rejects_anyone_group_permission() {
+    ProjectDto project = db.components().insertPrivateProject().getProjectDto();
+    GroupPermissionDto dto = new GroupPermissionDto()
+      .setUuid(Uuids.createFast())
+      .setGroupUuid(null)
+      .setRole(ProjectPermission.USER)
+      .setEntityUuid(project.getUuid())
+      .setEntityName(project.getName());
+    GroupPermissionDao groupPermissionDao = db.getDbClient().groupPermissionDao();
+
+    assertThatThrownBy(() -> groupPermissionDao.insert(dbSession, dto, project, null))
+      .isInstanceOf(IllegalArgumentException.class);
   }
 
 }

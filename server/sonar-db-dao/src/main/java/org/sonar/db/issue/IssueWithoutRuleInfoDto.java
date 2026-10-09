@@ -37,6 +37,7 @@ import org.apache.commons.lang3.builder.ToStringStyle;
 import org.sonar.api.issue.IssueStatus;
 import org.sonar.api.issue.impact.SoftwareQuality;
 import org.sonar.api.rules.CleanCodeAttribute;
+import org.sonar.core.issue.IssueProducer;
 import org.sonar.core.issue.LinkedTicketStatus;
 import org.sonar.core.rule.RuleType;
 import org.sonar.db.component.ComponentDto;
@@ -81,6 +82,8 @@ public class IssueWithoutRuleInfoDto implements Serializable {
   protected boolean prioritizedRule;
   protected boolean fromSonarQubeUpdate;
   protected String linkedTicketStatus = LinkedTicketStatus.NOT_LINKED;
+  protected Integer producerDbConstant;
+  protected Long deferralDate;
 
   // functional dates stored as Long
   protected Long issueCreationDate;
@@ -95,6 +98,7 @@ public class IssueWithoutRuleInfoDto implements Serializable {
   // joins
   protected String componentKey;
   protected String projectKey;
+  protected String branchUuid;
   protected String filePath;
   protected String tags;
   protected String internalTags;
@@ -625,6 +629,15 @@ public class IssueWithoutRuleInfoDto implements Serializable {
     return this;
   }
 
+  public IssueProducer getIssueProducer() {
+    return IssueProducer.fromDbConstant(producerDbConstant);
+  }
+
+  public IssueWithoutRuleInfoDto setIssueProducer(IssueProducer issueProducer) {
+    this.producerDbConstant = issueProducer.getDbConstant();
+    return this;
+  }
+
   public IssueWithoutRuleInfoDto setCleanCodeAttribute(CleanCodeAttribute cleanCodeAttribute) {
     this.cleanCodeAttribute = cleanCodeAttribute;
     return this;
@@ -700,6 +713,24 @@ public class IssueWithoutRuleInfoDto implements Serializable {
 
   public IssueWithoutRuleInfoDto setFromSonarQubeUpdate(boolean fromSonarQubeUpdate) {
     this.fromSonarQubeUpdate = fromSonarQubeUpdate;
+    return this;
+  }
+
+  public Long getDeferralDate() {
+    return deferralDate;
+  }
+
+  public IssueWithoutRuleInfoDto setDeferralDate(@Nullable Long deferralDate) {
+    this.deferralDate = deferralDate;
+    return this;
+  }
+
+  public String getBranchUuid() {
+    return branchUuid;
+  }
+
+  public IssueWithoutRuleInfoDto setBranchUuid(String branchUuid) {
+    this.branchUuid = branchUuid;
     return this;
   }
 

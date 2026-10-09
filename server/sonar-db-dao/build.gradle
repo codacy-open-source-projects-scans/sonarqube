@@ -1,3 +1,5 @@
+import org.sonar.build.DbAwareTest
+
 sonar {
   properties {
     property 'sonar.projectName', "${projectTitle} :: DAO"
@@ -11,7 +13,7 @@ dependencies {
   api 'at.yawk.lz4:lz4-java'
   api 'org.sonarsource.api.plugin:sonar-plugin-api'
   // CloseableIterator is exposed by ProjectMeasuresIndexerIterator
-  api "com.sonarsource.scanner.engine:protobuf-utils"
+  api "org.sonarsource.scanner.engine:protobuf-utils"
 
   api project(':server:sonar-db-migration')
   api project(':sonar-core')
@@ -19,6 +21,9 @@ dependencies {
   compileOnlyApi 'com.github.spotbugs:spotbugs-annotations'
 
   implementation "org.sonarsource.compliancereports:compliance-reports:${complianceReportsVersion}"
+  implementation "org.sonarsource.sonarqube:history-api"
+  implementation "org.sonarsource.sonarqube:history-core"
+  implementation "org.sonarsource.sonarqube:history-server-app"
 
   testImplementation 'commons-dbutils:commons-dbutils'
   testImplementation 'org.assertj:assertj-core'
@@ -52,7 +57,7 @@ dependencies {
 }
 
 test {
-  systemProperty 'orchestrator.configUrl', System.getProperty('orchestrator.configUrl')
+  DbAwareTest.configure(it)
   // Enabling the JUnit Platform (see https://github.com/junit-team/junit5-samples/tree/master/junit5-migration-gradle)
   useJUnitPlatform()
 }

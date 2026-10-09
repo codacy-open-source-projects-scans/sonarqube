@@ -33,4 +33,9 @@ public class NoAsyncIssueIndexing implements AsyncIssueIndexing {
   public void triggerForProject(String projectUuid) {
     throw new IllegalStateException("Async issue indexing should not be triggered in Compute Engine");
   }
+
+  @Override
+  public void triggerForOrphanedBranches() {
+    throw new IllegalStateException("Async issue indexing should not be triggered in Compute Engine");
+  }
 }

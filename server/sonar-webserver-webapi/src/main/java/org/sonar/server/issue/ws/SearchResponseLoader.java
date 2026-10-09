@@ -135,7 +135,10 @@ public class SearchResponseLoader {
     Set<String> usersUuidToLoad = collector.getUserUuids();
     List<UserDto> preloadedUsers = firstNonNull(preloadedResponseData.getUsers(), emptyList());
     result.addUsers(preloadedUsers);
-    preloadedUsers.forEach(userDto -> usersUuidToLoad.remove(userDto.getUuid()));
+    preloadedUsers.stream()
+      .map(UserDto::getUuid)
+      .filter(Objects::nonNull)
+      .forEach(usersUuidToLoad::remove);
     result.addUsers(dbClient.userDao().selectByUuids(dbSession, usersUuidToLoad));
   }
 
@@ -185,7 +188,7 @@ public class SearchResponseLoader {
     List<RuleDto> preloadedRules = firstNonNull(preloadedResponseData.getRules(), emptyList());
     result.addRules(preloadedRules);
     Set<String> ruleUuidsToLoad = collector.getRuleUuids();
-    preloadedRules.stream().map(RuleDto::getUuid).toList()
+    preloadedRules.stream().map(RuleDto::getUuid).filter(Objects::nonNull).toList()
       .forEach(ruleUuidsToLoad::remove);
 
     List<RuleDto> rules = dbClient.ruleDao().selectByUuids(dbSession, ruleUuidsToLoad);
@@ -218,10 +221,14 @@ public class SearchResponseLoader {
   }
 
   private boolean canEditOrDelete(IssueChangeDto dto) {
-    return userSession.isLoggedIn() && requireNonNull(userSession.getUuid(), "User uuid should not be null").equals(dto.getUserUuid());
+    return userSession.isLoggedIn() && !userSession.isServiceSession()
+      && requireNonNull(userSession.getUuid(), "User uuid should not be null").equals(dto.getUserUuid());
   }
 
   private void loadActionsAndTransitions(SearchResponseData result, Set<SearchAdditionalField> fields) {
+    if (userSession.isServiceSession()) {
+      return;
+    }
     if (fields.contains(ACTIONS) || fields.contains(TRANSITIONS)) {
       Map<String, ComponentDto> componentsByProjectUuid = result.getComponents()
         .stream()

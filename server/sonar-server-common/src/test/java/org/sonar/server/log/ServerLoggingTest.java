@@ -138,6 +138,75 @@ public class ServerLoggingTest {
   }
 
   @Test
+  public void changeLevel_to_INFO_suppresses_unified_prefixes_to_WARN() {
+    LogLevelConfig logLevelConfig = LogLevelConfig.newBuilder(rootLoggerName).build();
+    when(serverProcessLogging.getLogLevelConfig()).thenReturn(logLevelConfig);
+
+    underTest.changeLevel(INFO);
+
+    assertThat(logbackHelper.getRootContext().getLogger("com.sonarsource").getLevel()).isEqualTo(Level.WARN);
+    assertThat(logbackHelper.getRootContext().getLogger("org.sonarsource").getLevel()).isEqualTo(Level.WARN);
+  }
+
+  @Test
+  public void changeLevel_to_DEBUG_raises_unified_prefixes_to_DEBUG() {
+    LogLevelConfig logLevelConfig = LogLevelConfig.newBuilder(rootLoggerName).build();
+    when(serverProcessLogging.getLogLevelConfig()).thenReturn(logLevelConfig);
+
+    underTest.changeLevel(DEBUG);
+
+    assertThat(logbackHelper.getRootContext().getLogger("com.sonarsource").getLevel()).isEqualTo(Level.DEBUG);
+    assertThat(logbackHelper.getRootContext().getLogger("org.sonarsource").getLevel()).isEqualTo(Level.DEBUG);
+  }
+
+  @Test
+  public void changeLevel_to_TRACE_raises_unified_prefixes_to_TRACE() {
+    LogLevelConfig logLevelConfig = LogLevelConfig.newBuilder(rootLoggerName).build();
+    when(serverProcessLogging.getLogLevelConfig()).thenReturn(logLevelConfig);
+
+    underTest.changeLevel(TRACE);
+
+    assertThat(logbackHelper.getRootContext().getLogger("com.sonarsource").getLevel()).isEqualTo(Level.TRACE);
+    assertThat(logbackHelper.getRootContext().getLogger("org.sonarsource").getLevel()).isEqualTo(Level.TRACE);
+  }
+
+  @Test
+  public void changeLevel_restores_unified_prefixes_to_WARN_when_reset_to_INFO_after_DEBUG() {
+    LogLevelConfig logLevelConfig = LogLevelConfig.newBuilder(rootLoggerName).build();
+    when(serverProcessLogging.getLogLevelConfig()).thenReturn(logLevelConfig);
+
+    underTest.changeLevel(DEBUG);
+    underTest.changeLevel(INFO);
+
+    assertThat(logbackHelper.getRootContext().getLogger("com.sonarsource").getLevel()).isEqualTo(Level.WARN);
+    assertThat(logbackHelper.getRootContext().getLogger("org.sonarsource").getLevel()).isEqualTo(Level.WARN);
+  }
+
+  @Test
+  public void changeLevel_toInfo_whenUnifiedPrefixLevelOverridden_usesOverrideInsteadOfWarn() {
+    LogLevelConfig logLevelConfig = LogLevelConfig.newBuilder(rootLoggerName).build();
+    when(serverProcessLogging.getLogLevelConfig()).thenReturn(logLevelConfig);
+    settings.setProperty(ProcessProperties.Property.LOG_LEVEL_UNIFIED.getKey(), "INFO");
+
+    underTest.changeLevel(INFO);
+
+    assertThat(logbackHelper.getRootContext().getLogger("com.sonarsource").getLevel()).isEqualTo(Level.INFO);
+    assertThat(logbackHelper.getRootContext().getLogger("org.sonarsource").getLevel()).isEqualTo(Level.INFO);
+  }
+
+  @Test
+  public void changeLevel_whenUnifiedPrefixLevelOverrideIsInvalid_fallsBackToDefaultBehavior() {
+    LogLevelConfig logLevelConfig = LogLevelConfig.newBuilder(rootLoggerName).build();
+    when(serverProcessLogging.getLogLevelConfig()).thenReturn(logLevelConfig);
+    settings.setProperty(ProcessProperties.Property.LOG_LEVEL_UNIFIED.getKey(), "not_a_level");
+
+    underTest.changeLevel(INFO);
+
+    assertThat(logbackHelper.getRootContext().getLogger("com.sonarsource").getLevel()).isEqualTo(Level.WARN);
+    assertThat(logTester.logs(LoggerLevel.WARN)).anyMatch(log -> log.contains(ProcessProperties.Property.LOG_LEVEL_UNIFIED.getKey()));
+  }
+
+  @Test
   public void getLogsForSingleNode_shouldReturnFile() throws IOException {
     File dir = temp.newFolder();
     settings.setProperty(PATH_LOGS.getKey(), dir.getAbsolutePath());

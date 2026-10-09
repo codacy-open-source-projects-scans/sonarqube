@@ -21,6 +21,7 @@ package org.sonar.auth.github;
 
 import com.google.gson.annotations.SerializedName;
 import java.util.List;
+import java.util.Map;
 import javax.annotation.CheckForNull;
 import javax.annotation.Nullable;
 
@@ -154,6 +155,22 @@ public class GithubBinding {
         return type;
       }
     }
+  }
+
+  /**
+   * Installation as returned by {@code GET /app/installations} and {@code GET /repos/&#123;owner&#125;/&#123;repo&#125;/installation},
+   * keeping the permission object as a raw map instead of the fixed {@link Permissions} field set (SONAR-32166).
+   *
+   * <p>{@link Permissions} models neither {@code pull_requests} — which the Remediation Agent requires — nor
+   * {@code html_url}, and widening it would change {@link GsonInstallation} and every caller of its constructor. This
+   * is a separate model for the remediation path instead.
+   */
+  public record GsonInstallationDetails(
+    @SerializedName("id") long id,
+    @SerializedName("account") GsonInstallation.GsonAccount account,
+    @SerializedName("html_url") String htmlUrl,
+    @SerializedName("suspended_at") String suspendedAt,
+    @SerializedName("permissions") Map<String, String> permissions) {
   }
 
   public static class Permissions {
@@ -338,6 +355,10 @@ public class GithubBinding {
       // http://stackoverflow.com/a/18645370/229031
     }
 
+    public String getFullName() {
+      return fullName;
+    }
+
     public Repository toRepository() {
       return new Repository(this.id, this.name, this.isPrivate, this.fullName,
         this.htmlUrl, this.defaultBranch);
@@ -400,6 +421,8 @@ public class GithubBinding {
     GsonGithubCodeScanningAlert alert;
     @SerializedName("sender")
     GsonGithubCodeScanningAlertWebhookPayloadSender sender;
+    @SerializedName("repository")
+    GsonGithubRepository repository;
 
     public GsonGithubCodeScanningAlertWebhookPayload() {
       // even if empty constructor is not required for Gson, it is strongly
@@ -417,6 +440,11 @@ public class GithubBinding {
 
     public GsonGithubCodeScanningAlertWebhookPayloadSender getSender() {
       return sender;
+    }
+
+    @CheckForNull
+    public GsonGithubRepository getRepository() {
+      return repository;
     }
   }
 

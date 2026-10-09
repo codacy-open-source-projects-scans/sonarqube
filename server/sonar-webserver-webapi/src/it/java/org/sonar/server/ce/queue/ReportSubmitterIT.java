@@ -393,6 +393,25 @@ public class ReportSubmitterIT {
   }
 
   @Test
+  public void submit_whenReportIsForANewProjectWithValidAlmSettingsAutoProvisioningOffAndNoGlobalScanPerm_throwsForbiddenException() {
+    UserDto user = db.users().insertUser();
+    userSession.logIn(user).addPermission(PROVISION_PROJECTS);
+    when(managedInstanceService.isInstanceExternallyManaged()).thenReturn(true);
+    when(gitHubSettings.isProvisioningEnabled()).thenReturn(false);
+
+    mockAlmSettingDtoAndDevOpsProjectCreator(CHARACTERISTICS, false);
+
+    InputStream reportInput = IOUtils.toInputStream("{binary}", UTF_8);
+    assertThatThrownBy(() -> underTest.submit(PROJECT_KEY, PROJECT_NAME, CHARACTERISTICS, reportInput))
+      .isInstanceOf(ForbiddenException.class)
+      .hasMessage("Project 'MY_PROJECT' does not exist and cannot be created by this analysis. The token does not have the 'Execute Analysis' permission,"
+        + " and repository permissions cannot be checked on GitHub because GitHub provisioning is disabled on this instance."
+        + " Create and bind the project first (POST /api/v2/dop-translation/bound-projects), or grant the 'Execute Analysis' permission.");
+    assertThat(db.getDbClient().projectDao().selectProjectByKey(db.getSession(), PROJECT_KEY)).isEmpty();
+    verifyNoInteractions(queue);
+  }
+
+  @Test
   public void submit_whenReportIsForANewProjectWithoutDevOpsMetadataAndAutoProvisioningOn_shouldCreateLocalProject() {
     UserDto user = db.users().insertUser();
     userSession.logIn(user).addPermission(GlobalPermission.SCAN).addPermission(PROVISION_PROJECTS);
@@ -451,8 +470,17 @@ public class ReportSubmitterIT {
 
     mockGithubRepository(isPrivate);
 
-    DevOpsProjectCreationContext devOpsProjectCreationContext = new DevOpsProjectCreationContext("repo", "orga/repo", "orga/repo", true, "defaultBranch", almSettingDto,
-      userSession);
+    DevOpsProjectCreationContext devOpsProjectCreationContext = DevOpsProjectCreationContext.builder()
+      .name("repo")
+      .fullName("orga/repo")
+      .devOpsPlatformIdentifier("orga/repo")
+      .url("https://www.toto.com/orga/repo")
+      .repoId("123")
+      .isPublic(true)
+      .defaultBranchName("defaultBranch")
+      .almSettingDto(almSettingDto)
+      .userSession(userSession)
+      .build();
 
     DevOpsProjectCreator devOpsProjectCreator = spy(new GithubProjectCreator(db.getDbClient(), devOpsProjectCreationContext, projectKeyGenerator, gitHubSettings, projectCreator,
       permissionService, permissionUpdater, managedProjectService, githubApplicationClient, null, null));
@@ -546,6 +574,18 @@ public class ReportSubmitterIT {
     Map<String, String> emptyMap = emptyMap();
     InputStream inputStream = IOUtils.toInputStream("{binary}", UTF_8);
     assertThatThrownBy(() -> underTest.submit(PROJECT_KEY, PROJECT_NAME, emptyMap, inputStream))
+      .isInstanceOf(ForbiddenException.class);
+  }
+
+  @Test
+  public void fail_with_forbidden_exception_on_existing_project_when_no_scan_permission() {
+    ProjectData projectData = db.components().insertPrivateProject();
+
+    Map<String, String> emptyMap = emptyMap();
+    InputStream inputStream = IOUtils.toInputStream("{binary}", UTF_8);
+    String key = projectData.projectKey();
+    String name = projectData.getProjectDto().getName();
+    assertThatThrownBy(() -> underTest.submit(key, name, emptyMap, inputStream))
       .isInstanceOf(ForbiddenException.class);
   }
 

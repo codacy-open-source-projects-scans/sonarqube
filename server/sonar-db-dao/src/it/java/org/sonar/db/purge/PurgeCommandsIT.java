@@ -73,7 +73,6 @@ import static org.apache.commons.lang3.RandomStringUtils.secure;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatNoException;
 import static org.assertj.core.api.Assertions.tuple;
-import static org.sonar.db.component.ComponentTesting.newBranchDto;
 import static org.sonar.db.component.ComponentTesting.newFileDto;
 import static org.sonar.db.component.ComponentTesting.newProjectCopy;
 import static org.sonar.db.component.SnapshotDto.STATUS_PROCESSED;
@@ -81,6 +80,8 @@ import static org.sonar.db.component.SnapshotDto.STATUS_UNPROCESSED;
 import static org.sonar.db.issue.IssueTesting.newCodeReferenceIssue;
 
 class PurgeCommandsIT {
+
+  private static final Instant BASE = Instant.ofEpochMilli(1_704_067_200_000L);
 
   @RegisterExtension
   private final DbTester dbTester = DbTester.create(System2.INSTANCE);
@@ -594,7 +595,7 @@ class PurgeCommandsIT {
     PurgeCommands purgeCommands = new PurgeCommands(dbTester.getSession(), profiler, system2);
     purgeCommands.deletePermissions(project.getUuid());
 
-    assertThat(dbTester.countRowsOfTable("group_roles")).isEqualTo(2);
+    assertThat(dbTester.countRowsOfTable("group_roles")).isOne();
     assertThat(dbTester.countRowsOfTable("user_roles")).isOne();
   }
 
@@ -619,24 +620,23 @@ class PurgeCommandsIT {
     PurgeCommands purgeCommands = new PurgeCommands(dbTester.getSession(), profiler, system2);
     purgeCommands.deletePermissions(portfolio.uuid());
 
-    assertThat(dbTester.countRowsOfTable("group_roles")).isEqualTo(2);
+    assertThat(dbTester.countRowsOfTable("group_roles")).isOne();
     assertThat(dbTester.countRowsOfTable("user_roles")).isOne();
   }
 
   @Test
   void deleteNewCodePeriodsByRootUuid_deletes_branch_new_code_periods() {
-    ComponentDto project = dbTester.components().insertPrivateProject().getMainBranchComponent();
-    BranchDto branch = newBranchDto(project);
-    dbTester.components().insertProjectBranch(project, branch);
+    ProjectData project = dbTester.components().insertPrivateProject();
+    BranchDto branch = dbTester.components().insertProjectBranch(project.getProjectDto());
 
     // global settings
     dbTester.newCodePeriods().insert(NewCodePeriodType.PREVIOUS_VERSION, null);
 
     // project settings
-    dbTester.newCodePeriods().insert(project.uuid(), NewCodePeriodType.NUMBER_OF_DAYS, "20");
+    dbTester.newCodePeriods().insert(project.projectUuid(), NewCodePeriodType.NUMBER_OF_DAYS, "20");
 
     // branch settings
-    dbTester.newCodePeriods().insert(project.uuid(), branch.getUuid(), NewCodePeriodType.NUMBER_OF_DAYS, "1");
+    dbTester.newCodePeriods().insert(project.projectUuid(), branch.getUuid(), NewCodePeriodType.NUMBER_OF_DAYS, "1");
 
     PurgeCommands purgeCommands = new PurgeCommands(dbTester.getSession(), profiler, system2);
     purgeCommands.deleteNewCodePeriodsForBranch(branch.getUuid());
@@ -647,21 +647,20 @@ class PurgeCommandsIT {
 
   @Test
   void deleteNewCodePeriodsByRootUuid_deletes_project_new_code_periods() {
-    ComponentDto project = dbTester.components().insertPrivateProject().getMainBranchComponent();
-    BranchDto branch = newBranchDto(project);
-    dbTester.components().insertProjectBranch(project, branch);
+    ProjectData project = dbTester.components().insertPrivateProject();
+    BranchDto branch = dbTester.components().insertProjectBranch(project.getProjectDto());
 
     // global settings
     dbTester.newCodePeriods().insert(NewCodePeriodType.PREVIOUS_VERSION, null);
 
     // project settings
-    dbTester.newCodePeriods().insert(project.uuid(), NewCodePeriodType.NUMBER_OF_DAYS, "20");
+    dbTester.newCodePeriods().insert(project.projectUuid(), NewCodePeriodType.NUMBER_OF_DAYS, "20");
 
     // branch settings
-    dbTester.newCodePeriods().insert(project.uuid(), branch.getUuid(), NewCodePeriodType.NUMBER_OF_DAYS, "1");
+    dbTester.newCodePeriods().insert(project.projectUuid(), branch.getUuid(), NewCodePeriodType.NUMBER_OF_DAYS, "1");
 
     PurgeCommands purgeCommands = new PurgeCommands(dbTester.getSession(), profiler, system2);
-    purgeCommands.deleteNewCodePeriodsForProject(project.uuid());
+    purgeCommands.deleteNewCodePeriodsForProject(project.projectUuid());
 
     // should delete branch and project settings only
     assertThat(dbTester.countRowsOfTable("new_code_periods")).isOne();
@@ -669,18 +668,17 @@ class PurgeCommandsIT {
 
   @Test
   void deleteNewCodePeriodsByRootUuid_should_not_delete_any_if_root_uuid_is_null() {
-    ComponentDto project = dbTester.components().insertPrivateProject().getMainBranchComponent();
-    BranchDto branch = newBranchDto(project);
-    dbTester.components().insertProjectBranch(project, branch);
+    ProjectData project = dbTester.components().insertPrivateProject();
+    BranchDto branch = dbTester.components().insertProjectBranch(project.getProjectDto());
 
     // global settings
     dbTester.newCodePeriods().insert(NewCodePeriodType.PREVIOUS_VERSION, null);
 
     // project settings
-    dbTester.newCodePeriods().insert(project.uuid(), NewCodePeriodType.NUMBER_OF_DAYS, "20");
+    dbTester.newCodePeriods().insert(project.projectUuid(), NewCodePeriodType.NUMBER_OF_DAYS, "20");
 
     // branch settings
-    dbTester.newCodePeriods().insert(project.uuid(), branch.getUuid(), NewCodePeriodType.NUMBER_OF_DAYS, "1");
+    dbTester.newCodePeriods().insert(project.projectUuid(), branch.getUuid(), NewCodePeriodType.NUMBER_OF_DAYS, "1");
 
     PurgeCommands purgeCommands = new PurgeCommands(dbTester.getSession(), profiler, system2);
     purgeCommands.deleteNewCodePeriodsForProject(null);
@@ -804,13 +802,13 @@ class PurgeCommandsIT {
   void deleteAnticipatedTransitions_shouldDeleteAnticipatedTransitionsOlderThanDate() {
     ComponentDto projectDto = ComponentTesting.newPrivateProjectDto();
     // dates at the boundary of the deletion threshold set to 30 days
-    Instant okCreationDate = Instant.now().minus(29, ChronoUnit.DAYS);
-    Instant oldCreationDate = Instant.now().minus(31, ChronoUnit.DAYS);
+    Instant okCreationDate = BASE.minus(29, ChronoUnit.DAYS);
+    Instant oldCreationDate = BASE.minus(31, ChronoUnit.DAYS);
 
     dbTester.getDbClient().anticipatedTransitionDao().insert(dbTester.getSession(), getAnticipatedTransitionsDto(projectDto.uuid() + "ok", projectDto.uuid(), okCreationDate));
     dbTester.getDbClient().anticipatedTransitionDao().insert(dbTester.getSession(), getAnticipatedTransitionsDto(projectDto.uuid() + "old", projectDto.uuid(), oldCreationDate));
 
-    underTest.deleteAnticipatedTransitions(projectDto.uuid(), Instant.now().minus(30, ChronoUnit.DAYS).toEpochMilli());
+    underTest.deleteAnticipatedTransitions(projectDto.uuid(), BASE.minus(30, ChronoUnit.DAYS).toEpochMilli());
 
     List<AnticipatedTransitionDto> anticipatedTransitionDtos = dbTester.getDbClient().anticipatedTransitionDao().selectByProjectUuid(dbTester.getSession(), projectDto.uuid());
 
@@ -857,11 +855,6 @@ class PurgeCommandsIT {
   }
 
   private void addPermissions(EntityDto projectDto) {
-    if (!projectDto.isPrivate()) {
-      dbTester.users().insertEntityPermissionOnAnyone("foo1", projectDto);
-      dbTester.users().insertPermissionOnAnyone("not project level");
-    }
-
     GroupDto group = dbTester.users().insertGroup();
     dbTester.users().insertEntityPermissionOnGroup(group, "bar", projectDto);
     dbTester.users().insertPermissionOnGroup(group, "not project level");
@@ -870,7 +863,7 @@ class PurgeCommandsIT {
     dbTester.users().insertProjectPermissionOnUser(user, "doh", projectDto);
     dbTester.users().insertGlobalPermissionOnUser(user, GlobalPermission.SCAN);
 
-    assertThat(dbTester.countRowsOfTable("group_roles")).isEqualTo(projectDto.isPrivate() ? 2 : 4);
+    assertThat(dbTester.countRowsOfTable("group_roles")).isEqualTo(2);
     assertThat(dbTester.countRowsOfTable("user_roles")).isEqualTo(2);
   }
 
@@ -1007,6 +1000,25 @@ class PurgeCommandsIT {
 
   private int countIssuesOfRoot(ComponentDto root) {
     return dbTester.countSql("select count(*) from issues where project_uuid='" + root.uuid() + "'");
+  }
+
+  @Test
+  void deleteComponents_does_nothing_when_list_is_empty() {
+    dbTester.components().insertPrivateProject().getMainBranchComponent();
+
+    assertThatNoException().isThrownBy(() -> underTest.deleteComponents(List.of()));
+    assertThat(dbTester.countRowsOfTable("components")).isOne();
+  }
+
+  @Test
+  void deleteComponentMeasures_does_nothing_when_list_is_empty() {
+    ComponentDto component = dbTester.components().insertPrivateProject().getMainBranchComponent();
+    SnapshotDto analysis = dbTester.components().insertSnapshot(component);
+    MetricDto metric = dbTester.measures().insertMetric();
+    dbTester.measures().insertProjectMeasure(component, analysis, metric);
+
+    assertThatNoException().isThrownBy(() -> underTest.deleteComponentMeasures(List.of()));
+    assertThat(dbTester.countRowsOfTable("project_measures")).isOne();
   }
 
 }

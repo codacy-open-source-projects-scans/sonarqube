@@ -22,6 +22,7 @@ package org.sonar.db.alm.setting;
 import java.util.List;
 import java.util.Set;
 import javax.annotation.CheckForNull;
+import javax.annotation.Nullable;
 import org.apache.ibatis.annotations.Param;
 import org.sonar.db.Pagination;
 
@@ -35,9 +36,10 @@ public interface ProjectAlmSettingMapper {
 
   int countByAlmSettingUuid(@Param("almSettingUuid") String almSettingUuid);
 
-  int countByQuery(@Param("query") ProjectAlmSettingQuery query);
+  int countByQuery(@Param("query") ProjectAlmSettingQuery query, @Param("userUuid") String userUuid, @Param("role") String role);
 
-  List<ProjectAlmSettingDto> selectByQuery(@Param("query") ProjectAlmSettingQuery query, @Param("pagination") Pagination pagination);
+  List<ProjectAlmSettingDto> selectByQuery(@Param("query") ProjectAlmSettingQuery query, @Param("pagination") Pagination pagination,
+    @Param("userUuid") String userUuid, @Param("role") String role);
 
   void insert(@Param("dto") ProjectAlmSettingDto projectAlmSettingDto, @Param("uuid") String uuid, @Param("now") long now);
 
@@ -55,4 +57,10 @@ public interface ProjectAlmSettingMapper {
   List<ProjectAlmSettingDto> selectByProjectUuidsAndAlm(@Param("projectUuids") Set<String> projectUuids, @Param("alm") String alm);
 
   List<ProjectAlmKeyAndProject> selectAlmTypeAndUrlByProject();
+
+  List<ProjectAlmSettingDto> selectByUrl(@Param("url") String url);
+
+  List<ProjectAlmSettingDto> selectByAlmSettingAndRepoIds(@Param("almSettingUuid") String almSettingUuid, @Param("repoIds") List<String> repoIds);
+
+  int updateUrlAndRepoId(@Param("uuid") String uuid, @Param("url") @Nullable String url, @Param("repoId") @Nullable String repoId, @Param("now") long now);
 }

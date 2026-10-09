@@ -21,7 +21,6 @@ package org.sonar.db.purge;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.Lists;
-import java.util.Collection;
 import java.util.List;
 import java.util.Set;
 import javax.annotation.Nullable;
@@ -102,6 +101,7 @@ class PurgeCommands {
     List<List<String>> analysisUuidsPartitions = Lists.partition(analysisIdUuids, MAX_SNAPSHOTS_PER_QUERY);
 
     deleteAnalysisDuplications(analysisUuidsPartitions);
+    deleteArchDataOfAnalyses(analysisUuidsPartitions);
 
     profiler.start("deleteAnalyses (event_component_changes)");
     analysisUuidsPartitions.forEach(purgeMapper::deleteAnalysisEventComponentChanges);
@@ -177,6 +177,21 @@ class PurgeCommands {
     profiler.stop();
   }
 
+  private void deleteArchDataOfAnalyses(List<List<String>> analysisUuidsPartitions) {
+    profiler.start("deleteAnalyses (arch_scanner_data, arch_graph_blobs, arch_graph_metadata)");
+    analysisUuidsPartitions.forEach(analysisUuids -> {
+      List<String> ceActivityUuids = purgeMapper.selectCeActivityUuidsByAnalysisUuids(analysisUuids);
+      if (ceActivityUuids.isEmpty()) {
+        return;
+      }
+      purgeMapper.deleteArchScannerDataOfCeActivityByUuids(ceActivityUuids);
+      purgeMapper.deleteArchGraphBlobsOfCeActivityByUuids(ceActivityUuids);
+      purgeMapper.deleteArchGraphMetadataOfCeActivityByUuids(ceActivityUuids);
+    });
+    session.commit();
+    profiler.stop();
+  }
+
   void deletePermissions(String entityUuid) {
     profiler.start("deletePermissions (group_roles)");
     purgeMapper.deleteGroupRolesByEntityUuid(entityUuid);
@@ -202,6 +217,15 @@ class PurgeCommands {
 
     profiler.start("deleteIssues (issues_impacts)");
     purgeMapper.deleteIssuesImpactsByProjectUuid(rootUuid);
+    session.commit();
+    profiler.stop();
+
+    // Hunter Agent issues share a small, fixed set of rules; each issue's write-up is its own group of
+    // rule_desc_sections rows (root_cause, how_to_fix, ...) identified by the issue's context_key. That
+    // table has no back-pointer to issues, so without this pass a write-up would outlive the issue it
+    // belongs to. Must run while this branch's issues still exist.
+    profiler.start("deleteIssues (rule_desc_sections)");
+    purgeMapper.deleteUnreferencedRuleDescSectionsByProjectUuid(rootUuid);
     session.commit();
     profiler.stop();
 
@@ -236,6 +260,12 @@ class PurgeCommands {
 
     profiler.start("deleteByRootAndSubviews (report_subscriptions)");
     uuidsPartitions.forEach(purgeMapper::deleteReportSubscriptionsByPortfolioUuids);
+    session.commit();
+    profiler.stop();
+
+    // removes history of subportfolios when a portfolio is deleted
+    profiler.start("deleteByRootAndSubviews (dashboard history)");
+    uuidsPartitions.forEach(partition -> partition.forEach(this::purgeDashboardHistory));
     session.commit();
     profiler.stop();
   }
@@ -338,33 +368,55 @@ class PurgeCommands {
   }
 
   void deleteCeActivityBefore(@Nullable String rootUuid, @Nullable String entityUuidToPurge, long createdAt) {
-    profiler.start("deleteCeActivityBefore (ce_scanner_context)");
-    purgeMapper.deleteCeScannerContextOfCeActivityByRootUuidOrBefore(rootUuid, entityUuidToPurge, createdAt);
-    session.commit();
-    profiler.stop();
-    profiler.start("deleteCeActivityBefore (ce_task_characteristics)");
-    purgeMapper.deleteCeTaskCharacteristicsOfCeActivityByRootUuidOrBefore(rootUuid, entityUuidToPurge, createdAt);
-    session.commit();
-    profiler.stop();
-    profiler.start("deleteCeActivityBefore (ce_task_input)");
-    purgeMapper.deleteCeTaskInputOfCeActivityByRootUuidOrBefore(rootUuid, entityUuidToPurge, createdAt);
-    session.commit();
-    profiler.stop();
-    profiler.start("deleteCeActivityBefore (ce_task_message)");
-    purgeMapper.deleteCeTaskMessageOfCeActivityByRootUuidOrBefore(rootUuid, entityUuidToPurge, createdAt);
-    session.commit();
-    profiler.stop();
-    profiler.start("deleteCeActivityBefore (ce_activity)");
-    purgeMapper.deleteCeActivityByRootUuidOrBefore(rootUuid, entityUuidToPurge, createdAt);
-    session.commit();
-    profiler.stop();
+    List<String> chunk;
+    do {
+      chunk = purgeMapper.selectCeActivityUuidsByRootUuidOrBeforeWithLimit(rootUuid, entityUuidToPurge, createdAt, MAX_SNAPSHOTS_PER_QUERY);
+      if (chunk.isEmpty()) {
+        break;
+      }
+
+      profiler.start("deleteCeActivityBefore (ce_scanner_context)");
+      purgeMapper.deleteCeScannerContextOfCeActivityByUuids(chunk);
+      profiler.stop();
+      profiler.start("deleteCeActivityBefore (ce_task_characteristics)");
+      purgeMapper.deleteCeTaskCharacteristicsOfCeActivityByUuids(chunk);
+      profiler.stop();
+      profiler.start("deleteCeActivityBefore (ce_task_input)");
+      purgeMapper.deleteCeTaskInputOfCeActivityByUuids(chunk);
+      profiler.stop();
+      profiler.start("deleteCeActivityBefore (ce_task_message)");
+      purgeMapper.deleteCeTaskMessageOfCeActivityByUuids(chunk);
+      profiler.stop();
+      profiler.start("deleteCeActivityBefore (arch_scanner_data)");
+      purgeMapper.deleteArchScannerDataOfCeActivityByUuids(chunk);
+      profiler.stop();
+      profiler.start("deleteCeActivityBefore (arch_graph_blobs)");
+      purgeMapper.deleteArchGraphBlobsOfCeActivityByUuids(chunk);
+      profiler.stop();
+      profiler.start("deleteCeActivityBefore (arch_graph_metadata)");
+      purgeMapper.deleteArchGraphMetadataOfCeActivityByUuids(chunk);
+      profiler.stop();
+      profiler.start("deleteCeActivityBefore (ce_activity)");
+      purgeMapper.deleteCeActivityByUuids(chunk);
+      profiler.stop();
+
+      session.commit();
+    } while (chunk.size() == MAX_SNAPSHOTS_PER_QUERY);
   }
 
   void deleteCeScannerContextBefore(@Nullable String rootUuid, @Nullable String entityUuidToPurge, long createdAt) {
     // assuming CeScannerContext of rows in table CE_QUEUE can't be older than createdAt
-    profiler.start("deleteCeScannerContextBefore");
-    purgeMapper.deleteCeScannerContextOfCeActivityByRootUuidOrBefore(rootUuid, entityUuidToPurge, createdAt);
-    session.commit();
+    List<String> chunk;
+    do {
+      chunk = purgeMapper.selectCeScannerContextUuidsByRootUuidOrBeforeWithLimit(rootUuid, entityUuidToPurge, createdAt, MAX_SNAPSHOTS_PER_QUERY);
+      if (chunk.isEmpty()) {
+        break;
+      }
+      profiler.start("deleteCeScannerContextBefore");
+      purgeMapper.deleteCeScannerContextOfCeActivityByUuids(chunk);
+      profiler.stop();
+      session.commit();
+    } while (chunk.size() == MAX_SNAPSHOTS_PER_QUERY);
   }
 
   void deleteCeQueue(String rootUuid) {
@@ -463,6 +515,20 @@ class PurgeCommands {
     profiler.stop();
   }
 
+  void deleteDashboardHistory(String entityUuid) {
+    profiler.start("dashboardHistory");
+    purgeDashboardHistory(entityUuid);
+    session.commit();
+    profiler.stop();
+  }
+
+  void purgeDashboardHistory(String entityUuid) {
+    purgeMapper.deleteMeasureHistoryByEntityUuid(entityUuid);
+    purgeMapper.deleteIssueTtrHistoryByEntityUuid(entityUuid);
+    purgeMapper.deleteScaTtrHistoryByEntityUuid(entityUuid);
+    purgeMapper.deleteIssueCountHistoryByEntityUuid(entityUuid);
+  }
+
   void deleteNewCodePeriodsForBranch(String branchUuid) {
     profiler.start("deleteNewCodePeriods (new_code_periods)");
     purgeMapper.deleteNewCodePeriodsByBranchUuid(branchUuid);
@@ -517,13 +583,6 @@ class PurgeCommands {
     profiler.stop();
   }
 
-  public void deleteArchitectureGraphs(String branchUuid) {
-    profiler.start("deleteArchitectureGraphs (architecture_graphs)");
-    purgeMapper.deleteArchitectureGraphsByBranchUuid(branchUuid);
-    session.commit();
-    profiler.stop();
-  }
-
   public void deleteIssueStatsByRuleKey(AggregationType aggregationType, String aggregationId) {
     profiler.start("deleteIssueStatsByRuleKey (issue_stats_by_rule_key)");
     purgeMapper.deleteIssueStatsByRuleKey(aggregationType.toString(), aggregationId);
@@ -545,41 +604,58 @@ class PurgeCommands {
     profiler.stop();
   }
 
-  public void deleteScaActivity(String componentUuid) {
-    // delete sca_analyses first since it sort of marks the analysis as valid/existing
-    profiler.start("deleteScaAnalyses (sca_analyses)");
-    purgeMapper.deleteScaAnalysesByComponentUuid(componentUuid);
-    session.commit();
-    profiler.stop();
-
-    profiler.start("deleteScaDependencies (sca_dependencies)");
-    purgeMapper.deleteScaDependenciesByComponentUuid(componentUuid);
-    session.commit();
-    profiler.stop();
-
-    // this must be done before deleting sca_issues_releases or we won't
-    // be able to find the rows
-    profiler.start("deleteScaIssuesReleasesChanges (sca_issue_rels_changes)");
-    purgeMapper.deleteScaIssuesReleasesChangesByComponentUuid(componentUuid);
-    session.commit();
-    profiler.stop();
-
-    profiler.start("deleteScaIssuesReleases (sca_issues_releases)");
-    purgeMapper.deleteScaIssuesReleasesByComponentUuid(componentUuid);
-    session.commit();
-    profiler.stop();
-
-    // sca_releases MUST be deleted last because dependencies and
-    // issues_releases only join to the component through sca_releases
-    profiler.start("deleteScaReleases (sca_releases)");
-    purgeMapper.deleteScaReleasesByComponentUuid(componentUuid);
-    session.commit();
+  public void deleteArchScannerDataForRoot(String rootUuid) {
+    profiler.start("deleteArchScannerDataForRoot (arch_scanner_data)");
+    purgeMapper.deleteArchScannerDataByRootUuid(rootUuid);
     profiler.stop();
   }
 
-  public void deleteScaLicenseProfiles(String projectUuid) {
-    profiler.start("deleteScaLicenseProfileProjects (sca_lic_prof_projects)");
-    purgeMapper.deleteScaLicenseProfileProjectsByProjectUuid(projectUuid);
+  public void deleteArchitectureBranchData(String branchUuid) {
+    profiler.start("deleteArchitectureBranchData (arch_graph_blobs)");
+    purgeMapper.deleteArchGraphBlobsByBranchUuid(branchUuid);
+    profiler.stop();
+    profiler.start("deleteArchitectureBranchData (arch_graph_metadata)");
+    purgeMapper.deleteArchGraphMetadataByBranchUuid(branchUuid);
+    profiler.stop();
+  }
+
+  public void deleteArchitectureProjectData(String projectUuid) {
+    profiler.start("deleteArchitectureProjectData (arch_graph_blobs)");
+    purgeMapper.deleteArchGraphBlobsByProjectUuid(projectUuid);
+    profiler.stop();
+    profiler.start("deleteArchitectureProjectData (arch_graph_metadata)");
+    purgeMapper.deleteArchGraphMetadataByProjectUuid(projectUuid);
+    profiler.stop();
+    profiler.start("deleteArchitectureProjectData (arch_directives)");
+    purgeMapper.deleteArchDirectivesByProjectUuid(projectUuid);
+    profiler.stop();
+    profiler.start("deleteArchitectureProjectData (arch_model_patterns)");
+    purgeMapper.deleteArchModelPatternsByProjectUuid(projectUuid);
+    profiler.stop();
+    profiler.start("deleteArchitectureProjectData (arch_models)");
+    purgeMapper.deleteArchModelsByProjectUuid(projectUuid);
+    profiler.stop();
+    profiler.start("deleteArchitectureProjectData (arch_boundary_descriptors)");
+    purgeMapper.deleteArchBoundaryDescriptorsByProjectUuid(projectUuid);
+    profiler.stop();
+    profiler.start("deleteArchitectureProjectData (arch_boundaries)");
+    purgeMapper.deleteArchBoundariesByProjectUuid(projectUuid);
+    profiler.stop();
+    profiler.start("deleteArchitectureProjectData (arch_proj_relations)");
+    purgeMapper.deleteArchProjRelationsByProjectUuid(projectUuid);
+    profiler.stop();
+    // Must run before deleting arch_proj_org_compo: it resolves this project's org component and deletes
+    // relationships of other projects that target it.
+    profiler.start("deleteArchitectureProjectData (arch_proj_relations targeting this project's org component)");
+    purgeMapper.deleteArchProjRelationsByTargetProjectUuid(projectUuid);
+    profiler.stop();
+    // Same reason as above: must run before deleting arch_proj_org_compo. Org SDKs belong to the organization,
+    // not the project, so they are not deleted, only their stale reference to this project's org component is cleared.
+    profiler.start("deleteArchitectureProjectData (arch_org_sdks target component id)");
+    purgeMapper.clearArchOrgSdksTargetComponentIdByProjectUuid(projectUuid);
+    profiler.stop();
+    profiler.start("deleteArchitectureProjectData (arch_proj_org_compo)");
+    purgeMapper.deleteArchProjOrgCompoByProjectUuid(projectUuid);
     profiler.stop();
   }
 }

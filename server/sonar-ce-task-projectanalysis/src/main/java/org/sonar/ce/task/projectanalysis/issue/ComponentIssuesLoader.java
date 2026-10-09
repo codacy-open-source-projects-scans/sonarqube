@@ -31,6 +31,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.apache.ibatis.session.ResultContext;
 import org.apache.ibatis.session.ResultHandler;
+import org.jetbrains.annotations.NotNull;
 import org.slf4j.LoggerFactory;
 import org.sonar.api.config.Configuration;
 import org.sonar.api.rule.RuleKey;
@@ -94,6 +95,36 @@ public class ComponentIssuesLoader {
     }
   }
 
+  public List<DefaultIssue> loadOpenScannerIssues(String componentUuid) {
+    try (DbSession dbSession = dbClient.openSession(false)) {
+      return loadOpenScannerIssues(componentUuid, dbSession);
+    }
+  }
+
+  public List<DefaultIssue> loadOpenScannerIssuesWithChanges(String componentUuid) {
+    try (DbSession dbSession = dbClient.openSession(false)) {
+      List<DefaultIssue> result = loadOpenScannerIssues(componentUuid, dbSession);
+      return loadChanges(dbSession, result);
+    }
+  }
+
+  public List<DefaultIssue> loadOpenHunterIssues(String componentUuid) {
+    try (DbSession dbSession = dbClient.openSession(false)) {
+      return loadOpenIssues(componentUuid, dbSession, IssueMapper::scrollNonClosedHunterAgentIssuesByComponentUuid);
+    }
+  }
+
+  @NotNull
+  public Map<String, List<DefaultIssue>> loadAllOpenHunterIssuesForBranch(String branchUuid) {
+    try (DbSession dbSession = dbClient.openSession(false)) {
+      return dbSession.getMapper(IssueMapper.class).selectNonClosedHunterAgentIssuesByBranchUuid(branchUuid)
+        .stream()
+        .map(dto -> toDefaultIssue(dto, ruleRepository.getByUuid(dto.getRuleUuid())))
+        .filter(issue -> issue.componentUuid() != null)
+        .collect(groupingBy(DefaultIssue::componentUuid));
+    }
+  }
+
   /**
    * Loads all comments and changes EXCEPT old changes involving a status change or a move between branches.
    */
@@ -136,14 +167,32 @@ public class ComponentIssuesLoader {
       return emptyList();
     }
 
+    long closeDateAfter = computeCloseDateAfter();
+    try (DbSession dbSession = dbClient.openSession(false)) {
+      return loadClosedIssues(dbSession, componentUuid, closeDateAfter, IssueMapper::scrollClosedByComponentUuid);
+    }
+  }
+
+  /**
+   * Same contract as {@link #loadClosedIssues(String)}, restricted to scanner-produced issues.
+   */
+  public List<DefaultIssue> loadClosedScannerIssues(String componentUuid) {
+    if (closedIssueMaxAge == 0) {
+      return emptyList();
+    }
+
+    long closeDateAfter = computeCloseDateAfter();
+    try (DbSession dbSession = dbClient.openSession(false)) {
+      return loadClosedIssues(dbSession, componentUuid, closeDateAfter, IssueMapper::scrollClosedScannerIssuesByComponentUuid);
+    }
+  }
+
+  private long computeCloseDateAfter() {
     Date date = new Date(system2.now());
-    long closeDateAfter = date.toInstant()
+    return date.toInstant()
       .minus(closedIssueMaxAge, ChronoUnit.DAYS)
       .truncatedTo(ChronoUnit.DAYS)
       .toEpochMilli();
-    try (DbSession dbSession = dbClient.openSession(false)) {
-      return loadClosedIssues(dbSession, componentUuid, closeDateAfter);
-    }
   }
 
   private static Integer safelyParseClosedIssueMaxAge(String str) {
@@ -181,8 +230,16 @@ public class ComponentIssuesLoader {
   }
 
   private List<DefaultIssue> loadOpenIssues(String componentUuid, DbSession dbSession) {
+    return loadOpenIssues(componentUuid, dbSession, IssueMapper::scrollNonClosedByComponentUuid);
+  }
+
+  private List<DefaultIssue> loadOpenScannerIssues(String componentUuid, DbSession dbSession) {
+    return loadOpenIssues(componentUuid, dbSession, IssueMapper::scrollNonClosedScannerIssuesByComponentUuid);
+  }
+
+  private List<DefaultIssue> loadOpenIssues(String componentUuid, DbSession dbSession, OpenIssuesScroller scroller) {
     List<DefaultIssue> result = new ArrayList<>();
-    dbSession.getMapper(IssueMapper.class).scrollNonClosedByComponentUuid(componentUuid, resultContext -> {
+    scroller.scroll(dbSession.getMapper(IssueMapper.class), componentUuid, resultContext -> {
       Rule rule = ruleRepository.getByUuid(resultContext.getResultObject().getRuleUuid());
       DefaultIssue issue = toDefaultIssue(resultContext.getResultObject(), rule);
 
@@ -196,6 +253,15 @@ public class ComponentIssuesLoader {
       result.add(issue);
     });
     return unmodifiableList(result);
+  }
+
+  /**
+   * Matches the shape of the {@code scrollNonClosed*ByComponentUuid} family of {@link IssueMapper} methods, so a
+   * method reference to any of them can be passed to {@link #loadOpenIssues(String, DbSession, OpenIssuesScroller)}.
+   */
+  @FunctionalInterface
+  private interface OpenIssuesScroller {
+    void scroll(IssueMapper mapper, String componentUuid, ResultHandler<IssueWithoutRuleInfoDto> handler);
   }
 
   private void setFilteredChanges(Map<String, List<IssueChangeDto>> changeDtoByIssueKey, DefaultIssue i) {
@@ -240,10 +306,20 @@ public class ComponentIssuesLoader {
     return activeRulesHolder.get(ruleKey).isPresent();
   }
 
-  private List<DefaultIssue> loadClosedIssues(DbSession dbSession, String componentUuid, long closeDateAfter) {
+  private List<DefaultIssue> loadClosedIssues(DbSession dbSession, String componentUuid, long closeDateAfter, ClosedIssuesScroller scroller) {
     ClosedIssuesResultHandler handler = new ClosedIssuesResultHandler(ruleRepository);
-    dbSession.getMapper(IssueMapper.class).scrollClosedByComponentUuid(componentUuid, closeDateAfter, handler);
+    scroller.scroll(dbSession.getMapper(IssueMapper.class), componentUuid, closeDateAfter, handler);
     return unmodifiableList(handler.issues);
+  }
+
+  /**
+   * Matches the shape of the {@code scrollClosed*ByComponentUuid} family of {@link IssueMapper} methods, so a
+   * method reference to any of them can be passed to
+   * {@link #loadClosedIssues(DbSession, String, long, ClosedIssuesScroller)}.
+   */
+  @FunctionalInterface
+  private interface ClosedIssuesScroller {
+    void scroll(IssueMapper mapper, String componentUuid, long closeDateAfter, ResultHandler<IssueWithoutRuleInfoDto> handler);
   }
 
   private static class ClosedIssuesResultHandler implements ResultHandler<IssueWithoutRuleInfoDto> {
@@ -371,6 +447,7 @@ public class ComponentIssuesLoader {
     issue.setComponentUuid(source.getComponentUuid());
     issue.setProjectUuid(source.getProjectUuid());
     issue.setProjectKey(source.getProjectKey());
+    issue.setBranchUuid(source.getBranchUuid());
     issue.setManualSeverity(source.isManualSeverity());
     issue.setRuleKey(rule.getKey());
     issue.setTags(source.getTags());

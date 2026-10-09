@@ -22,9 +22,13 @@ package org.sonar.alm.client.azure;
 import java.io.IOException;
 import java.util.concurrent.TimeUnit;
 import javax.annotation.Nullable;
+import okhttp3.Authenticator;
+import okhttp3.Interceptor;
+import okhttp3.OkHttpClient;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
 import okhttp3.mockwebserver.RecordedRequest;
+import okhttp3.mockwebserver.SocketPolicy;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
@@ -33,10 +37,12 @@ import org.slf4j.event.Level;
 import org.sonar.alm.client.ConstantTimeoutConfiguration;
 import org.sonar.alm.client.TimeoutConfiguration;
 import org.sonar.api.testfixtures.log.LogTester;
+import org.sonarqube.ws.client.OkHttpClientBuilder;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
+import static org.mockito.Mockito.mock;
 
 public class AzureDevOpsHttpClientTest {
   @Rule
@@ -52,7 +58,7 @@ public class AzureDevOpsHttpClientTest {
     server.start();
 
     TimeoutConfiguration timeoutConfiguration = new ConstantTimeoutConfiguration(10_000);
-    underTest = new AzureDevOpsHttpClient(timeoutConfiguration);
+    underTest = new AzureDevOpsHttpClient(timeoutConfiguration, new OkHttpClientBuilder().build());
   }
 
   @After
@@ -343,6 +349,70 @@ public class AzureDevOpsHttpClientTest {
         "Unable to contact Azure DevOps server : TF200016: The following project does not exist: projectName. Verify that the name of the project is correct and that the project exists on the specified Azure DevOps Server.");
   }
 
+  @Test
+  public void isGlobalPat_returns_true_when_response_is_successful() throws InterruptedException {
+    enqueueResponse(200, "{}");
+
+    boolean result = underTest.isGlobalPat(server.url("").toString(), "token");
+
+    assertThat(result).isTrue();
+    RecordedRequest request = server.takeRequest(10, TimeUnit.SECONDS);
+    assertThat(request.getRequestUrl()).hasToString(server.url("") + "_apis/connectionData?api-version=3.0-preview");
+    assertThat(request.getMethod()).isEqualTo("GET");
+    assertThat(request.getHeader("Authorization")).isNotBlank();
+  }
+
+  @Test
+  public void isGlobalPat_returns_false_when_response_is_401() {
+    enqueueResponse(401);
+
+    boolean result = underTest.isGlobalPat(server.url("").toString(), "token");
+
+    assertThat(result).isFalse();
+  }
+
+  @Test
+  public void isGlobalPat_returns_false_when_response_is_403() {
+    enqueueResponse(403);
+
+    boolean result = underTest.isGlobalPat(server.url("").toString(), "token");
+
+    assertThat(result).isFalse();
+  }
+
+  @Test
+  public void isGlobalPat_throws_when_response_is_server_error() {
+    enqueueResponse(500);
+
+    String serverUrl = server.url("").toString();
+    assertThatThrownBy(() -> underTest.isGlobalPat(serverUrl, "token"))
+      .isInstanceOf(AzureDevopsServerException.class);
+  }
+
+  @Test
+  public void isGlobalPat_throws_when_response_is_203_non_authoritative() {
+    enqueueResponse(203);
+
+    String serverUrl = server.url("").toString();
+    assertThatThrownBy(() -> underTest.isGlobalPat(serverUrl, "token"))
+      .isInstanceOf(AzureDevopsServerException.class);
+  }
+
+  @Test
+  public void isGlobalPat_times_out_quickly_when_probe_host_is_unreachable() {
+    server.enqueue(new MockResponse().setSocketPolicy(SocketPolicy.NO_RESPONSE));
+    String serverUrl = server.url("").toString();
+
+    long start = System.currentTimeMillis();
+    assertThatThrownBy(() -> underTest.isGlobalPat(serverUrl, "token"))
+      .isInstanceOf(IllegalArgumentException.class);
+    long elapsedMs = System.currentTimeMillis() - start;
+
+    // underTest is configured with a 10s timeout (see prepare()); the probe must use its own
+    // shorter timeout instead of blocking for that long.
+    assertThat(elapsedMs).isLessThan(9_000);
+  }
+
   private void enqueueResponse(int responseCode) {
     enqueueResponse(responseCode, "");
   }
@@ -492,5 +562,28 @@ public class AzureDevOpsHttpClientTest {
     assertThat(requestPath)
       .contains("project%3Fquery=1")  // ? is encoded
       .contains("repo%2Fname");         // / is encoded
+  }
+
+  @Test
+  public void constructor_derives_client_from_injected_okHttpClient_preserving_proxy_config() {
+    Authenticator proxyAuthenticator = mock(Authenticator.class);
+    Interceptor interceptor = chain -> chain.proceed(chain.request());
+    OkHttpClient sharedClient = new OkHttpClient.Builder()
+      .proxyAuthenticator(proxyAuthenticator)
+      .addNetworkInterceptor(interceptor)
+      .build();
+
+    TimeoutConfiguration timeoutConfiguration = new ConstantTimeoutConfiguration(5_000);
+    AzureDevOpsHttpClient client = new AzureDevOpsHttpClient(timeoutConfiguration, sharedClient);
+
+    assertThat(client.client.proxyAuthenticator()).isSameAs(proxyAuthenticator);
+    assertThat(client.client.networkInterceptors()).contains(interceptor);
+    assertThat(client.client.connectTimeoutMillis()).isEqualTo(5_000);
+    assertThat(client.client.readTimeoutMillis()).isEqualTo(5_000);
+    assertThat(client.client.followRedirects()).isFalse();
+    assertThat(client.client.followSslRedirects()).isFalse();
+
+    assertThat(sharedClient.proxyAuthenticator()).isSameAs(proxyAuthenticator);
+    assertThat(sharedClient.connectTimeoutMillis()).isNotEqualTo(5_000);
   }
 }

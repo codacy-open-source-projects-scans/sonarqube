@@ -23,6 +23,7 @@ import java.util.Collections;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.sonar.api.config.Configuration;
 import org.sonar.api.resources.Language;
@@ -75,6 +76,7 @@ import static org.sonarqube.ws.client.qualityprofile.QualityProfileWsParameters.
 import static org.sonarqube.ws.client.qualityprofile.QualityProfileWsParameters.PARAM_PARENT_QUALITY_PROFILE;
 import static org.sonarqube.ws.client.qualityprofile.QualityProfileWsParameters.PARAM_QUALITY_PROFILE;
 
+@Tag("elasticsearch")
 class ChangeParentActionIT {
 
   @RegisterExtension
@@ -155,6 +157,27 @@ class ChangeParentActionIT {
     assertThat(activeRules1.get(0).getKey().getRuleKey().rule()).isEqualTo(rule1.getRuleKey());
 
     assertThat(ruleIndex.searchV2(new RuleQuery().setActivation(true).setQProfile(child), new SearchOptions()).getUuids()).hasSize(1);
+  }
+
+  @Test
+  void change_parent_resolves_a_built_in_parent_referenced_by_its_display_name() {
+    QProfileDto parent = QualityProfileTesting.newQualityProfileDto()
+      .setName("Sonar way")
+      .setLanguage(language.getKey())
+      .setIsBuiltIn(true);
+    dbClient.qualityProfileDao().insert(dbSession, parent);
+    dbSession.commit();
+    QProfileDto child = createProfile();
+
+    ws.newRequest()
+      .setMethod("POST")
+      .setParam(PARAM_LANGUAGE, child.getLanguage())
+      .setParam(PARAM_QUALITY_PROFILE, child.getName())
+      .setParam(PARAM_PARENT_QUALITY_PROFILE, "Sonar way comprehensive")
+      .execute();
+
+    QProfileDto reloaded = dbClient.qualityProfileDao().selectByUuid(dbSession, child.getKee());
+    assertThat(reloaded.getParentKee()).isEqualTo(parent.getKee());
   }
 
   @Test

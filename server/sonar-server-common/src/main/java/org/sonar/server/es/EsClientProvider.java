@@ -26,8 +26,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
-import org.apache.http.HttpHost;
-import org.elasticsearch.common.settings.Settings;
+import org.apache.hc.core5.http.HttpHost;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.sonar.api.ce.ComputeEngineSide;
@@ -54,10 +53,8 @@ public class EsClientProvider {
 
   @Bean("EsClient")
   public EsClient provide(Configuration config) {
-    Settings.Builder esSettings = Settings.builder();
-
-    // mandatory property defined by bootstrap process
-    esSettings.put("cluster.name", config.get(CLUSTER_NAME.getKey()).get());
+    // mandatory property defined by bootstrap process — validated by the .get() below
+    config.get(CLUSTER_NAME.getKey()).orElseThrow(() -> new IllegalStateException("Missing setting " + CLUSTER_NAME.getKey()));
 
     boolean clusterEnabled = config.getBoolean(CLUSTER_ENABLED.getKey()).orElse(false);
     boolean searchNode = !clusterEnabled || SEARCH.equals(NodeType.parse(config.get(CLUSTER_NODE_TYPE.getKey()).orElse(null)));
@@ -94,11 +91,12 @@ public class EsClientProvider {
 
   private static HttpHost toHttpHost(HostAndPort host, Configuration config) {
     try {
-      String scheme = config.get(CLUSTER_ES_HTTP_KEYSTORE.getKey()).isPresent() ? "https" : HttpHost.DEFAULT_SCHEME_NAME;
+      String scheme = config.get(CLUSTER_ES_HTTP_KEYSTORE.getKey()).isPresent() ? "https" : "http";
+      InetAddress address = InetAddress.getByName(host.getHost());
       if ("true".equalsIgnoreCase(System.getProperty("java.net.preferIPv6Addresses"))) {
-        return new HttpHost(InetAddress.getByName(host.getHost()), host.getHost(), host.getPortOrDefault(9001), scheme);
+        return new HttpHost(scheme, address, host.getHost(), host.getPortOrDefault(9001));
       }
-      return new HttpHost(InetAddress.getByName(host.getHost()), host.getPortOrDefault(9001), scheme);
+      return new HttpHost(scheme, address, host.getPortOrDefault(9001));
     } catch (UnknownHostException e) {
       throw new IllegalStateException("Can not resolve host [" + host + "]", e);
     }

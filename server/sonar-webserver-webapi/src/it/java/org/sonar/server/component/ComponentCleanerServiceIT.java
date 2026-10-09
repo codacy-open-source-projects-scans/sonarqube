@@ -19,6 +19,7 @@
  */
 package org.sonar.server.component;
 
+import java.time.Instant;
 import java.util.List;
 import org.junit.Rule;
 import org.junit.Test;
@@ -39,6 +40,15 @@ import org.sonar.db.rule.RuleDto;
 import org.sonar.db.webhook.WebhookDto;
 import org.sonar.server.es.Indexers;
 import org.sonar.server.es.Indexers.BranchEvent;
+import org.sonarsource.history.model.EntityType;
+import org.sonarsource.history.model.IssueCountHistoryRow;
+import org.sonarsource.history.model.IssueTtrHistory;
+import org.sonarsource.history.model.MeasureHistoryRow;
+import org.sonarsource.history.server.db.HistoryMyBatisConfExtension;
+import org.sonarsource.history.server.db.mapper.IssueTtrHistoryMapperFragments;
+import org.sonarsource.history.server.db.repository.IssueCountHistoryRepository;
+import org.sonarsource.history.server.db.repository.IssueTtrHistoryRepository;
+import org.sonarsource.history.server.db.repository.MeasureHistoryRepository;
 
 import static java.util.Arrays.asList;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -56,11 +66,14 @@ public class ComponentCleanerServiceIT {
   private final System2 system2 = System2.INSTANCE;
 
   @Rule
-  public final DbTester db = DbTester.create(system2);
+  public final DbTester db = DbTester.createWithConfExtensions(system2, List.of(new HistoryMyBatisConfExtension(IssueTtrHistoryMapperFragments.class)));
 
   private final DbClient dbClient = db.getDbClient();
   private final DbSession dbSession = db.getSession();
   private final Indexers indexers = mock(Indexers.class);
+  private final IssueCountHistoryRepository issueCountHistoryRepository = new IssueCountHistoryRepository();
+  private final MeasureHistoryRepository measureHistoryRepository = new MeasureHistoryRepository();
+  private final IssueTtrHistoryRepository issueTtrHistoryRepository = new IssueTtrHistoryRepository();
   private final ComponentCleanerService underTest = new ComponentCleanerService(dbClient, indexers);
 
   @Test
@@ -74,6 +87,24 @@ public class ComponentCleanerServiceIT {
     assertExists(data2);
     verify(indexers).commitAndIndexEntities(any(), eq(List.of(data1.project)), eq(DELETION));
     verifyNoMoreInteractions(indexers);
+  }
+
+  @Test
+  public void delete_entity_should_delete_history() {
+    DbData data = insertProjectData();
+    BranchDto branch = db.components().insertProjectBranch(data.project);
+    insertHistory(data.mainBranch);
+    insertHistory(branch);
+    insertScaHistory(data.mainBranch.getUuid());
+    insertScaHistory(branch.getUuid());
+
+    underTest.deleteEntity(dbSession, data.project);
+    dbSession.commit();
+
+    assertThat(db.countRowsOfTable(dbSession, "issue_count_history")).isZero();
+    assertThat(db.countRowsOfTable(dbSession, "measure_history")).isZero();
+    assertThat(db.countRowsOfTable(dbSession, "issue_ttr_history")).isZero();
+    assertThat(db.countRowsOfTable(dbSession, "sca_ttr_history")).isZero();
   }
 
   @Test
@@ -270,6 +301,23 @@ public class ComponentCleanerServiceIT {
 
   private void assertComponentExists(ComponentDto componentDto, boolean exists) {
     assertThat(dbClient.componentDao().selectByUuid(dbSession, componentDto.uuid()).isPresent()).isEqualTo(exists);
+  }
+
+  private void insertHistory(BranchDto branch) {
+    Instant recordedAt = Instant.now();
+    issueCountHistoryRepository.upsert(dbSession, new IssueCountHistoryRow(branch.getUuid(), EntityType.PROJECT_BRANCH, 1, recordedAt, 1));
+    measureHistoryRepository.upsert(dbSession, new MeasureHistoryRow(1, branch.getUuid(), EntityType.PROJECT_BRANCH, recordedAt, "1"));
+    issueTtrHistoryRepository.upsert(dbSession, new IssueTtrHistory(branch.getUuid(), EntityType.PROJECT_BRANCH, 1, recordedAt, 1L, 1));
+  }
+
+  private void insertScaHistory(String entityId) {
+    db.executeInsert("sca_ttr_history",
+      "entity_id", entityId,
+      "entity_type", "PROJECT_BRANCH",
+      "sca_dimension_id", 1,
+      "recorded_at_epoch", Instant.now().toEpochMilli(),
+      "total_minutes_to_resolution", 1,
+      "sca_issues_resolved", 1);
   }
 
   private static class DbData {

@@ -38,6 +38,7 @@ import org.assertj.core.groups.Tuple;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.sonar.api.config.Configuration;
 import org.sonar.api.impl.utils.AlwaysIncreasingSystem2;
@@ -126,6 +127,7 @@ import static org.sonar.server.rule.ws.RulesWsParameters.PARAM_RULE_KEY;
 import static org.sonar.server.rule.ws.RulesWsParameters.PARAM_SEVERITIES;
 import static org.sonarqube.ws.Rules.Rule.DescriptionSection.Context.newBuilder;
 
+@Tag("elasticsearch")
 class SearchActionIT {
 
   private static final String JAVA = "java";
@@ -937,6 +939,31 @@ class SearchActionIT {
     assertThat(searchedRule).isNotNull();
     assertThat(searchedRule.getKey()).isEqualTo(rule.getRepositoryKey() + ":" + rule.getRuleKey());
     assertThat(searchedRule.getName()).isEqualTo(rule.getName());
+  }
+
+  @Test
+  void search_returns_display_name_of_built_in_sonar_way_profile_only() {
+    QProfileDto builtIn = db.qualityProfiles().insert(p -> p.setLanguage("java").setName("Sonar way").setIsBuiltIn(true));
+    QProfileDto custom = db.qualityProfiles().insert(p -> p.setLanguage("java").setName("Sonar way").setIsBuiltIn(false));
+    RuleDto rule = db.rules().insert(r -> r.setLanguage("java"));
+    db.qualityProfiles().activateRule(builtIn, rule);
+    db.qualityProfiles().activateRule(custom, rule);
+    indexRules();
+    indexActiveRules();
+
+    SearchResponse builtInResult = ws.newRequest()
+      .setParam("f", "actives")
+      .setParam("activation", "true")
+      .setParam("qprofile", builtIn.getKee())
+      .executeProtobuf(SearchResponse.class);
+    SearchResponse customResult = ws.newRequest()
+      .setParam("f", "actives")
+      .setParam("activation", "true")
+      .setParam("qprofile", custom.getKee())
+      .executeProtobuf(SearchResponse.class);
+
+    assertThat(builtInResult.getQProfiles().getQProfilesMap().get(builtIn.getKee()).getName()).isEqualTo("Sonar way comprehensive");
+    assertThat(customResult.getQProfiles().getQProfilesMap().get(custom.getKee()).getName()).isEqualTo("Sonar way");
   }
 
   @Test

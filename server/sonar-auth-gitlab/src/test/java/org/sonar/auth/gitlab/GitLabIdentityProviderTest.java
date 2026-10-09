@@ -50,6 +50,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThatExceptionOfType;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -66,6 +69,8 @@ class GitLabIdentityProviderTest {
 
   @Mock
   private GitLabRestClient gitLabRestClient;
+  @Mock
+  private GitLabGraphQlClient gitLabGraphQlClient;
   @Mock
   private Configuration configuration;
 
@@ -89,7 +94,7 @@ class GitLabIdentityProviderTest {
 
   @BeforeEach
   void setup() throws IOException, ExecutionException, InterruptedException {
-    gitLabIdentityProvider = new GitLabIdentityProvider(gitLabSettings, gitLabRestClient, scribeApi, scribeFactory);
+    gitLabIdentityProvider = new GitLabIdentityProvider(gitLabSettings, gitLabRestClient, gitLabGraphQlClient, scribeApi, scribeFactory);
 
     lenient().when(initContext.generateCsrfState()).thenReturn(STATE);
     lenient().when(initContext.getCallbackUrl()).thenReturn(CALLBACK_URL);
@@ -99,6 +104,7 @@ class GitLabIdentityProviderTest {
 
     lenient().when(scribeFactory.newScribe(gitLabSettings, CALLBACK_URL, scribeApi)).thenReturn(scribe);
     lenient().when(scribe.getAccessToken(OAUTH_CODE)).thenReturn(accessToken);
+    lenient().when(accessToken.getAccessToken()).thenReturn("test-access-token");
     lenient().when(scribe.getAuthorizationUrl(STATE)).thenReturn(AUTHORIZATION_URL);
   }
 
@@ -144,7 +150,7 @@ class GitLabIdentityProviderTest {
 
     verifyAuthenticateIsCalledWithExpectedIdentity(callbackContext, gsonUser, Set.of());
     verify(callbackContext).redirectToRequestedPage();
-    verify(gitLabRestClient, never()).getGroups(any(), any());
+    verify(gitLabGraphQlClient, never()).getGroups(anyString(), any());
   }
 
   @Test
@@ -157,7 +163,7 @@ class GitLabIdentityProviderTest {
 
     verifyAuthenticateIsCalledWithExpectedIdentity(callbackContext, gsonUser, Set.of());
     verify(callbackContext).redirectToRequestedPage();
-    verify(gitLabRestClient, never()).getGroups(any(), any());
+    verify(gitLabGraphQlClient, never()).getGroups(anyString(), any());
   }
 
   @ParameterizedTest
@@ -167,7 +173,7 @@ class GitLabIdentityProviderTest {
     when(configuration.getStringArray("sonar.auth.gitlab.allowedGroups")).thenReturn(allowedGroups.toArray(new String[0]));
 
     GsonUser gsonUser = mockGsonUser();
-    Set<GsonGroup> gsonGroups = mockGitlabGroups();
+    Set<GsonGroup> gsonGroups = mockGitlabGroups(allowedGroups);
 
     gitLabIdentityProvider.callback(callbackContext);
 
@@ -183,6 +189,56 @@ class GitLabIdentityProviderTest {
     );
   }
 
+  @Test
+  void onCallback_withTwoCharAllowedGroup_fetchesAllGroupsAndAuthenticates() {
+    when(gitLabSettings.syncUserGroups()).thenReturn(true);
+    when(configuration.getStringArray("sonar.auth.gitlab.allowedGroups")).thenReturn(new String[] {"gr"});
+
+    mockGsonUser();
+    GsonGroup gsonGroup = mock();
+    when(gsonGroup.getFullPath()).thenReturn("gr");
+    when(gitLabGraphQlClient.getGroups(anyString(), isNull())).thenReturn(List.of(gsonGroup));
+
+    gitLabIdentityProvider.callback(callbackContext);
+
+    verify(gitLabGraphQlClient).getGroups(anyString(), isNull());
+    verify(gitLabGraphQlClient, never()).getGroups(anyString(), eq("gr"));
+    verify(callbackContext).redirectToRequestedPage();
+  }
+
+  @Test
+  void onCallback_withTwoCharAllowedGroupAndUserInSubgroup_fetchesAllGroupsAndAuthenticates() {
+    when(gitLabSettings.syncUserGroups()).thenReturn(true);
+    when(configuration.getStringArray("sonar.auth.gitlab.allowedGroups")).thenReturn(new String[] {"gr"});
+
+    mockGsonUser();
+    GsonGroup gsonGroup = mock();
+    when(gsonGroup.getFullPath()).thenReturn("gr/subteam");
+    when(gitLabGraphQlClient.getGroups(anyString(), isNull())).thenReturn(List.of(gsonGroup));
+
+    gitLabIdentityProvider.callback(callbackContext);
+
+    verify(gitLabGraphQlClient).getGroups(anyString(), isNull());
+    verify(callbackContext).redirectToRequestedPage();
+  }
+
+  @Test
+  void onCallback_withOneCharAllowedGroup_fetchesAllGroupsAndAuthenticates() {
+    when(gitLabSettings.syncUserGroups()).thenReturn(true);
+    when(configuration.getStringArray("sonar.auth.gitlab.allowedGroups")).thenReturn(new String[] {"g"});
+
+    mockGsonUser();
+    GsonGroup gsonGroup = mock();
+    when(gsonGroup.getFullPath()).thenReturn("g");
+    when(gitLabGraphQlClient.getGroups(anyString(), isNull())).thenReturn(List.of(gsonGroup));
+
+    gitLabIdentityProvider.callback(callbackContext);
+
+    verify(gitLabGraphQlClient).getGroups(anyString(), isNull());
+    verify(gitLabGraphQlClient, never()).getGroups(anyString(), eq("g"));
+    verify(callbackContext).redirectToRequestedPage();
+  }
+
   @ParameterizedTest
   @MethodSource("notAllowedGroups")
   void onCallback_withGroupSyncAndAllowedGroupsNotMatching_shouldThrow(Set<String> allowedGroups) {
@@ -190,7 +246,7 @@ class GitLabIdentityProviderTest {
     when(configuration.getStringArray("sonar.auth.gitlab.allowedGroups")).thenReturn(allowedGroups.toArray(new String[0]));
 
     mockGsonUser();
-    mockGitlabGroups();
+    mockGitlabGroups(allowedGroups);
 
     assertThatExceptionOfType(UnauthorizedException.class)
       .isThrownBy(() -> gitLabIdentityProvider.callback(callbackContext))
@@ -214,12 +270,241 @@ class GitLabIdentityProviderTest {
       .isEqualTo(exception);
   }
 
-  private Set<GsonGroup> mockGitlabGroups() {
+  @Test
+  void onCallback_withAllowedGroupContainingSubgroup_shouldSearchByFullGroupPath() {
+    when(gitLabSettings.syncUserGroups()).thenReturn(true);
+    when(configuration.getStringArray("sonar.auth.gitlab.allowedGroups")).thenReturn(new String[] {"parent/child"});
+
+    mockGsonUser();
+    GsonGroup gsonGroup = mock(GsonGroup.class);
+    when(gsonGroup.getFullPath()).thenReturn("parent/child");
+    lenient().when(gitLabGraphQlClient.getGroups(anyString(), eq("parent/child"))).thenReturn(List.of(gsonGroup));
+
+    gitLabIdentityProvider.callback(callbackContext);
+
+    verify(gitLabGraphQlClient).getGroups(anyString(), eq("parent/child"));
+  }
+
+  @Test
+  void onCallback_withMultipleAllowedGroupsSameRoot_shouldSearchOncePerGroup() {
+    when(gitLabSettings.syncUserGroups()).thenReturn(true);
+    when(configuration.getStringArray("sonar.auth.gitlab.allowedGroups")).thenReturn(new String[] {"company/a", "company/b"});
+
+    mockGsonUser();
+    GsonGroup gsonGroup = mock(GsonGroup.class);
+    when(gsonGroup.getFullPath()).thenReturn("company/a");
+    GsonGroup gsonGroup2 = mock(GsonGroup.class);
+    when(gsonGroup2.getFullPath()).thenReturn("company/b");
+    lenient().when(gitLabGraphQlClient.getGroups(anyString(), eq("company/a"))).thenReturn(List.of(gsonGroup));
+    lenient().when(gitLabGraphQlClient.getGroups(anyString(), eq("company/b"))).thenReturn(List.of(gsonGroup2));
+
+    gitLabIdentityProvider.callback(callbackContext);
+
+    verify(gitLabGraphQlClient).getGroups(anyString(), eq("company/a"));
+    verify(gitLabGraphQlClient).getGroups(anyString(), eq("company/b"));
+  }
+
+  @Test
+  void onCallback_withAllowedGroupNamingSubgroup_shouldAuthenticateUserWhoIsMemberOfAncestorOnly() {
+    when(gitLabSettings.syncUserGroups()).thenReturn(true);
+    when(configuration.getStringArray("sonar.auth.gitlab.allowedGroups")).thenReturn(new String[] {"sonar-repro/child-team"});
+
+    GsonUser gsonUser = mockGsonUser();
+    lenient().when(gitLabGraphQlClient.getGroups(anyString(), eq("sonar-repro/child-team"))).thenReturn(List.of());
+    GsonGroup ancestorGroup = mock(GsonGroup.class);
+    when(ancestorGroup.getFullPath()).thenReturn("sonar-repro");
+    when(gitLabGraphQlClient.getGroups(anyString(), eq("sonar-repro"))).thenReturn(List.of(ancestorGroup));
+
+    GsonGroup descendantGroup = mock(GsonGroup.class);
+    when(descendantGroup.getFullPath()).thenReturn("sonar-repro/child-team");
+    when(gitLabGraphQlClient.getDescendantGroups(anyString(), eq("sonar-repro"))).thenReturn(List.of(descendantGroup));
+
+    gitLabIdentityProvider.callback(callbackContext);
+
+    verify(gitLabGraphQlClient).getGroups(anyString(), eq("sonar-repro"));
+    verifyAuthenticateIsCalledWithExpectedIdentity(callbackContext, gsonUser, Set.of(ancestorGroup, descendantGroup));
+  }
+
+  @Test
+  void onCallback_withShortAncestorGroupName_fetchesAllGroupsAndAuthenticatesUserWhoIsMemberOfAncestorOnly() {
+    when(gitLabSettings.syncUserGroups()).thenReturn(true);
+    when(configuration.getStringArray("sonar.auth.gitlab.allowedGroups")).thenReturn(new String[] {"ab/child-team"});
+
+    GsonUser gsonUser = mockGsonUser();
+    GsonGroup ancestorGroup = mock(GsonGroup.class);
+    when(ancestorGroup.getFullPath()).thenReturn("ab");
+    when(gitLabGraphQlClient.getGroups(anyString(), isNull())).thenReturn(List.of(ancestorGroup));
+
+    GsonGroup descendantGroup = mock(GsonGroup.class);
+    when(descendantGroup.getFullPath()).thenReturn("ab/child-team");
+    when(gitLabGraphQlClient.getDescendantGroups(anyString(), eq("ab"))).thenReturn(List.of(descendantGroup));
+
+    gitLabIdentityProvider.callback(callbackContext);
+
+    verify(gitLabGraphQlClient).getGroups(anyString(), isNull());
+    verify(gitLabGraphQlClient, never()).getGroups(anyString(), eq("ab/child-team"));
+    verifyAuthenticateIsCalledWithExpectedIdentity(callbackContext, gsonUser, Set.of(ancestorGroup, descendantGroup));
+  }
+
+  @Test
+  void onCallback_withAllowAllGroupsFlag_fetchesAllGroupsAndAuthenticates() {
+    when(gitLabSettings.syncUserGroups()).thenReturn(true);
+    when(gitLabSettings.allowAllGroups()).thenReturn(true);
+    when(configuration.getStringArray("sonar.auth.gitlab.allowedGroups")).thenReturn(new String[] {"some/saved-group"});
+
+    GsonUser gsonUser = mockGsonUser();
+    Set<GsonGroup> gsonGroups = mockGitlabGroups(Set.of());
+
+    gitLabIdentityProvider.callback(callbackContext);
+
+    verifyAuthenticateIsCalledWithExpectedIdentity(callbackContext, gsonUser, gsonGroups);
+    verify(callbackContext).redirectToRequestedPage();
+    verify(gitLabGraphQlClient).getGroups(anyString(), isNull());
+    verify(gitLabGraphQlClient, never()).getGroups(anyString(), eq("some/saved-group"));
+  }
+
+  @Test
+  void onCallback_withAllowAllGroupsFlagAndZeroGroups_bypassesGroupCheckAndAuthenticates() {
+    when(gitLabSettings.syncUserGroups()).thenReturn(true);
+    when(gitLabSettings.allowAllGroups()).thenReturn(true);
+    when(configuration.getStringArray("sonar.auth.gitlab.allowedGroups")).thenReturn(new String[] {"some/saved-group"});
+
+    GsonUser gsonUser = mockGsonUser();
+    when(gitLabGraphQlClient.getGroups(anyString(), isNull())).thenReturn(List.of());
+
+    gitLabIdentityProvider.callback(callbackContext);
+
+    verifyAuthenticateIsCalledWithExpectedIdentity(callbackContext, gsonUser, Set.of());
+    verify(callbackContext).redirectToRequestedPage();
+  }
+
+  @Test
+  void onCallback_withUnfilteredSync_expandsDirectGroupsWithInheritedDescendants() {
+    when(gitLabSettings.syncUserGroups()).thenReturn(true);
+    when(configuration.getStringArray("sonar.auth.gitlab.allowedGroups")).thenReturn(new String[0]);
+
+    GsonUser gsonUser = mockGsonUser();
+    GsonGroup directGroup = mock(GsonGroup.class);
+    when(directGroup.getFullPath()).thenReturn("sonar-repro");
+    when(gitLabGraphQlClient.getGroups(anyString(), isNull())).thenReturn(List.of(directGroup));
+
+    GsonGroup descendantGroup = mock(GsonGroup.class);
+    when(descendantGroup.getFullPath()).thenReturn("sonar-repro/child-team");
+    when(gitLabGraphQlClient.getDescendantGroups(anyString(), eq("sonar-repro"))).thenReturn(List.of(descendantGroup));
+
+    gitLabIdentityProvider.callback(callbackContext);
+
+    verifyAuthenticateIsCalledWithExpectedIdentity(callbackContext, gsonUser, Set.of(directGroup, descendantGroup));
+  }
+
+  @Test
+  void onCallback_withAllowedGroupsSync_expandsMatchedGroupWithInheritedDescendants() {
+    when(gitLabSettings.syncUserGroups()).thenReturn(true);
+    when(configuration.getStringArray("sonar.auth.gitlab.allowedGroups")).thenReturn(new String[] {"sonar-repro"});
+
+    GsonUser gsonUser = mockGsonUser();
+    GsonGroup directGroup = mock(GsonGroup.class);
+    when(directGroup.getFullPath()).thenReturn("sonar-repro");
+    lenient().when(gitLabGraphQlClient.getGroups(anyString(), eq("sonar-repro"))).thenReturn(List.of(directGroup));
+
+    GsonGroup descendantGroup = mock(GsonGroup.class);
+    when(descendantGroup.getFullPath()).thenReturn("sonar-repro/child-team");
+    when(gitLabGraphQlClient.getDescendantGroups(anyString(), eq("sonar-repro"))).thenReturn(List.of(descendantGroup));
+
+    gitLabIdentityProvider.callback(callbackContext);
+
+    verifyAuthenticateIsCalledWithExpectedIdentity(callbackContext, gsonUser, Set.of(directGroup, descendantGroup));
+  }
+
+  @Test
+  void onCallback_withOverlappingDirectAndDescendantGroups_shouldNotDuplicate() {
+    when(gitLabSettings.syncUserGroups()).thenReturn(true);
+    when(configuration.getStringArray("sonar.auth.gitlab.allowedGroups")).thenReturn(new String[0]);
+
+    GsonUser gsonUser = mockGsonUser();
+    GsonGroup parentGroup = mock(GsonGroup.class);
+    when(parentGroup.getFullPath()).thenReturn("sonar-repro");
+    GsonGroup childGroup = mock(GsonGroup.class);
+    when(childGroup.getFullPath()).thenReturn("sonar-repro/child-team");
+    when(gitLabGraphQlClient.getGroups(anyString(), isNull())).thenReturn(List.of(parentGroup, childGroup));
+
+    GsonGroup descendantOfParent = mock(GsonGroup.class);
+    when(descendantOfParent.getFullPath()).thenReturn("sonar-repro/child-team");
+    lenient().when(gitLabGraphQlClient.getDescendantGroups(anyString(), eq("sonar-repro"))).thenReturn(List.of(descendantOfParent));
+    lenient().when(gitLabGraphQlClient.getDescendantGroups(anyString(), eq("sonar-repro/child-team"))).thenReturn(List.of());
+
+    gitLabIdentityProvider.callback(callbackContext);
+
+    verifyAuthenticateIsCalledWithExpectedIdentity(callbackContext, gsonUser, Set.of(parentGroup, childGroup));
+  }
+
+  @Test
+  void onCallback_withDirectMembershipInParentAndChild_shouldNotFetchDescendantsOfChild() {
+    when(gitLabSettings.syncUserGroups()).thenReturn(true);
+    when(configuration.getStringArray("sonar.auth.gitlab.allowedGroups")).thenReturn(new String[0]);
+
+    mockGsonUser();
+    GsonGroup parentGroup = mock(GsonGroup.class);
+    when(parentGroup.getFullPath()).thenReturn("sonar-repro");
+    GsonGroup childGroup = mock(GsonGroup.class);
+    when(childGroup.getFullPath()).thenReturn("sonar-repro/child-team");
+    when(gitLabGraphQlClient.getGroups(anyString(), isNull())).thenReturn(List.of(parentGroup, childGroup));
+    when(gitLabGraphQlClient.getDescendantGroups(anyString(), eq("sonar-repro"))).thenReturn(List.of());
+
+    gitLabIdentityProvider.callback(callbackContext);
+
+    verify(gitLabGraphQlClient).getDescendantGroups(anyString(), eq("sonar-repro"));
+    verify(gitLabGraphQlClient, never()).getDescendantGroups(anyString(), eq("sonar-repro/child-team"));
+  }
+
+  @Test
+  void onCallback_withNoDirectGroups_shouldNotFetchDescendantGroups() {
+    when(gitLabSettings.syncUserGroups()).thenReturn(true);
+    when(configuration.getStringArray("sonar.auth.gitlab.allowedGroups")).thenReturn(new String[0]);
+
+    mockGsonUser();
+    when(gitLabGraphQlClient.getGroups(anyString(), isNull())).thenReturn(List.of());
+
+    gitLabIdentityProvider.callback(callbackContext);
+
+    verify(gitLabGraphQlClient, never()).getDescendantGroups(anyString(), anyString());
+  }
+
+  @Test
+  void onCallback_whenUserBelongsToGroupNamedAsBuiltInAdministrators_shouldNotPassItToIdentity() {
+    when(gitLabSettings.syncUserGroups()).thenReturn(true);
+    when(configuration.getStringArray("sonar.auth.gitlab.allowedGroups")).thenReturn(new String[0]);
+
+    mockGsonUser();
+    GsonGroup admins = mock(GsonGroup.class);
+    when(admins.getFullPath()).thenReturn("sonar-administrators");
+    GsonGroup adminsUpperCase = mock(GsonGroup.class);
+    when(adminsUpperCase.getFullPath()).thenReturn("Sonar-Administrators");
+    GsonGroup other = mock(GsonGroup.class);
+    when(other.getFullPath()).thenReturn("team");
+    when(gitLabGraphQlClient.getGroups(anyString(), isNull())).thenReturn(List.of(admins, adminsUpperCase, other));
+
+    gitLabIdentityProvider.callback(callbackContext);
+
+    ArgumentCaptor<UserIdentity> captor = ArgumentCaptor.forClass(UserIdentity.class);
+    verify(callbackContext).authenticate(captor.capture());
+    assertThat(captor.getValue().getGroups()).containsExactly("team");
+  }
+
+  private Set<GsonGroup> mockGitlabGroups(Set<String> allowedGroups) {
     GsonGroup gsonGroup = mock(GsonGroup.class);
     when(gsonGroup.getFullPath()).thenReturn("path/to/group");
     GsonGroup gsonGroup2 = mock(GsonGroup.class);
     when(gsonGroup2.getFullPath()).thenReturn("path/to/group2");
-    when(gitLabRestClient.getGroups(scribe, accessToken)).thenReturn(List.of(gsonGroup, gsonGroup2));
+    List<GsonGroup> groupList = List.of(gsonGroup, gsonGroup2);
+
+    if (allowedGroups.isEmpty()) {
+      lenient().when(gitLabGraphQlClient.getGroups(anyString(), isNull())).thenReturn(groupList);
+    } else {
+      for (String group : allowedGroups) {
+        lenient().when(gitLabGraphQlClient.getGroups(anyString(), eq(group))).thenReturn(groupList);
+      }
+    }
     return Set.of(gsonGroup, gsonGroup2);
   }
 

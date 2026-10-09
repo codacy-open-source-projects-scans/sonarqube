@@ -25,7 +25,9 @@ import java.util.Collections;
 import java.util.Date;
 import java.util.Iterator;
 import java.util.LinkedList;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Random;
 import java.util.Set;
@@ -43,7 +45,9 @@ import org.sonar.api.issue.Issue;
 import org.sonar.api.issue.impact.Severity;
 import org.sonar.api.issue.impact.SoftwareQuality;
 import org.sonar.api.rule.RuleKey;
+import org.sonar.api.rules.CleanCodeAttribute;
 import org.sonar.api.utils.System2;
+import org.sonar.core.issue.IssueProducer;
 import org.sonar.core.rule.RuleType;
 import org.sonar.db.DbSession;
 import org.sonar.db.DbTester;
@@ -52,8 +56,10 @@ import org.sonar.db.RowNotFoundException;
 import org.sonar.db.component.BranchDto;
 import org.sonar.db.component.BranchType;
 import org.sonar.db.component.ComponentDto;
+import org.sonar.db.component.ComponentQualifiers;
 import org.sonar.db.component.ComponentTesting;
 import org.sonar.db.component.ProjectData;
+import org.sonar.db.protobuf.DbCommons;
 import org.sonar.db.protobuf.DbIssues;
 import org.sonar.db.rule.RuleDto;
 import org.sonar.db.rule.RuleTesting;
@@ -75,6 +81,7 @@ import static org.sonar.api.issue.Issue.STATUS_OPEN;
 import static org.sonar.api.issue.Issue.STATUS_REOPENED;
 import static org.sonar.api.issue.Issue.STATUS_RESOLVED;
 import static org.sonar.api.issue.Issue.STATUS_REVIEWED;
+import static org.sonar.api.issue.Issue.STATUS_TO_REVIEW;
 import static org.sonar.api.issue.impact.Severity.BLOCKER;
 import static org.sonar.api.issue.impact.Severity.HIGH;
 import static org.sonar.api.issue.impact.Severity.INFO;
@@ -137,12 +144,40 @@ class IssueDaoIT {
   }
 
   @Test
+  void selectSourceRedactionIssues_whenRequestedComponentHasScopedSecretIssues_shouldReturnOnlyIssuesForThatComponent() {
+    ComponentDto selectedFile = db.components().insertComponent(newFileDto(projectDto));
+    ComponentDto otherFile = db.components().insertComponent(newFileDto(projectDto));
+    RuleDto s6437Rule = db.rules().insert(r -> r.setRepositoryKey("java").setRuleKey("S6437"));
+    RuleDto s2068Rule = db.rules().insert(r -> r.setRepositoryKey("java").setRuleKey("S2068"));
+    RuleDto secretsRule = db.rules().insert(r -> r.setRepositoryKey("secrets").setRuleKey("S6689"));
+    RuleDto unrelatedRule = db.rules().insert(r -> r.setRepositoryKey("java").setRuleKey("S0001"));
+
+    db.issues().insert(s6437Rule, projectDto, selectedFile, issue -> issue.setKee("s6437-on-selected-file"));
+    db.issues().insert(s2068Rule, projectDto, selectedFile, issue -> issue.setKee("s2068-on-selected-file"));
+    db.issues().insert(secretsRule, projectDto, selectedFile, issue -> issue.setKee("secrets-on-selected-file"));
+    db.issues().insert(unrelatedRule, projectDto, selectedFile, issue -> issue.setKee("unrelated-on-selected-file"));
+    db.issues().insert(s6437Rule, projectDto, otherFile, issue -> issue.setKee("s6437-on-other-file"));
+    db.commit();
+
+    List<IssueDto> result = underTest.selectSourceRedactionIssues(
+      db.getSession(), selectedFile.uuid(), Set.of("S2068", "S6418", "S6437"));
+
+    assertThat(result).extracting(IssueDto::getComponentUuid, IssueDto::getRuleRepo,
+      issue -> issue.getRuleKey().rule())
+      .containsExactlyInAnyOrder(
+        tuple(selectedFile.uuid(), "java", "S6437"),
+        tuple(selectedFile.uuid(), "java", "S2068"),
+        tuple(selectedFile.uuid(), "secrets", "S6689"));
+  }
+
+  @Test
   void selectByKeyOrFail() {
     prepareTables();
     IssueDto expected = new IssueDto()
       .setKee(ISSUE_KEY1)
       .setComponentUuid(FILE_UUID)
       .setProjectUuid(PROJECT_UUID)
+      .setBranchUuid(projectDto.branchUuid())
       .setRuleUuid(RULE.getUuid())
       .setLanguage(Optional.ofNullable(RULE.getLanguage()).orElseGet(() -> fail("Rule language should not be null here")))
       .setSeverity("BLOCKER")
@@ -170,7 +205,8 @@ class IssueDaoIT {
       .setInternalTags(List.of("internalTag1", "internalTag2"))
       .setCodeVariants(List.of("variant1", "variant2"))
       .setQuickFixAvailable(false)
-      .setMessageFormattings(MESSAGE_FORMATTING);
+      .setMessageFormattings(MESSAGE_FORMATTING)
+      .setIssueProducer(IssueProducer.SCANNER);
 
     IssueDto issue = underTest.selectOrFailByKey(db.getSession(), ISSUE_KEY1);
 
@@ -186,6 +222,7 @@ class IssueDaoIT {
     assertThat(issue.getRule()).isEqualTo(RULE.getRuleKey());
     assertThat(issue.getEffectiveCleanCodeAttribute()).isEqualTo(RULE.getCleanCodeAttribute());
     assertThat(issue.parseLocations()).isNull();
+    assertThat(issue.getIssueProducer()).isEqualTo(IssueProducer.SCANNER);
     assertThat(issue.getImpacts())
       .extracting(ImpactDto::getSeverity, ImpactDto::getSoftwareQuality, ImpactDto::isManualSeverity)
       .containsExactlyInAnyOrder(
@@ -305,6 +342,137 @@ class IssueDaoIT {
   }
 
   @Test
+  void selectIssueCountDimensionsForBranches_shouldGroupNonClosedIssuesByDimensionAndComputeIssueType() {
+    ComponentDto project = db.components().insertPrivateProject().getMainBranchComponent();
+    RuleDto bugRule = db.rules().insert(r -> r.setRepositoryKey("java").setRuleKey("S1234").setType(RuleType.BUG)
+      .addDefaultImpact(new ImpactDto().setSoftwareQuality(RELIABILITY).setSeverity(MEDIUM)));
+    RuleDto codeSmellRule = db.rules().insert(r -> r.setRepositoryKey("java").setRuleKey("S5678").setType(RuleType.CODE_SMELL));
+
+    ComponentDto branch = db.components().insertProjectBranch(project, b -> b.setKey("branchA"));
+    ComponentDto file = db.components().insertComponent(newFileDto(branch));
+    ComponentDto testFile = db.components().insertComponent(newFileDto(branch).setQualifier(ComponentQualifiers.UNIT_TEST_FILE));
+
+    // two OPEN bugs sharing the same dimension: must be counted together, not as two rows. IssueTesting.newIssue
+    // always attaches a MAINTAINABILITY override, so these already have an issue-level impact and (all-or-nothing)
+    // must NOT fall back to the rule's RELIABILITY default below
+    db.issues().insert(bugRule, branch, file, i -> i.setKee("bug-open-1").setType(bugRule.getType()).setStatus("OPEN").setResolution(null).setSeverity("MAJOR"));
+    db.issues().insert(bugRule, branch, file, i -> i.setKee("bug-open-2").setType(bugRule.getType()).setStatus("OPEN").setResolution(null).setSeverity("MAJOR"));
+
+    // a different issue type on the same rule-independent dimension: must stay a separate row (regression test for the
+    // `type`/`issueType` MyBatis alias mismatch, which used to collapse every type into issueType=0)
+    db.issues().insert(codeSmellRule, branch, file, i -> i.setKee("smell-open").setType(codeSmellRule.getType()).setStatus("OPEN").setResolution(null).setSeverity("MINOR"));
+
+    // a CLOSED issue: must be excluded entirely
+    db.issues().insert(bugRule, branch, file, i -> i.setKee("bug-closed").setType(bugRule.getType()).setStatus("CLOSED").setResolution("FIXED").setSeverity("MAJOR"));
+
+    // a unit-test-file issue with an issue-level impact override: codeScope must be TEST and the override must win over the rule default
+    db.issues().insert(bugRule, branch, testFile, i -> i.setKee("bug-test-file").setType(bugRule.getType()).setStatus("OPEN").setResolution(null).setSeverity("MAJOR")
+      .addImpact(new ImpactDto().setSoftwareQuality(RELIABILITY).setSeverity(HIGH)));
+
+    List<IssueCountDimensionDto> rows = underTest.selectIssueCountDimensionsForBranches(db.getSession(), List.of(branch.branchUuid()));
+
+    assertThat(rows)
+      .extracting(IssueCountDimensionDto::issueType, IssueCountDimensionDto::codeScope,
+        row -> row.effectiveImpacts().get("RELIABILITY"), IssueCountDimensionDto::issueCount)
+      .containsExactlyInAnyOrder(
+        tuple(RuleType.BUG.getDbConstant(), "MAIN", null, 2),
+        tuple(RuleType.CODE_SMELL.getDbConstant(), "MAIN", null, 1),
+        tuple(RuleType.BUG.getDbConstant(), "TEST", "HIGH", 1));
+    // ruleKey is already composed as repository:rule in SQL (nested concat(), portable to Oracle's 2-arg limit)
+    assertThat(rows).extracting(IssueCountDimensionDto::ruleKey)
+      .containsOnly("java:S1234", "java:S5678");
+  }
+
+  @Test
+  void selectIssueCountDimensionsForBranches_shouldComputeIssueStatusAndHotspotResolution() {
+    ComponentDto project = db.components().insertPrivateProject().getMainBranchComponent();
+    RuleDto rule = db.rules().insert(r -> r.setRepositoryKey("java").setRuleKey("S1234").setType(RuleType.BUG));
+    RuleDto hotspotRule = db.rules().insert(r -> r.setRepositoryKey("java").setRuleKey("S9999").setType(RuleType.SECURITY_HOTSPOT));
+    ComponentDto branch = db.components().insertProjectBranch(project, b -> b.setKey("branchB"));
+    ComponentDto file = db.components().insertComponent(newFileDto(branch));
+
+    db.issues().insert(rule, branch, file, i -> i.setKee("false-positive").setType(rule.getType())
+      .setStatus("RESOLVED").setResolution("FALSE-POSITIVE").setSeverity("MAJOR"));
+    db.issues().insert(hotspotRule, branch, file, i -> i.setKee("reviewed-hotspot").setType(hotspotRule.getType())
+      .setStatus("REVIEWED").setResolution("FIXED").setSeverity("MAJOR"));
+
+    List<IssueCountDimensionDto> rows = underTest.selectIssueCountDimensionsForBranches(db.getSession(), List.of(branch.branchUuid()));
+
+    assertThat(rows)
+      .extracting(IssueCountDimensionDto::issueType, IssueCountDimensionDto::issueStatus, IssueCountDimensionDto::hotspotResolution)
+      .containsExactlyInAnyOrder(
+        tuple(RuleType.BUG.getDbConstant(), "FALSE_POSITIVE", null),
+        tuple(RuleType.SECURITY_HOTSPOT.getDbConstant(), null, "FIXED"));
+  }
+
+  @Test
+  void selectIssueCountDimensionsForBranches_shouldSumCountsAcrossBranchesInASingleQuery() {
+    ComponentDto projectA = db.components().insertPrivateProject().getMainBranchComponent();
+    ComponentDto projectB = db.components().insertPrivateProject().getMainBranchComponent();
+    RuleDto bugRule = db.rules().insert(r -> r.setRepositoryKey("java").setRuleKey("S1234").setType(RuleType.BUG));
+
+    ComponentDto branchA = db.components().insertProjectBranch(projectA, b -> b.setKey("branchA"));
+    ComponentDto fileA = db.components().insertComponent(newFileDto(branchA));
+    db.issues().insert(bugRule, branchA, fileA, i -> i.setKee("bug-a").setType(bugRule.getType()).setStatus("OPEN").setResolution(null).setSeverity("MAJOR"));
+
+    ComponentDto branchB = db.components().insertProjectBranch(projectB, b -> b.setKey("branchB"));
+    ComponentDto fileB = db.components().insertComponent(newFileDto(branchB));
+    db.issues().insert(bugRule, branchB, fileB, i -> i.setKee("bug-b").setType(bugRule.getType()).setStatus("OPEN").setResolution(null).setSeverity("MAJOR"));
+
+    List<IssueCountDimensionDto> rows = underTest.selectIssueCountDimensionsForBranches(db.getSession(),
+      List.of(branchA.branchUuid(), branchB.branchUuid()));
+
+    assertThat(rows)
+      .extracting(IssueCountDimensionDto::issueType, IssueCountDimensionDto::issueCount)
+      .containsExactly(tuple(RuleType.BUG.getDbConstant(), 2));
+  }
+
+  @Test
+  void selectIssueCountDimensionsForBranches_shouldNotFallBackToRuleDefaultsForQualitiesTheIssueDidNotOverride() {
+    ComponentDto project = db.components().insertPrivateProject().getMainBranchComponent();
+    RuleDto rule = db.rules().insert(r -> r.setRepositoryKey("java").setRuleKey("S1234").setType(RuleType.BUG)
+      .replaceAllDefaultImpacts(List.of(
+        new ImpactDto().setSoftwareQuality(MAINTAINABILITY).setSeverity(MEDIUM),
+        new ImpactDto().setSoftwareQuality(SECURITY).setSeverity(MEDIUM),
+        new ImpactDto().setSoftwareQuality(RELIABILITY).setSeverity(MEDIUM))));
+    ComponentDto branch = db.components().insertProjectBranch(project, b -> b.setKey("branchC"));
+    ComponentDto file = db.components().insertComponent(newFileDto(branch));
+
+    // the issue overrides only MAINTAINABILITY: SECURITY/RELIABILITY must stay absent, not fall back to the
+    // rule's MEDIUM defaults for those two qualities (all-or-nothing, mirroring IssueDto#getEffectiveImpacts)
+    db.issues().insert(rule, branch, file, i -> i.setKee("partial-override").setType(rule.getType()).setStatus("OPEN").setResolution(null).setSeverity("MAJOR")
+      .replaceAllImpacts(List.of(new ImpactDto().setSoftwareQuality(MAINTAINABILITY).setSeverity(HIGH))));
+
+    List<IssueCountDimensionDto> rows = underTest.selectIssueCountDimensionsForBranches(db.getSession(), List.of(branch.branchUuid()));
+
+    assertThat(rows).hasSize(1);
+    assertThat(rows.get(0).effectiveImpacts()).containsOnly(Map.entry("MAINTAINABILITY", "HIGH"));
+  }
+
+  @Test
+  void selectIssueCountDimensionsForBranches_shouldFallBackToRuleDefaultsWhenIssueHasNoImpactsAtAll() {
+    ComponentDto project = db.components().insertPrivateProject().getMainBranchComponent();
+    RuleDto rule = db.rules().insert(r -> r.setRepositoryKey("java").setRuleKey("S1234").setType(RuleType.BUG)
+      .replaceAllDefaultImpacts(List.of(
+        new ImpactDto().setSoftwareQuality(MAINTAINABILITY).setSeverity(MEDIUM),
+        new ImpactDto().setSoftwareQuality(RELIABILITY).setSeverity(LOW))));
+    ComponentDto branch = db.components().insertProjectBranch(project, b -> b.setKey("branchD"));
+    ComponentDto file = db.components().insertComponent(newFileDto(branch));
+
+    // IssueTesting.newIssue always attaches a MAINTAINABILITY override; clear it so this issue truly has no
+    // impacts of its own and must fall back to every one of the rule's defaults
+    db.issues().insert(rule, branch, file, i -> i.setKee("no-override").setType(rule.getType()).setStatus("OPEN").setResolution(null).setSeverity("MAJOR")
+      .replaceAllImpacts(List.of()));
+
+    List<IssueCountDimensionDto> rows = underTest.selectIssueCountDimensionsForBranches(db.getSession(), List.of(branch.branchUuid()));
+
+    assertThat(rows).hasSize(1);
+    assertThat(rows.get(0).effectiveImpacts()).containsOnly(
+      Map.entry("MAINTAINABILITY", "MEDIUM"),
+      Map.entry("RELIABILITY", "LOW"));
+  }
+
+  @Test
   void scrollIndexationIssues_shouldReturnDto() {
     ComponentDto project = db.components().insertPrivateProject().getMainBranchComponent();
     RuleDto rule = db.rules().insert(r -> r.setRepositoryKey("java").setLanguage("java")
@@ -339,6 +507,145 @@ class IssueDaoIT {
       issueCount++;
     }
     assertThat(issueCount).isEqualTo(100);
+  }
+
+  @Test
+  void selectHotspotsForMigration_returnsHotspotFindingsWithRuleTargetType_scopedByProject() {
+    ProjectData projectA = db.components().insertPrivateProject();
+    ComponentDto branchA = projectA.getMainBranchComponent();
+    ComponentDto fileA = db.components().insertComponent(newFileDto(branchA));
+    ProjectData projectB = db.components().insertPrivateProject();
+    ComponentDto branchB = projectB.getMainBranchComponent();
+    ComponentDto fileB = db.components().insertComponent(newFileDto(branchB));
+
+    // Phase-1-converted rules (rule type already changed) and a rule not yet converted (still a hotspot).
+    RuleDto vulnerabilityRule = db.rules().insert(r -> r.setType(RuleType.VULNERABILITY));
+    RuleDto codeSmellRule = db.rules().insert(r -> r.setType(RuleType.CODE_SMELL));
+    RuleDto stillHotspotRule = db.rules().insertHotspotRule();
+
+    // Hotspot-typed findings (issue_type = SECURITY_HOTSPOT) — the migration input.
+    IssueDto onVuln = db.issues().insert(vulnerabilityRule, branchA, fileA, i -> i.setType(RuleType.SECURITY_HOTSPOT));
+    IssueDto onCodeSmell = db.issues().insert(codeSmellRule, branchA, fileA, i -> i.setType(RuleType.SECURITY_HOTSPOT));
+    // Rule still a hotspot -> no target type -> never migratable, so not returned.
+    IssueDto onStillHotspot = db.issues().insert(stillHotspotRule, branchB, fileB, i -> i.setType(RuleType.SECURITY_HOTSPOT));
+    // Not a hotspot finding -> excluded.
+    db.issues().insert(vulnerabilityRule, branchA, fileA, i -> i.setType(RuleType.VULNERABILITY));
+
+    // All projects: only the findings whose rule was already converted.
+    List<HotspotMigrationKeyDto> allKeys = underTest.selectHotspotKeysForMigration(db.getSession(), null, null, null, 100);
+    assertThat(allKeys).extracting(HotspotMigrationKeyDto::getKee)
+      .containsExactlyInAnyOrder(onVuln.getKey(), onCodeSmell.getKey())
+      .doesNotContain(onStillHotspot.getKey());
+
+    // Loading by keys is unchanged and still carries each finding's rule current type, including a still-hotspot
+    // rule, so the migrator's guard can act on a rule that changed type after the key query ran.
+    List<HotspotToMigrateDto> loaded = underTest.selectHotspotsForMigrationByKeys(db.getSession(),
+      List.of(onVuln.getKey(), onCodeSmell.getKey(), onStillHotspot.getKey()));
+    assertThat(loaded).extracting(HotspotToMigrateDto::getKey, HotspotToMigrateDto::getRuleTypeEnum)
+      .containsExactlyInAnyOrder(
+        tuple(onVuln.getKey(), RuleType.VULNERABILITY),
+        tuple(onCodeSmell.getKey(), RuleType.CODE_SMELL),
+        tuple(onStillHotspot.getKey(), RuleType.SECURITY_HOTSPOT));
+
+    // Scoped to projectA (entity uuid): only its hotspot findings.
+    List<HotspotMigrationKeyDto> scoped = underTest.selectHotspotKeysForMigration(db.getSession(),
+      Set.of(projectA.getProjectDto().getUuid()), null, null, 100);
+    assertThat(scoped).extracting(HotspotMigrationKeyDto::getKee)
+      .containsExactlyInAnyOrder(onVuln.getKey(), onCodeSmell.getKey());
+
+    // Scoping projectB, whose only hotspot finding is not migratable, yields nothing rather than falling back to
+    // "all projects".
+    assertThat(underTest.selectHotspotKeysForMigration(db.getSession(),
+      Set.of(projectB.getProjectDto().getUuid()), null, null, 100)).isEmpty();
+  }
+
+  @Test
+  void hotspotsForMigration_countsAgreeWithTheKeysThatWillBeMigrated() {
+    ProjectData project = db.components().insertPrivateProject();
+    ComponentDto branch = project.getMainBranchComponent();
+    ComponentDto file = db.components().insertComponent(newFileDto(branch));
+    RuleDto vulnerabilityRule = db.rules().insert(r -> r.setType(RuleType.VULNERABILITY));
+    RuleDto stillHotspotRule = db.rules().insertHotspotRule();
+
+    db.issues().insert(vulnerabilityRule, branch, file, i -> i.setType(RuleType.SECURITY_HOTSPOT));
+    db.issues().insert(vulnerabilityRule, branch, file, i -> i.setType(RuleType.SECURITY_HOTSPOT));
+    db.issues().insert(stillHotspotRule, branch, file, i -> i.setType(RuleType.SECURITY_HOTSPOT));
+
+    // The remaining count must match what the key query returns, otherwise migration_status could never reach zero.
+    assertThat(underTest.countHotspotsForMigration(db.getSession(), null)).isEqualTo(2);
+    assertThat(underTest.selectHotspotKeysForMigration(db.getSession(), null, null, null, 100)).hasSize(2);
+    // The excluded findings stay visible through the dedicated count.
+    assertThat(underTest.countNotConvertedHotspotsForMigration(db.getSession(), null)).isEqualTo(1);
+
+    Set<String> scope = Set.of(project.getProjectDto().getUuid());
+    assertThat(underTest.countHotspotsForMigration(db.getSession(), scope)).isEqualTo(2);
+    assertThat(underTest.countNotConvertedHotspotsForMigration(db.getSession(), scope)).isEqualTo(1);
+  }
+
+  @Test
+  void hotspotsForMigration_excludeFindingsWhoseBranchRowIsGone() {
+    ProjectData project = db.components().insertPrivateProject();
+    ComponentDto branch = project.getMainBranchComponent();
+    ComponentDto file = db.components().insertComponent(newFileDto(branch));
+    RuleDto vulnerabilityRule = db.rules().insert(r -> r.setType(RuleType.VULNERABILITY));
+    IssueDto kept = db.issues().insert(vulnerabilityRule, branch, file, i -> i.setType(RuleType.SECURITY_HOTSPOT));
+    IssueDto orphan = db.issues().insert(vulnerabilityRule, branch, file, i -> i.setType(RuleType.SECURITY_HOTSPOT));
+
+    // Point one finding at a branch uuid that has no project_branches row. Such rows exist on real instances and
+    // cannot be migrated (the by-keys load inner-joins components on project_uuid), so they must not be returned
+    // or counted - otherwise the remaining count would never reach zero.
+    db.executeUpdateSql("update issues set project_uuid = 'missing-branch-uuid' where kee = '" + orphan.getKey() + "'");
+
+    assertThat(underTest.selectHotspotKeysForMigration(db.getSession(), null, null, null, 100))
+      .extracting(HotspotMigrationKeyDto::getKee)
+      .containsExactly(kept.getKey());
+    assertThat(underTest.countHotspotsForMigration(db.getSession(), null)).isEqualTo(1);
+    assertThat(underTest.countNotConvertedHotspotsForMigration(db.getSession(), null)).isZero();
+  }
+
+  @Test
+  void hotspotsForMigration_rejectAnEmptyScopeInsteadOfScanningEverything() {
+    Set<String> emptyScope = Set.of();
+    DbSession session = db.getSession();
+
+    assertThatThrownBy(() -> underTest.selectHotspotKeysForMigration(session, emptyScope, null, null, 100))
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessageContaining("must be null (all projects) or non-empty");
+    assertThatThrownBy(() -> underTest.countHotspotsForMigration(session, emptyScope))
+      .isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(() -> underTest.countNotConvertedHotspotsForMigration(session, emptyScope))
+      .isInstanceOf(IllegalArgumentException.class);
+  }
+
+  @Test
+  void selectHotspotKeysForMigration_paginatesByKeysetWithoutGapsOrDuplicates() {
+    ProjectData project = db.components().insertPrivateProject();
+    ComponentDto branch = project.getMainBranchComponent();
+    ComponentDto file = db.components().insertComponent(newFileDto(branch));
+    RuleDto vulnerabilityRule = db.rules().insert(r -> r.setType(RuleType.VULNERABILITY));
+    IssueDto h1 = db.issues().insert(vulnerabilityRule, branch, file, i -> i.setType(RuleType.SECURITY_HOTSPOT));
+    IssueDto h2 = db.issues().insert(vulnerabilityRule, branch, file, i -> i.setType(RuleType.SECURITY_HOTSPOT));
+    IssueDto h3 = db.issues().insert(vulnerabilityRule, branch, file, i -> i.setType(RuleType.SECURITY_HOTSPOT));
+
+    List<String> collected = new ArrayList<>();
+    String lastBranchUuid = null;
+    String lastKee = null;
+    while (true) {
+      List<HotspotMigrationKeyDto> page = underTest.selectHotspotKeysForMigration(db.getSession(), null, lastBranchUuid, lastKee, 2);
+      if (page.isEmpty()) {
+        break;
+      }
+      page.forEach(row -> collected.add(row.getKee()));
+      HotspotMigrationKeyDto last = page.get(page.size() - 1);
+      lastBranchUuid = last.getBranchUuid();
+      lastKee = last.getKee();
+      if (page.size() < 2) {
+        break;
+      }
+    }
+    assertThat(collected)
+      .containsExactlyInAnyOrder(h1.getKey(), h2.getKey(), h3.getKey())
+      .doesNotHaveDuplicates();
   }
 
   @Test
@@ -473,6 +780,31 @@ class IssueDaoIT {
   }
 
   @Test
+  void selectByBranch_shouldReturnProducer() {
+    ComponentDto project = db.components().insertPrivateProject().getMainBranchComponent();
+    RuleDto rule = db.rules().insert(r -> r.setRepositoryKey("java").setLanguage("java").setType(RuleType.VULNERABILITY));
+    ComponentDto branch = db.components().insertProjectBranch(project, b -> b.setKey("branchProducer"));
+    ComponentDto file = db.components().insertComponent(newFileDto(branch));
+
+    db.issues().insert(rule, branch, file, i -> i.setKee("issueScanner")
+      .setStatus(STATUS_OPEN)
+      .setType(rule.getType()));
+    db.issues().insert(rule, branch, file, i -> i.setKee("issueHunterAgent")
+      .setStatus(STATUS_OPEN)
+      .setType(rule.getType())
+      .setIssueProducer(IssueProducer.HUNTER_AGENT));
+
+    List<IssueDto> result = underTest.selectByBranch(db.getSession(), Set.of("issueScanner", "issueHunterAgent"),
+      buildSelectByBranchQuery(branch, false, 1_000_000_000_000L));
+
+    assertThat(result)
+      .extracting(IssueDto::getKey, IssueDto::getIssueProducer)
+      .containsExactlyInAnyOrder(
+        tuple("issueScanner", IssueProducer.SCANNER),
+        tuple("issueHunterAgent", IssueProducer.HUNTER_AGENT));
+  }
+
+  @Test
   void selectOpenByComponentUuid() {
     RuleDto rule = db.rules().insert();
     ComponentDto project = db.components().insertPublicProject().getMainBranchComponent();
@@ -491,9 +823,86 @@ class IssueDaoIT {
     IssueDto fpIssue = db.issues().insert(rule, projectBranch, file,
       i -> i.setStatus(STATUS_RESOLVED).setResolution(RESOLUTION_FALSE_POSITIVE));
 
-    assertThat(underTest.selectOpenByComponentUuids(db.getSession(), Collections.singletonList(file.uuid())))
+    assertThat(underTest.selectOpenScannerIssuesByComponentUuids(db.getSession(), Collections.singletonList(file.uuid())))
       .extracting("kee")
       .containsOnly(openIssue.getKey(), reopenedIssue.getKey(), confirmedIssue.getKey(), wontfixIssue.getKey(), fpIssue.getKey());
+  }
+
+  @Test
+  void selectOpenScannerIssuesByComponentUuids_excludes_hunter_agent_issues() {
+    RuleDto rule = db.rules().insert();
+    ComponentDto project = db.components().insertPublicProject().getMainBranchComponent();
+    ComponentDto projectBranch = db.components().insertProjectBranch(project,
+      b -> b.setKey("feature/foo")
+        .setBranchType(BranchType.BRANCH));
+
+    ComponentDto file = db.components().insertComponent(newFileDto(projectBranch));
+
+    IssueDto scannerIssue = db.issues().insert(rule, projectBranch, file,
+      i -> i.setStatus(STATUS_OPEN).setResolution(null).setIssueProducer(IssueProducer.SCANNER));
+    db.issues().insert(rule, projectBranch, file,
+      i -> i.setStatus(STATUS_OPEN).setResolution(null).setIssueProducer(IssueProducer.HUNTER_AGENT));
+
+    assertThat(underTest.selectOpenScannerIssuesByComponentUuids(db.getSession(), Collections.singletonList(file.uuid())))
+      .extracting("kee")
+      .containsOnly(scannerIssue.getKey());
+  }
+
+  @Test
+  void selectNonClosedHunterAgentIssuesByBranchUuid_returns_only_open_hunterAgent_issues_for_the_branch() {
+    RuleDto rule = db.rules().insert();
+    ComponentDto project = db.components().insertPublicProject().getMainBranchComponent();
+    ComponentDto branch = db.components().insertProjectBranch(project, b -> b.setKey("feature/foo").setBranchType(BranchType.BRANCH));
+    ComponentDto file = db.components().insertComponent(newFileDto(branch));
+
+    IssueDto openHunterAgentIssue = db.issues().insert(rule, branch, file,
+      i -> i.setStatus(STATUS_OPEN).setResolution(null).setIssueProducer(IssueProducer.HUNTER_AGENT));
+    db.issues().insert(rule, branch, file, i -> i.setStatus(STATUS_OPEN).setResolution(null).setIssueProducer(IssueProducer.SCANNER));
+    db.issues().insert(rule, branch, file,
+      i -> i.setStatus(STATUS_CLOSED).setResolution(RESOLUTION_FIXED).setIssueProducer(IssueProducer.HUNTER_AGENT));
+
+    ComponentDto otherProject = db.components().insertPublicProject().getMainBranchComponent();
+    ComponentDto otherBranch = db.components().insertProjectBranch(otherProject, b -> b.setKey("feature/bar").setBranchType(BranchType.BRANCH));
+    ComponentDto otherFile = db.components().insertComponent(newFileDto(otherBranch));
+    db.issues().insert(rule, otherBranch, otherFile,
+      i -> i.setStatus(STATUS_OPEN).setResolution(null).setIssueProducer(IssueProducer.HUNTER_AGENT));
+
+    List<IssueWithoutRuleInfoDto> result = underTest.selectNonClosedHunterAgentIssuesByBranchUuid(db.getSession(), branch.uuid());
+
+    assertThat(result).extracting(IssueWithoutRuleInfoDto::getKey).containsExactly(openHunterAgentIssue.getKey());
+    assertThat(result.get(0).getRuleUuid()).isEqualTo(rule.getUuid());
+  }
+
+  @Test
+  void selectClosedHunterAgentIssuesByKeys_returns_only_closed_hunterAgent_issues_matching_keys() {
+    RuleDto rule = db.rules().insert();
+    ComponentDto project = db.components().insertPublicProject().getMainBranchComponent();
+    ComponentDto branch = db.components().insertProjectBranch(project, b -> b.setKey("feature/foo").setBranchType(BranchType.BRANCH));
+    ComponentDto file = db.components().insertComponent(newFileDto(branch));
+
+    IssueDto closedRequested = db.issues().insert(rule, branch, file,
+      i -> i.setStatus(STATUS_CLOSED).setResolution(RESOLUTION_FIXED).setIssueProducer(IssueProducer.HUNTER_AGENT));
+    db.issues().insert(rule, branch, file,
+      i -> i.setStatus(STATUS_CLOSED).setResolution(RESOLUTION_FIXED).setIssueProducer(IssueProducer.HUNTER_AGENT));
+    db.issues().insert(rule, branch, file, i -> i.setStatus(STATUS_OPEN).setResolution(null).setIssueProducer(IssueProducer.HUNTER_AGENT));
+    IssueDto closedScannerIssue = db.issues().insert(rule, branch, file,
+      i -> i.setStatus(STATUS_CLOSED).setResolution(RESOLUTION_FIXED).setIssueProducer(IssueProducer.SCANNER));
+
+    ComponentDto otherProject = db.components().insertPublicProject().getMainBranchComponent();
+    ComponentDto otherBranch = db.components().insertProjectBranch(otherProject, b -> b.setKey("feature/bar").setBranchType(BranchType.BRANCH));
+    ComponentDto otherFile = db.components().insertComponent(newFileDto(otherBranch));
+    IssueDto closedOnOtherBranch = db.issues().insert(rule, otherBranch, otherFile,
+      i -> i.setStatus(STATUS_CLOSED).setResolution(RESOLUTION_FIXED).setIssueProducer(IssueProducer.HUNTER_AGENT));
+
+    List<IssueWithoutRuleInfoDto> result = underTest.selectClosedHunterAgentIssuesByKeys(db.getSession(), branch.uuid(),
+      Set.of(closedRequested.getKey(), closedScannerIssue.getKey(), closedOnOtherBranch.getKey(), "unknown-key"));
+
+    assertThat(result).extracting(IssueWithoutRuleInfoDto::getKey).containsExactly(closedRequested.getKey());
+  }
+
+  @Test
+  void selectClosedHunterAgentIssuesByKeys_returns_emptyList_forEmptyKeyCollection() {
+    assertThat(underTest.selectClosedHunterAgentIssuesByKeys(db.getSession(), "branch-uuid", Set.of())).isEmpty();
   }
 
   @Test
@@ -507,7 +916,7 @@ class IssueDaoIT {
     ComponentDto file = db.components().insertComponent(newFileDto(projectBranch));
     IssueDto fpIssue = db.issues().insert(rule, projectBranch, file, i -> i.setStatus("RESOLVED").setResolution("FALSE-POSITIVE"));
 
-    PrIssueDto fp = underTest.selectOpenByComponentUuids(db.getSession(), Collections.singletonList(file.uuid())).get(0);
+    PrIssueDto fp = underTest.selectOpenScannerIssuesByComponentUuids(db.getSession(), Collections.singletonList(file.uuid())).get(0);
     assertThat(fp.getLine()).isEqualTo(fpIssue.getLine());
     assertThat(fp.getMessage()).isEqualTo(fpIssue.getMessage());
     assertThat(fp.getChecksum()).isEqualTo(fpIssue.getChecksum());
@@ -854,6 +1263,48 @@ class IssueDaoIT {
     assertThat(result.stream().filter(g -> g.getSeverity() == BLOCKER).mapToLong(IssueImpactSeverityGroupDto::getCount).sum()).isEqualTo(1);
     assertThat(result.stream().filter(g -> g.getSeverity() == HIGH).mapToLong(IssueImpactSeverityGroupDto::getCount).sum()).isEqualTo(1);
     assertThat(result.stream().filter(g -> g.getSeverity() == INFO).mapToLong(IssueImpactSeverityGroupDto::getCount).sum()).isEqualTo(1);
+  }
+
+  @Test
+  void selectIssueImpactGroupsByComponent_whenSecurityHotspots_shouldExcludeThem() {
+    ComponentDto project = db.components().insertPublicProject().getMainBranchComponent();
+    ComponentDto file = db.components().insertComponent(ComponentTesting.newFileDto(project));
+    RuleDto rule = db.rules().insert();
+
+    db.issues().insert(rule, project, file,
+      i -> i.setType(RuleType.SECURITY_HOTSPOT).setStatus(STATUS_TO_REVIEW).setResolution(null).setEffort(60L)
+        .replaceAllImpacts(List.of(createImpact(SECURITY, LOW))));
+    db.issues().insert(rule, project, file,
+      i -> i.setType(RuleType.VULNERABILITY).setStatus(STATUS_OPEN).setEffort(60L)
+        .replaceAllImpacts(List.of(createImpact(SECURITY, HIGH))));
+
+    Collection<IssueImpactGroupDto> result = underTest.selectIssueImpactGroupsByComponent(db.getSession(), file, Long.MAX_VALUE);
+
+    assertThat(result).hasSize(1);
+    assertThat(result.stream().mapToLong(IssueImpactGroupDto::getCount).sum()).isEqualTo(1);
+    assertThat(result.stream().filter(g -> g.getSeverity() == HIGH).mapToLong(IssueImpactGroupDto::getCount).sum()).isEqualTo(1);
+    assertThat(result.stream().filter(g -> g.getSeverity() == LOW)).isEmpty();
+  }
+
+  @Test
+  void selectIssueImpactSeverityGroupsByComponent_whenSecurityHotspots_shouldExcludeThem() {
+    ComponentDto project = db.components().insertPublicProject().getMainBranchComponent();
+    ComponentDto file = db.components().insertComponent(ComponentTesting.newFileDto(project));
+    RuleDto rule = db.rules().insert();
+
+    db.issues().insert(rule, project, file,
+      i -> i.setType(RuleType.SECURITY_HOTSPOT).setStatus(STATUS_TO_REVIEW).setResolution(null).setEffort(60L)
+        .replaceAllImpacts(List.of(createImpact(SECURITY, LOW))));
+    db.issues().insert(rule, project, file,
+      i -> i.setType(RuleType.VULNERABILITY).setStatus(STATUS_OPEN).setEffort(60L)
+        .replaceAllImpacts(List.of(createImpact(SECURITY, HIGH))));
+
+    Collection<IssueImpactSeverityGroupDto> result = underTest.selectIssueImpactSeverityGroupsByComponent(db.getSession(), file, Long.MAX_VALUE);
+
+    assertThat(result).hasSize(1);
+    assertThat(result.stream().mapToLong(IssueImpactSeverityGroupDto::getCount).sum()).isEqualTo(1);
+    assertThat(result.stream().filter(g -> g.getSeverity() == HIGH).mapToLong(IssueImpactSeverityGroupDto::getCount).sum()).isEqualTo(1);
+    assertThat(result.stream().filter(g -> g.getSeverity() == LOW)).isEmpty();
   }
 
   @Test
@@ -1217,6 +1668,191 @@ class IssueDaoIT {
   }
 
   @Test
+  void insert_shouldPersistScannerProducer_whenProducerNotSet() {
+    IssueDto issue = createIssueWithKey(ISSUE_KEY1);
+    underTest.insert(db.getSession(), issue);
+
+    IssueDto selected = underTest.selectOrFailByKey(db.getSession(), ISSUE_KEY1);
+    assertThat(selected.getIssueProducer()).isEqualTo(IssueProducer.SCANNER);
+  }
+
+  @Test
+  void insert_shouldPersistHunterAgentProducer_whenSet() {
+    IssueDto issue = createIssueWithKey(ISSUE_KEY1).setIssueProducer(IssueProducer.HUNTER_AGENT);
+    underTest.insert(db.getSession(), issue);
+
+    IssueDto selected = underTest.selectOrFailByKey(db.getSession(), ISSUE_KEY1);
+    assertThat(selected.getIssueProducer()).isEqualTo(IssueProducer.HUNTER_AGENT);
+  }
+
+  @Test
+  void update_shouldNotChangeProducer_whenUpdatingHunterOwnedIssue() {
+    IssueDto issue = createIssueWithKey(ISSUE_KEY1).setIssueProducer(IssueProducer.HUNTER_AGENT);
+    underTest.insert(db.getSession(), issue);
+
+    issue.setMessage("updated via generic update");
+    underTest.update(db.getSession(), issue);
+
+    IssueDto updated = underTest.selectOrFailByKey(db.getSession(), ISSUE_KEY1);
+    assertThat(updated.getMessage()).isEqualTo("updated via generic update");
+    assertThat(updated.getIssueProducer()).isEqualTo(IssueProducer.HUNTER_AGENT);
+  }
+
+  @Test
+  void updateIfBeforeSelectedDate_shouldNotChangeProducer() {
+    IssueDto issue = createIssueWithKey(ISSUE_KEY1).setIssueProducer(IssueProducer.HUNTER_AGENT);
+    underTest.insert(db.getSession(), issue);
+
+    IssueDto issueToUpdate = underTest.selectOrFailByKey(db.getSession(), ISSUE_KEY1)
+      .setMessage("updated via updateIfBeforeSelectedDate")
+      .setSelectedAt(1_440_000_000_000L);
+    boolean isUpdated = underTest.updateIfBeforeSelectedDate(db.getSession(), issueToUpdate);
+
+    assertThat(isUpdated).isTrue();
+    IssueDto updated = underTest.selectOrFailByKey(db.getSession(), ISSUE_KEY1);
+    assertThat(updated.getMessage()).isEqualTo("updated via updateIfBeforeSelectedDate");
+    assertThat(updated.getIssueProducer()).isEqualTo(IssueProducer.HUNTER_AGENT);
+  }
+
+  @Test
+  void updateHunterAgentIssue_whenHunterOwnedIssue_updatesMutableFields() {
+    RuleDto newRule = db.rules().insert();
+    IssueDto issue = createIssueWithKey(ISSUE_KEY1).setIssueProducer(IssueProducer.HUNTER_AGENT);
+    underTest.insert(db.getSession(), issue);
+
+    byte[] newLocations = DbIssues.Locations.newBuilder()
+      .setTextRange(DbCommons.TextRange.newBuilder().setStartLine(42).build())
+      .build()
+      .toByteArray();
+    IssueDto toUpdate = underTest.selectOrFailByKey(db.getSession(), ISSUE_KEY1)
+      .setRuleUuid(newRule.getUuid())
+      .setSeverity("MINOR")
+      .setManualSeverity(true)
+      .setMessage("updated message")
+      .setLine(42)
+      .setLocations(newLocations)
+      .setEffort(20L)
+      .setStatus(STATUS_CONFIRMED)
+      .setResolution(null)
+      .setChecksum("newChecksum")
+      .setType(RuleType.BUG.getDbConstant())
+      .setCleanCodeAttribute(CleanCodeAttribute.CONVENTIONAL);
+
+    underTest.updateHunterAgentIssue(db.getSession(), toUpdate);
+
+    IssueDto updated = underTest.selectOrFailByKey(db.getSession(), ISSUE_KEY1);
+    assertThat(updated.getRuleUuid()).isEqualTo(newRule.getUuid());
+    assertThat(updated.getSeverity()).isEqualTo("MINOR");
+    assertThat(updated.isManualSeverity()).isTrue();
+    assertThat(updated.getMessage()).isEqualTo("updated message");
+    assertThat(updated.getLine()).isEqualTo(42);
+    assertThat(updated.getLocations()).isEqualTo(newLocations);
+    assertThat(updated.getEffort()).isEqualTo(20L);
+    assertThat(updated.getStatus()).isEqualTo(STATUS_CONFIRMED);
+    assertThat(updated.getResolution()).isNull();
+    assertThat(updated.getChecksum()).isEqualTo("newChecksum");
+    assertThat(updated.getType()).isEqualTo(RuleType.BUG.getDbConstant());
+    assertThat(updated.getEffectiveCleanCodeAttribute()).isEqualTo(CleanCodeAttribute.CONVENTIONAL);
+    assertThat(updated.getIssueProducer()).isEqualTo(IssueProducer.HUNTER_AGENT);
+  }
+
+  @Test
+  void updateHunterAgentIssue_updatesTagsAndRuleDescriptionContextKey() {
+    IssueDto issue = createIssueWithKey(ISSUE_KEY1).setIssueProducer(IssueProducer.HUNTER_AGENT)
+      .setTags(List.of("old-tag"))
+      .setRuleDescriptionContextKey("old-context");
+    underTest.insert(db.getSession(), issue);
+
+    IssueDto toUpdate = underTest.selectOrFailByKey(db.getSession(), ISSUE_KEY1)
+      .setTags(List.of("security", "owasp-a3"))
+      .setRuleDescriptionContextKey("new-context");
+
+    underTest.updateHunterAgentIssue(db.getSession(), toUpdate);
+
+    IssueDto updated = underTest.selectOrFailByKey(db.getSession(), ISSUE_KEY1);
+    assertThat(updated.getTags()).containsExactlyInAnyOrder("security", "owasp-a3");
+    assertThat(updated.getOptionalRuleDescriptionContextKey()).contains("new-context");
+  }
+
+  @Test
+  void updateHunterAgentIssue_whenComponentUuidChanges_movesIssue() {
+    ComponentDto otherFile = db.components().insertComponent(newFileDto(projectDto));
+    IssueDto issue = createIssueWithKey(ISSUE_KEY1).setIssueProducer(IssueProducer.HUNTER_AGENT);
+    underTest.insert(db.getSession(), issue);
+
+    IssueDto toUpdate = underTest.selectOrFailByKey(db.getSession(), ISSUE_KEY1)
+      .setComponentUuid(otherFile.uuid());
+
+    underTest.updateHunterAgentIssue(db.getSession(), toUpdate);
+
+    IssueDto updated = underTest.selectOrFailByKey(db.getSession(), ISSUE_KEY1);
+    assertThat(updated.getComponentUuid()).isEqualTo(otherFile.uuid());
+  }
+
+  @Test
+  void updateHunterAgentIssue_whenClosing_updatesStatusAndResolution() {
+    IssueDto issue = createIssueWithKey(ISSUE_KEY1).setIssueProducer(IssueProducer.HUNTER_AGENT).setStatus(STATUS_OPEN).setResolution(null);
+    underTest.insert(db.getSession(), issue);
+
+    IssueDto toClose = underTest.selectOrFailByKey(db.getSession(), ISSUE_KEY1)
+      .setStatus(STATUS_CLOSED)
+      .setResolution(RESOLUTION_FIXED)
+      .setIssueCloseTime(1_460_000_000_000L);
+
+    underTest.updateHunterAgentIssue(db.getSession(), toClose);
+
+    IssueDto closed = underTest.selectOrFailByKey(db.getSession(), ISSUE_KEY1);
+    assertThat(closed.getStatus()).isEqualTo(STATUS_CLOSED);
+    assertThat(closed.getResolution()).isEqualTo(RESOLUTION_FIXED);
+    assertThat(closed.getIssueCloseDate()).isNotNull();
+  }
+
+  @Test
+  void updateHunterAgentIssue_replacesImpacts() {
+    IssueDto issue = createIssueWithKey(ISSUE_KEY1).setIssueProducer(IssueProducer.HUNTER_AGENT)
+      .addImpact(createImpact(SECURITY, HIGH));
+    underTest.insert(db.getSession(), issue);
+
+    IssueDto toUpdate = underTest.selectOrFailByKey(db.getSession(), ISSUE_KEY1)
+      .replaceAllImpacts(List.of(createImpact(RELIABILITY, LOW)));
+
+    underTest.updateHunterAgentIssue(db.getSession(), toUpdate);
+
+    assertThat(underTest.selectOrFailByKey(db.getSession(), ISSUE_KEY1).getImpacts())
+      .extracting(ImpactDto::getSoftwareQuality, ImpactDto::getSeverity)
+      .containsExactly(tuple(RELIABILITY, LOW));
+  }
+
+  @Test
+  void updateHunterAgentIssue_whenScannerOwnedIssue_throwsAndLeavesRowAndImpactsUntouched() {
+    IssueDto scannerIssue = createIssueWithKey(ISSUE_KEY1).addImpact(createImpact(SECURITY, HIGH));
+    underTest.insert(db.getSession(), scannerIssue);
+
+    IssueDto colliding = underTest.selectOrFailByKey(db.getSession(), ISSUE_KEY1)
+      .setMessage("hijacked")
+      .replaceAllImpacts(List.of(createImpact(RELIABILITY, LOW)));
+
+    DbSession session = db.getSession();
+    assertThatThrownBy(() -> underTest.updateHunterAgentIssue(session, colliding))
+      .isInstanceOf(IllegalStateException.class);
+
+    IssueDto untouched = underTest.selectOrFailByKey(db.getSession(), ISSUE_KEY1);
+    assertThat(untouched.getMessage()).isEqualTo("the message");
+    assertThat(untouched.getIssueProducer()).isEqualTo(IssueProducer.SCANNER);
+    assertThat(untouched.getImpacts()).extracting(ImpactDto::getSoftwareQuality, ImpactDto::getSeverity)
+      .containsExactly(tuple(SECURITY, HIGH));
+  }
+
+  @Test
+  void updateHunterAgentIssue_whenKeyMissing_throws() {
+    IssueDto missing = createIssueWithKey("DOES_NOT_EXIST").setIssueProducer(IssueProducer.HUNTER_AGENT);
+
+    DbSession session = db.getSession();
+    assertThatThrownBy(() -> underTest.updateHunterAgentIssue(session, missing))
+      .isInstanceOf(IllegalStateException.class);
+  }
+
+  @Test
   void insertIssueImpacts_should_insert_all_values() {
     IssueDto issueDto = createIssueWithKey(ISSUE_KEY1);
     ImpactDto impactDto1 = new ImpactDto(MAINTAINABILITY, MEDIUM, true);
@@ -1394,6 +2030,114 @@ class IssueDaoIT {
         tuple(projectData1.projectUuid(), 2),
         tuple(projectData2.projectUuid(), 1)
       );
+  }
+
+  @Test
+  void insert_shouldPersistDeferralDate() {
+    underTest.insert(db.getSession(), createIssueWithKey(ISSUE_KEY1).setStatus(STATUS_IN_SANDBOX).setDeferralDate(1_500_000_000_000L));
+    db.getSession().commit();
+
+    Optional<IssueDto> issueDto = underTest.selectByKey(db.getSession(), ISSUE_KEY1);
+
+    assertThat(issueDto).isPresent().get().extracting(IssueDto::getDeferralDate).isEqualTo(1_500_000_000_000L);
+  }
+
+  @Test
+  void update_shouldPersistDeferralDate() {
+    IssueDto issue = createIssueWithKey(ISSUE_KEY1).setStatus(STATUS_IN_SANDBOX).setDeferralDate(1_500_000_000_000L);
+    underTest.insert(db.getSession(), issue);
+
+    issue.setDeferralDate(1_600_000_000_000L);
+    underTest.update(db.getSession(), issue);
+
+    Optional<IssueDto> issueDto = underTest.selectByKey(db.getSession(), ISSUE_KEY1);
+    assertThat(issueDto).isPresent().get().extracting(IssueDto::getDeferralDate).isEqualTo(1_600_000_000_000L);
+  }
+
+  @Test
+  void selectBranchUuidsWithSandboxDeferredIssues_shouldReturnOnlyBranchesWithDueSandboxedIssues() {
+    long now = 2_000_000L;
+
+    ProjectData projectData1 = db.components().insertPrivateProject();
+    ProjectData projectData2 = db.components().insertPrivateProject();
+    ProjectData projectData3 = db.components().insertPrivateProject();
+    ComponentDto project1 = projectData1.getMainBranchComponent();
+    ComponentDto project2 = projectData2.getMainBranchComponent();
+    ComponentDto project3 = projectData3.getMainBranchComponent();
+    ComponentDto file1 = db.components().insertComponent(newFileDto(project1));
+    ComponentDto file2 = db.components().insertComponent(newFileDto(project2));
+    ComponentDto file3 = db.components().insertComponent(newFileDto(project3));
+
+    // project1: due sandboxed issue
+    underTest.insert(db.getSession(), createIssueWithKey("due1", project1.uuid(), file1.uuid())
+      .setStatus(STATUS_IN_SANDBOX).setDeferralDate(now - 1000));
+    // project2: due sandboxed issue exactly at now
+    underTest.insert(db.getSession(), createIssueWithKey("due2", project2.uuid(), file2.uuid())
+      .setStatus(STATUS_IN_SANDBOX).setDeferralDate(now));
+    // project3: not-yet-due sandboxed issue
+    underTest.insert(db.getSession(), createIssueWithKey("notdue", project3.uuid(), file3.uuid())
+      .setStatus(STATUS_IN_SANDBOX).setDeferralDate(now + 1000));
+    // project3: non-sandboxed issue with a past deferral date (should never happen, but must not surface)
+    underTest.insert(db.getSession(), createIssueWithKey("open-with-date", project3.uuid(), file3.uuid())
+      .setStatus(STATUS_OPEN).setDeferralDate(now - 1000));
+    // project3: sandboxed issue with no deferral date at all
+    underTest.insert(db.getSession(), createIssueWithKey("nulldate", project3.uuid(), file3.uuid())
+      .setStatus(STATUS_IN_SANDBOX).setDeferralDate(null));
+
+    db.getSession().commit();
+
+    List<String> result = underTest.selectBranchUuidsWithSandboxDeferredIssues(db.getSession(), now);
+
+    assertThat(result).containsExactlyInAnyOrder(project1.uuid(), project2.uuid());
+  }
+
+  @Test
+  void selectSandboxDeferredIssueKeys_shouldReturnOnlyDueSandboxedIssuesForRequestedBranch() {
+    long now = 2_000_000L;
+
+    ProjectData otherProjectData = db.components().insertPrivateProject();
+    ComponentDto otherProject = otherProjectData.getMainBranchComponent();
+    ComponentDto otherFile = db.components().insertComponent(newFileDto(otherProject));
+
+    // due, in sandbox, on the requested branch -> returned
+    underTest.insert(db.getSession(), createIssueWithKey("due1", projectDto.uuid(), FILE_UUID)
+      .setStatus(STATUS_IN_SANDBOX).setDeferralDate(now - 1000));
+    // not yet due, in sandbox, on the requested branch -> excluded
+    underTest.insert(db.getSession(), createIssueWithKey("notdue", projectDto.uuid(), FILE_UUID)
+      .setStatus(STATUS_IN_SANDBOX).setDeferralDate(now + 1000));
+    // due, but not in sandbox anymore, on the requested branch -> excluded
+    underTest.insert(db.getSession(), createIssueWithKey("resolved", projectDto.uuid(), FILE_UUID)
+      .setStatus(STATUS_OPEN).setDeferralDate(now - 1000));
+    // due, in sandbox, but null deferral date -> excluded
+    underTest.insert(db.getSession(), createIssueWithKey("nulldate", projectDto.uuid(), FILE_UUID)
+      .setStatus(STATUS_IN_SANDBOX).setDeferralDate(null));
+    // due, in sandbox, but on a different branch -> excluded
+    underTest.insert(db.getSession(), createIssueWithKey("otherbranch", otherProject.uuid(), otherFile.uuid())
+      .setStatus(STATUS_IN_SANDBOX).setDeferralDate(now - 1000));
+
+    db.getSession().commit();
+
+    List<String> result = underTest.selectSandboxDeferredIssueKeys(db.getSession(), projectDto.uuid(), now, 100);
+
+    assertThat(result).containsExactly("due1");
+  }
+
+  @Test
+  void selectSandboxDeferredIssueKeys_shouldCapAtLimitAndDrainOldestFirst() {
+    long now = 2_000_000L;
+
+    underTest.insert(db.getSession(), createIssueWithKey("due-old", projectDto.uuid(), FILE_UUID)
+      .setStatus(STATUS_IN_SANDBOX).setDeferralDate(now - 2000));
+    underTest.insert(db.getSession(), createIssueWithKey("due-mid", projectDto.uuid(), FILE_UUID)
+      .setStatus(STATUS_IN_SANDBOX).setDeferralDate(now - 1000));
+    underTest.insert(db.getSession(), createIssueWithKey("due-new", projectDto.uuid(), FILE_UUID)
+      .setStatus(STATUS_IN_SANDBOX).setDeferralDate(now));
+
+    db.getSession().commit();
+
+    List<String> result = underTest.selectSandboxDeferredIssueKeys(db.getSession(), projectDto.uuid(), now, 2);
+
+    assertThat(result).containsExactly("due-old", "due-mid");
   }
 
   @Test

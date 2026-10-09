@@ -21,10 +21,12 @@ package org.sonar.server.source.ws;
 
 import org.junit.Rule;
 import org.junit.Test;
+import org.sonar.api.config.internal.MapSettings;
 import org.sonar.api.utils.System2;
 import org.sonar.core.util.Uuids;
 import org.sonar.db.DbTester;
 import org.sonar.db.component.ComponentDto;
+import org.sonar.db.component.ProjectData;
 import org.sonar.db.protobuf.DbFileSources;
 import org.sonar.db.source.FileSourceDto;
 import org.sonar.server.component.TestComponentFinder;
@@ -50,12 +52,14 @@ public class IndexActionIT {
   public DbTester db = DbTester.create(System2.INSTANCE);
 
   WsActionTester tester = new WsActionTester(
-    new IndexAction(db.getDbClient(), new SourceService(db.getDbClient(), new HtmlSourceDecorator()), userSession, TestComponentFinder.from(db)));
+    new IndexAction(db.getDbClient(), new SourceService(db.getDbClient(), new HtmlSourceDecorator(), new MapSettings().asConfig()), userSession,
+      TestComponentFinder.from(db)));
 
   @Test
   public void get_json() throws Exception {
-    ComponentDto project = db.components().insertPrivateProject().getMainBranchComponent();
-    userSession.addProjectPermission(CODEVIEWER, project);
+    ProjectData projectData = db.components().insertPrivateProject();
+    ComponentDto project = projectData.getMainBranchComponent();
+    userSession.addProjectPermission(CODEVIEWER, projectData.getProjectDto()).registerBranches(projectData.getMainBranchDto());
     ComponentDto file = db.components().insertComponent(newFileDto(project));
     insertFileWithData(file, newData("public class HelloWorld {", "}"));
 
@@ -74,8 +78,9 @@ public class IndexActionIT {
 
   @Test
   public void limit_range() throws Exception {
-    ComponentDto project = db.components().insertPrivateProject().getMainBranchComponent();
-    userSession.addProjectPermission(CODEVIEWER, project);
+    ProjectData projectData = db.components().insertPrivateProject();
+    ComponentDto project = projectData.getMainBranchComponent();
+    userSession.addProjectPermission(CODEVIEWER, projectData.getProjectDto()).registerBranches(projectData.getMainBranchDto());
     ComponentDto file = db.components().insertComponent(newFileDto(project));
     insertFileWithData(file, newData("/**", " */", "public class HelloWorld {", "}", "", "foo"));
 
@@ -96,8 +101,9 @@ public class IndexActionIT {
 
   @Test
   public void fail_when_missing_code_viewer_permission() {
-    ComponentDto project = db.components().insertPrivateProject().getMainBranchComponent();
-    userSession.addProjectPermission(USER, project);
+    ProjectData projectData = db.components().insertPrivateProject();
+    ComponentDto project = projectData.getMainBranchComponent();
+    userSession.addProjectPermission(USER, projectData.getProjectDto()).registerBranches(projectData.getMainBranchDto());
     ComponentDto file = db.components().insertComponent(newFileDto(project));
 
     assertThatThrownBy(() -> tester.newRequest()

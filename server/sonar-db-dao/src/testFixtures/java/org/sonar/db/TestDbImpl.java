@@ -31,7 +31,7 @@ import org.sonar.api.config.internal.Settings;
 import org.sonar.db.dialect.H2;
 import org.sonar.db.testfixtures.DatabaseTestUtils;
 import org.sonar.db.testfixtures.TestDb;
-import org.sonar.db.version.SqTables;
+import org.sonar.db.version.SonarQubeSchema;
 import org.sonar.process.logging.LogbackHelper;
 
 class TestDbImpl implements TestDb {
@@ -57,6 +57,15 @@ class TestDbImpl implements TestDb {
     if (dialect != null && !"h2".equals(dialect)) {
       database = new DefaultDatabase(new LogbackHelper(), settings);
     } else {
+      // CI's DB JUnit job sets this env var to the vendor it expects; if it's set but we still
+      // fell back to H2, this module's test task is missing the 'orchestrator.configUrl'
+      // systemProperty forwarding that other DB-aware modules declare.
+      String expectedVendor = System.getenv("SONAR_TEST_EXPECTED_DB_VENDOR");
+      if (expectedVendor != null && !expectedVendor.isEmpty()) {
+        throw new IllegalStateException("Expected to run against DB vendor '" + expectedVendor
+          + "' but fell back to H2 - this module's test task is likely missing the "
+          + "'orchestrator.configUrl' systemProperty forwarding that other DB-aware modules declare.");
+      }
       database = new SQDatabase.Builder()
         .asH2Database("h2Tests" + DigestUtils.md5Hex(StringUtils.defaultString(schemaPath)))
         .createSchema(schemaPath == null)
@@ -113,7 +122,7 @@ class TestDbImpl implements TestDb {
     try {
       // we are overriding truncateTables to use a fixed list of tables instead of loading them from the database
       // because here we may be using Oracle which our dynamic table name query does not handle correctly.
-      DatabaseTestUtils.truncateTables(getDatabase().getDataSource(), SqTables.TABLES);
+      DatabaseTestUtils.truncateTables(getDatabase().getDataSource(), SonarQubeSchema.TABLES);
     } catch (SQLException e) {
       throw new IllegalStateException("Fail to truncate db tables", e);
     }

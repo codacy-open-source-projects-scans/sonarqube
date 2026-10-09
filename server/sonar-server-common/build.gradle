@@ -1,3 +1,5 @@
+import org.sonar.build.DbAwareTest
+
 description = 'Code shared between the Web Server and the Compute Engine'
 
 sonar {
@@ -13,13 +15,14 @@ dependencies {
   api 'commons-io:commons-io'
   api 'com.github.scribejava:scribejava-apis'
   api 'com.github.scribejava:scribejava-core'
+  api 'com.google.code.gson:gson'
   api 'com.google.guava:guava'
   api 'com.squareup.okhttp3:okhttp'
   api 'org.apache.commons:commons-email2-jakarta'
   api 'org.apache.commons:commons-lang3'
   api 'org.bouncycastle:bcprov-jdk18on'
-  api 'org.elasticsearch.client:elasticsearch-rest-high-level-client'
   api 'co.elastic.clients:elasticsearch-java'
+  api 'joda-time:joda-time'
   api 'org.slf4j:slf4j-api'
   api 'org.sonarsource.api.plugin:sonar-plugin-api'
   api project(':server:sonar-db-dao')
@@ -34,11 +37,14 @@ dependencies {
   implementation "org.sonarsource.compliancereports:compliance-reports:${complianceReportsVersion}"
   implementation 'org.sonarsource.sonarqube:organizations-api'
   implementation 'org.sonarsource.sonarqube:organizations-server-app'
+  implementation 'org.sonarsource.sonarqube:enterprises-api'
+  implementation 'org.sonarsource.sonarqube:enterprises-server-app'
   implementation 'org.springdoc:springdoc-openapi-starter-webmvc-api'
 
   compileOnlyApi 'com.github.spotbugs:spotbugs-annotations'
+  compileOnlyApi 'org.sonarsource.sonarqube:gessie-server-app'
 
-  testImplementation 'org.elasticsearch.plugin:transport-netty4-client'
+  testImplementation 'org.sonarsource.sonarqube:gessie-server-app'
   testImplementation 'ch.qos.logback:logback-core'
   testImplementation 'com.github.spotbugs:spotbugs-annotations'
   testImplementation 'com.icegreen:greenmail'
@@ -58,6 +64,7 @@ dependencies {
   testImplementation 'org.mockito:mockito-junit-jupiter'
   testImplementation 'org.junit.jupiter:junit-jupiter-params'
   testImplementation 'org.sonarsource.api.plugin:sonar-plugin-api-test-fixtures'
+  testImplementation 'org.springframework:spring-test'
   testImplementation testFixtures(project(':server:sonar-db-dao'))
   testImplementation testFixtures(project(':server:sonar-webserver-auth'))
   testImplementation testFixtures(project(':server:sonar-webserver-es'))
@@ -69,10 +76,6 @@ dependencies {
   testFixturesApi testFixtures(project(':server:sonar-db-dao'))
 
   testFixturesCompileOnly 'com.github.spotbugs:spotbugs-annotations'
-  testFixturesImplementation 'org.elasticsearch.plugin:transport-netty4-client'
-  testFixturesImplementation 'org.codelibs.elasticsearch.module:analysis-common'
-  testFixturesImplementation 'org.codelibs.elasticsearch.module:reindex'
-  testFixturesImplementation 'org.elasticsearch:mocksocket'
   testFixturesImplementation 'org.junit.jupiter:junit-jupiter-api'
 
 
@@ -84,4 +87,6 @@ dependencies {
 test {
   // Enabling the JUnit Platform (see https://github.com/junit-team/junit5-samples/tree/master/junit5-migration-gradle)
   useJUnitPlatform()
+  // Only PermissionIndexerDao runs its own JDBC statement; the rest goes through sonar-db-dao
+  DbAwareTest.configure(it, ['org.sonar.server.permission.index.PermissionIndexerDaoIT'])
 }

@@ -20,8 +20,7 @@
 package org.sonar.server.v2.api.gitlab.config.response;
 
 import java.util.List;
-import org.sonar.server.v2.api.gitlab.config.resource.GitlabConfigurationResource;
 import org.sonar.server.v2.api.response.PageRestResponse;
 
-public record GitlabConfigurationSearchRestResponse(List<GitlabConfigurationResource> gitlabConfigurations, PageRestResponse page) {}
+public record GitlabConfigurationSearchRestResponse(List<GitlabConfigurationRestResponse> gitlabConfigurations, PageRestResponse page) {}
 

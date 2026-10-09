@@ -46,6 +46,21 @@
       rds.rule_uuid = r.uuid
   </sql>
 
+  <!--
+    Used only by selectByKey, which is the only select that can be called with a non-null "contextKey"
+    parameter. Kept separate from leftOuterJoinRulesDescriptionSections (rather than adding the <if> there)
+    because that fragment is also included by selects that don't declare a "contextKey" @Param
+    (selectByUuid, selectByUuids, selectByKeys, ...); referencing it there would throw a MyBatis
+    BindingException on those statements.
+  -->
+  <sql id="leftOuterJoinRulesDescriptionSectionsFilteredByContext">
+    left outer join rule_desc_sections rds on
+      rds.rule_uuid = r.uuid
+      <if test="contextKey != null">
+        and (rds.context_key is null or rds.context_key = #{contextKey,jdbcType=VARCHAR})
+      </if>
+  </sql>
+
   <sql id="leftOuterJoinRulesDefaultImpacts">
     left outer join rules_default_impacts rdi on
       rdi.rule_uuid = r.uuid
@@ -100,6 +115,18 @@
     <include refid="leftOuterJoinRulesDescriptionSections"/>
     <include refid="leftOuterJoinRulesDefaultImpacts"/>
     <include refid="leftOuterJoinRulesTags"/>
+    order by r.uuid
+  </select>
+
+  <select id="selectAllForIndexing" resultMap="ruleResultMap">
+    select
+      <include refid="selectJoinedTablesColumns"/>
+    from
+      rules r
+    <include refid="leftOuterJoinRulesDescriptionSections"/>
+    <include refid="leftOuterJoinRulesDefaultImpacts"/>
+    <include refid="leftOuterJoinRulesTags"/>
+    where r.plugin_name &lt;&gt; 'hunter-agent'
     order by r.uuid
   </select>
 
@@ -193,7 +220,7 @@
       <include refid="selectJoinedTablesColumns"/>
     from
       rules r
-    <include refid="leftOuterJoinRulesDescriptionSections"/>
+    <include refid="leftOuterJoinRulesDescriptionSectionsFilteredByContext"/>
     <include refid="leftOuterJoinRulesDefaultImpacts"/>
     <include refid="leftOuterJoinRulesTags"/>
     where
@@ -248,7 +275,7 @@
     order by r.uuid
   </select>
 
-    <select id="selectByRuleKeys" parameterType="map" resultMap="ruleResultMap">
+  <select id="selectByRuleKeys" parameterType="map" resultMap="ruleResultMap">
     select
       <include refid="selectJoinedTablesColumns"/>
     from
@@ -259,6 +286,21 @@
     where r.plugin_rule_key in
       <foreach collection="ruleKeys" index="index" item="ruleKey" open="(" separator=", " close=")">
         #{ruleKey,jdbcType=VARCHAR}
+      </foreach>
+    order by r.uuid
+  </select>
+
+  <select id="selectByRepositories" parameterType="map" resultMap="ruleResultMap">
+    select
+      <include refid="selectJoinedTablesColumns"/>
+    from
+      rules r
+    <include refid="leftOuterJoinRulesDescriptionSections"/>
+    <include refid="leftOuterJoinRulesDefaultImpacts"/>
+    <include refid="leftOuterJoinRulesTags"/>
+    where r.plugin_name in
+      <foreach collection="repositories" index="index" item="repository" open="(" separator=", " close=")">
+        #{repository,jdbcType=VARCHAR}
       </foreach>
     order by r.uuid
   </select>
@@ -366,6 +408,24 @@
       #{dto.context.displayName,jdbcType=VARCHAR}
     )
   </insert>
+
+  <update id="updateRuleDescriptionSectionContent" parameterType="Map">
+    update rule_desc_sections
+    set
+      content = #{dto.content,jdbcType=VARCHAR},
+      context_display_name = #{dto.context.displayName,jdbcType=VARCHAR}
+    where
+      rule_uuid = #{ruleUuid,jdbcType=VARCHAR}
+      and kee = #{dto.key,jdbcType=VARCHAR}
+      <choose>
+        <when test="dto.context != null">
+          and context_key = #{dto.context.key,jdbcType=VARCHAR}
+        </when>
+        <otherwise>
+          and context_key is null
+        </otherwise>
+      </choose>
+  </update>
 
   <insert id="insertRule" parameterType="org.sonar.db.rule.RuleDto" useGeneratedKeys="false">
     insert into rules (
@@ -508,6 +568,10 @@
     where
       rule_uuid=#{ruleUuid,jdbcType=VARCHAR}
   </delete>
+
+  <update id="clearAdHocDescription" parameterType="String">
+    update rules set ad_hoc_description = null where uuid = #{ruleUuid,jdbcType=VARCHAR}
+  </update>
 
   <delete id="deleteRuleDefaultImpacts" parameterType="String">
     delete from
@@ -732,4 +796,3 @@
   </select>
 
 </mapper>
-

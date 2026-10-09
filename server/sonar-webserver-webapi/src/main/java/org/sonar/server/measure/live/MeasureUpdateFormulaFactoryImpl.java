@@ -19,6 +19,7 @@
  */
 package org.sonar.server.measure.live;
 
+import org.sonar.core.metric.ScaMetrics;
 import java.util.List;
 import java.util.Optional;
 import java.util.OptionalInt;
@@ -31,6 +32,7 @@ import org.sonar.api.measures.Metric;
 import org.sonar.api.rule.Severity;
 import org.sonar.core.rule.RuleType;
 import org.sonar.core.metric.SoftwareQualitiesMetrics;
+import org.sonar.api.measures.SeverityValues;
 import org.sonar.server.measure.ImpactMeasureBuilder;
 import org.sonar.server.measure.Rating;
 
@@ -39,7 +41,6 @@ import static org.sonar.api.measures.CoreMetrics.CODE_SMELLS;
 import static org.sonar.api.measures.CoreMetrics.NEW_SECURITY_HOTSPOTS_REVIEWED;
 import static org.sonar.api.measures.CoreMetrics.NEW_SECURITY_HOTSPOTS_REVIEWED_STATUS;
 import static org.sonar.api.measures.CoreMetrics.NEW_SECURITY_HOTSPOTS_TO_REVIEW_STATUS;
-import static org.sonar.api.measures.CoreMetrics.SECURITY_HOTSPOTS_REVIEWED;
 import static org.sonar.api.measures.CoreMetrics.SECURITY_HOTSPOTS_REVIEWED_STATUS;
 import static org.sonar.api.measures.CoreMetrics.SECURITY_HOTSPOTS_TO_REVIEW_STATUS;
 import static org.sonar.api.measures.CoreMetrics.TECHNICAL_DEBT;
@@ -58,6 +59,15 @@ import static org.sonar.core.metric.SoftwareQualitiesMetrics.SOFTWARE_QUALITY_RE
 import static org.sonar.core.metric.SoftwareQualitiesMetrics.SOFTWARE_QUALITY_RELIABILITY_REMEDIATION_EFFORT;
 import static org.sonar.core.metric.SoftwareQualitiesMetrics.SOFTWARE_QUALITY_SECURITY_RATING;
 import static org.sonar.core.metric.SoftwareQualitiesMetrics.SOFTWARE_QUALITY_SECURITY_REMEDIATION_EFFORT;
+import static org.sonar.api.measures.CoreMetrics.MAINTAINABILITY_ISSUE_SEVERITY;
+import static org.sonar.api.measures.CoreMetrics.NEW_BUGS_SEVERITY;
+import static org.sonar.api.measures.CoreMetrics.NEW_CODE_SMELLS_SEVERITY;
+import static org.sonar.api.measures.CoreMetrics.NEW_MAINTAINABILITY_ISSUE_SEVERITY;
+import static org.sonar.api.measures.CoreMetrics.NEW_RELIABILITY_ISSUE_SEVERITY;
+import static org.sonar.api.measures.CoreMetrics.NEW_SECURITY_ISSUE_SEVERITY;
+import static org.sonar.api.measures.CoreMetrics.NEW_VULNERABILITIES_SEVERITY;
+import static org.sonar.api.measures.CoreMetrics.RELIABILITY_ISSUE_SEVERITY;
+import static org.sonar.api.measures.CoreMetrics.SECURITY_ISSUE_SEVERITY;
 import static org.sonar.server.measure.Rating.RATING_BY_SEVERITY;
 import static org.sonar.server.measure.Rating.RATING_BY_SOFTWARE_QUALITY_SEVERITY;
 import static org.sonar.server.metric.IssueCountMetrics.ISSUES_IN_SANDBOX;
@@ -67,6 +77,10 @@ import static org.sonar.server.security.SecurityReviewRating.computePercent;
 import static org.sonar.server.security.SecurityReviewRating.computeRating;
 
 public class MeasureUpdateFormulaFactoryImpl implements MeasureUpdateFormulaFactory {
+
+  private static final Metric<?> SCA_RATING_ANY_ISSUE_METRIC = ScaMetrics.SCA_RATING_ANY_ISSUE;
+  private static final Metric<?> NEW_SCA_RATING_ANY_ISSUE_METRIC = ScaMetrics.NEW_SCA_RATING_ANY_ISSUE;
+
   private static final List<MeasureUpdateFormula> FORMULAS = asList(
     new MeasureUpdateFormula(CODE_SMELLS, false, new AddChildren(),
       (context, issues) -> context.setValue(issues.countUnresolvedByType(RuleType.CODE_SMELL, false))),
@@ -178,22 +192,20 @@ public class MeasureUpdateFormulaFactoryImpl implements MeasureUpdateFormulaFact
       (context, formula) -> context.setValue(context.getValue(SECURITY_HOTSPOTS_TO_REVIEW_STATUS).orElse(0D) + context.getChildrenHotspotsToReview()),
       (context, issues) -> context.setValue(issues.countHotspotsByStatus(Issue.STATUS_TO_REVIEW, false))),
 
-    new MeasureUpdateFormula(CoreMetrics.SECURITY_HOTSPOTS_REVIEWED, false,
-      (context, formula) -> {
-        Optional<Double> percent = computePercent(
-          context.getValue(SECURITY_HOTSPOTS_TO_REVIEW_STATUS).orElse(0D).longValue(),
-          context.getValue(SECURITY_HOTSPOTS_REVIEWED_STATUS).orElse(0D).longValue());
-        percent.ifPresent(context::setValue);
-      },
-      (context, issues) -> computePercent(issues.countHotspotsByStatus(Issue.STATUS_TO_REVIEW, false), issues.countHotspotsByStatus(Issue.STATUS_REVIEWED, false))
-        .ifPresent(context::setValue)),
+    new MeasureUpdateFormula(CoreMetrics.SECURITY_HOTSPOTS_REVIEWED, false, false,
+      (context, formula) -> setOrUnsetHotspotsReviewed(context, SECURITY_HOTSPOTS_TO_REVIEW_STATUS, SECURITY_HOTSPOTS_REVIEWED_STATUS),
+      (context, issues) -> setOrUnsetHotspotsReviewed(context,
+        issues.countHotspotsByStatus(Issue.STATUS_TO_REVIEW, false),
+        issues.countHotspotsByStatus(Issue.STATUS_REVIEWED, false)),
+      asList(SECURITY_HOTSPOTS_TO_REVIEW_STATUS, SECURITY_HOTSPOTS_REVIEWED_STATUS)),
 
-    new MeasureUpdateFormula(CoreMetrics.SECURITY_REVIEW_RATING, false,
-      (context, formula) -> context.setValue(computeRating(context.getValue(SECURITY_HOTSPOTS_REVIEWED).orElse(null))),
+    new MeasureUpdateFormula(CoreMetrics.SECURITY_REVIEW_RATING, false, false,
+      (context, formula) -> setSecurityReviewRating(context, SECURITY_HOTSPOTS_TO_REVIEW_STATUS, SECURITY_HOTSPOTS_REVIEWED_STATUS),
       (context, issues) -> {
         Optional<Double> percent = computePercent(issues.countHotspotsByStatus(Issue.STATUS_TO_REVIEW, false), issues.countHotspotsByStatus(Issue.STATUS_REVIEWED, false));
         context.setValue(computeRating(percent.orElse(null)));
-      }),
+      },
+      asList(SECURITY_HOTSPOTS_TO_REVIEW_STATUS, SECURITY_HOTSPOTS_REVIEWED_STATUS)),
 
     new MeasureUpdateFormula(CoreMetrics.NEW_CODE_SMELLS, true, new AddChildren(),
       (context, issues) -> context.setValue(issues.countUnresolvedByType(RuleType.CODE_SMELL, true))),
@@ -260,22 +272,20 @@ public class MeasureUpdateFormulaFactoryImpl implements MeasureUpdateFormulaFact
       (context, formula) -> context.setValue(context.getValue(NEW_SECURITY_HOTSPOTS_TO_REVIEW_STATUS).orElse(0D) + context.getChildrenNewHotspotsToReview()),
       (context, issues) -> context.setValue(issues.countHotspotsByStatus(Issue.STATUS_TO_REVIEW, true))),
 
-    new MeasureUpdateFormula(NEW_SECURITY_HOTSPOTS_REVIEWED, true,
-      (context, formula) -> {
-        Optional<Double> percent = computePercent(
-          context.getValue(NEW_SECURITY_HOTSPOTS_TO_REVIEW_STATUS).orElse(0D).longValue(),
-          context.getValue(NEW_SECURITY_HOTSPOTS_REVIEWED_STATUS).orElse(0D).longValue());
-        percent.ifPresent(context::setValue);
-      },
-      (context, issues) -> computePercent(issues.countHotspotsByStatus(Issue.STATUS_TO_REVIEW, true), issues.countHotspotsByStatus(Issue.STATUS_REVIEWED, true))
-        .ifPresent(context::setValue)),
+    new MeasureUpdateFormula(NEW_SECURITY_HOTSPOTS_REVIEWED, true, false,
+      (context, formula) -> setOrUnsetHotspotsReviewed(context, NEW_SECURITY_HOTSPOTS_TO_REVIEW_STATUS, NEW_SECURITY_HOTSPOTS_REVIEWED_STATUS),
+      (context, issues) -> setOrUnsetHotspotsReviewed(context,
+        issues.countHotspotsByStatus(Issue.STATUS_TO_REVIEW, true),
+        issues.countHotspotsByStatus(Issue.STATUS_REVIEWED, true)),
+      asList(NEW_SECURITY_HOTSPOTS_TO_REVIEW_STATUS, NEW_SECURITY_HOTSPOTS_REVIEWED_STATUS)),
 
-    new MeasureUpdateFormula(CoreMetrics.NEW_SECURITY_REVIEW_RATING, true,
-      (context, formula) -> context.setValue(computeRating(context.getValue(NEW_SECURITY_HOTSPOTS_REVIEWED).orElse(null))),
+    new MeasureUpdateFormula(CoreMetrics.NEW_SECURITY_REVIEW_RATING, true, false,
+      (context, formula) -> setSecurityReviewRating(context, NEW_SECURITY_HOTSPOTS_TO_REVIEW_STATUS, NEW_SECURITY_HOTSPOTS_REVIEWED_STATUS),
       (context, issues) -> {
         Optional<Double> percent = computePercent(issues.countHotspotsByStatus(Issue.STATUS_TO_REVIEW, true), issues.countHotspotsByStatus(Issue.STATUS_REVIEWED, true));
         context.setValue(computeRating(percent.orElse(null)));
-      }),
+      },
+      asList(NEW_SECURITY_HOTSPOTS_TO_REVIEW_STATUS, NEW_SECURITY_HOTSPOTS_REVIEWED_STATUS)),
 
     new MeasureUpdateFormula(CoreMetrics.NEW_SQALE_DEBT_RATIO, true, false,
       (context, formula) -> context.setValue(100.0D * newDebtDensity(CoreMetrics.NEW_TECHNICAL_DEBT, context)),
@@ -318,22 +328,22 @@ public class MeasureUpdateFormulaFactoryImpl implements MeasureUpdateFormulaFact
     new MeasureUpdateFormula(SoftwareQualitiesMetrics.NEW_SOFTWARE_QUALITY_INFO_ISSUES, true, true, new AddChildren(),
       (context, issues) -> context.setValue(issues.countUnresolvedByImpactSeverity(org.sonar.api.issue.impact.Severity.INFO, true))),
 
-    new MeasureUpdateFormula(SoftwareQualitiesMetrics.SOFTWARE_QUALITY_MAINTAINABILITY_ISSUES, false, true, new AddChildren(),
+    new MeasureUpdateFormula(CoreMetrics.SOFTWARE_QUALITY_MAINTAINABILITY_ISSUES, false, true, new AddChildren(),
       (context, issues) -> context.setValue(issues.countBySoftwareQuality(SoftwareQuality.MAINTAINABILITY, false))),
 
-    new MeasureUpdateFormula(SoftwareQualitiesMetrics.SOFTWARE_QUALITY_RELIABILITY_ISSUES, false, true, new AddChildren(),
+    new MeasureUpdateFormula(CoreMetrics.SOFTWARE_QUALITY_RELIABILITY_ISSUES, false, true, new AddChildren(),
       (context, issues) -> context.setValue(issues.countBySoftwareQuality(SoftwareQuality.RELIABILITY, false))),
 
-    new MeasureUpdateFormula(SoftwareQualitiesMetrics.SOFTWARE_QUALITY_SECURITY_ISSUES, false, true, new AddChildren(),
+    new MeasureUpdateFormula(CoreMetrics.SOFTWARE_QUALITY_SECURITY_ISSUES, false, true, new AddChildren(),
       (context, issues) -> context.setValue(issues.countBySoftwareQuality(SoftwareQuality.SECURITY, false))),
 
-    new MeasureUpdateFormula(SoftwareQualitiesMetrics.NEW_SOFTWARE_QUALITY_MAINTAINABILITY_ISSUES, true, true, new AddChildren(),
+    new MeasureUpdateFormula(CoreMetrics.NEW_SOFTWARE_QUALITY_MAINTAINABILITY_ISSUES, true, true, new AddChildren(),
       (context, issues) -> context.setValue(issues.countBySoftwareQuality(SoftwareQuality.MAINTAINABILITY, true))),
 
-    new MeasureUpdateFormula(SoftwareQualitiesMetrics.NEW_SOFTWARE_QUALITY_RELIABILITY_ISSUES, true, true, new AddChildren(),
+    new MeasureUpdateFormula(CoreMetrics.NEW_SOFTWARE_QUALITY_RELIABILITY_ISSUES, true, true, new AddChildren(),
       (context, issues) -> context.setValue(issues.countBySoftwareQuality(SoftwareQuality.RELIABILITY, true))),
 
-    new MeasureUpdateFormula(SoftwareQualitiesMetrics.NEW_SOFTWARE_QUALITY_SECURITY_ISSUES, true, true, new AddChildren(),
+    new MeasureUpdateFormula(CoreMetrics.NEW_SOFTWARE_QUALITY_SECURITY_ISSUES, true, true, new AddChildren(),
       (context, issues) -> context.setValue(issues.countBySoftwareQuality(SoftwareQuality.SECURITY, true))),
 
     new MeasureUpdateFormula(SOFTWARE_QUALITY_MAINTAINABILITY_REMEDIATION_EFFORT, false, true, new AddChildren(),
@@ -409,9 +419,118 @@ public class MeasureUpdateFormulaFactoryImpl implements MeasureUpdateFormulaFact
           .map(RATING_BY_SOFTWARE_QUALITY_SEVERITY::get)
           .orElse(Rating.A);
         context.setValue(rating);
-      }));
+      }),
+
+    new MeasureUpdateFormula(NEW_BUGS_SEVERITY, true, true, new MaxValueChildren(),
+      (context, issues) -> context.setValue(
+        issues.getHighestSeverityOfUnresolved(RuleType.BUG, true)
+          .map(SeverityValues::fromRuleSeverity)
+          .orElse(SeverityValues.NO_ISSUES))),
+
+    new MeasureUpdateFormula(NEW_VULNERABILITIES_SEVERITY, true, true, new MaxValueChildren(),
+      (context, issues) -> context.setValue(
+        issues.getHighestSeverityOfUnresolved(RuleType.VULNERABILITY, true)
+          .map(SeverityValues::fromRuleSeverity)
+          .orElse(SeverityValues.NO_ISSUES))),
+
+    new MeasureUpdateFormula(NEW_CODE_SMELLS_SEVERITY, true, true, new MaxValueChildren(),
+      (context, issues) -> context.setValue(
+        issues.getHighestSeverityOfUnresolved(RuleType.CODE_SMELL, true)
+          .map(SeverityValues::fromRuleSeverity)
+          .orElse(SeverityValues.NO_ISSUES))),
+
+    new MeasureUpdateFormula(NEW_RELIABILITY_ISSUE_SEVERITY, true, true, new MaxValueChildren(),
+      (context, issues) -> context.setValue(
+        issues.getHighestSeverityOfUnresolved(SoftwareQuality.RELIABILITY, true)
+          .map(SeverityValues::fromImpactSeverity)
+          .orElse(SeverityValues.NO_ISSUES))),
+
+    new MeasureUpdateFormula(NEW_SECURITY_ISSUE_SEVERITY, true, true, new MaxValueChildren(),
+      (context, issues) -> context.setValue(
+        issues.getHighestSeverityOfUnresolved(SoftwareQuality.SECURITY, true)
+          .map(SeverityValues::fromImpactSeverity)
+          .orElse(SeverityValues.NO_ISSUES))),
+
+    new MeasureUpdateFormula(NEW_MAINTAINABILITY_ISSUE_SEVERITY, true, true, new MaxValueChildren(),
+      (context, issues) -> context.setValue(
+        issues.getHighestSeverityOfUnresolved(SoftwareQuality.MAINTAINABILITY, true)
+          .map(SeverityValues::fromImpactSeverity)
+          .orElse(SeverityValues.NO_ISSUES))),
+
+    new MeasureUpdateFormula(RELIABILITY_ISSUE_SEVERITY, false, true, new MaxValueChildren(),
+      (context, issues) -> context.setValue(
+        issues.getHighestSeverityOfUnresolved(SoftwareQuality.RELIABILITY, false)
+          .map(SeverityValues::fromImpactSeverity)
+          .orElse(SeverityValues.NO_ISSUES))),
+
+    new MeasureUpdateFormula(SECURITY_ISSUE_SEVERITY, false, true, new MaxValueChildren(),
+      (context, issues) -> context.setValue(
+        issues.getHighestSeverityOfUnresolved(SoftwareQuality.SECURITY, false)
+          .map(SeverityValues::fromImpactSeverity)
+          .orElse(SeverityValues.NO_ISSUES))),
+
+    new MeasureUpdateFormula(MAINTAINABILITY_ISSUE_SEVERITY, false, true, new MaxValueChildren(),
+      (context, issues) -> context.setValue(
+        issues.getHighestSeverityOfUnresolved(SoftwareQuality.MAINTAINABILITY, false)
+          .map(SeverityValues::fromImpactSeverity)
+          .orElse(SeverityValues.NO_ISSUES))),
+    newScaRatingFormula(SCA_RATING_ANY_ISSUE_METRIC, false),
+    newScaRatingFormula(NEW_SCA_RATING_ANY_ISSUE_METRIC, true));
 
   private static final Set<Metric> FORMULA_METRICS = MeasureUpdateFormulaFactory.extractMetrics(FORMULAS);
+
+  private static MeasureUpdateFormula newScaRatingFormula(Metric<?> metric, boolean onNewCode) {
+    return new MeasureUpdateFormula(metric, onNewCode, false,
+      (context, formula) -> {},
+      (context, issues) -> getValueIfRegistered(context, metric)
+        .map(v -> Rating.valueOf(v.intValue()))
+        .ifPresent(context::setValue),
+      List.of(metric));
+  }
+
+  // SCA metrics are only registered when the SCA plugin loads them via a Metrics extension.
+  // On editions without that extension, MeasureMatrix.getMeasure throws IllegalArgumentException
+  // for the unregistered key; treat that as "no value" so the passthrough is a safe no-op.
+  private static Optional<Double> getValueIfRegistered(MeasureUpdateFormula.Context context, Metric<?> metric) {
+    try {
+      return context.getValue(metric);
+    } catch (IllegalArgumentException e) {
+      return Optional.empty();
+    }
+  }
+
+  private static void setOrUnsetHotspotsReviewed(MeasureUpdateFormula.Context context, Metric<?> hotspotsToReviewStatusMetric,
+    Metric<?> hotspotsReviewedStatusMetric) {
+    setOrUnsetHotspotsReviewed(context, statusCount(context, hotspotsToReviewStatusMetric), statusCount(context, hotspotsReviewedStatusMetric));
+  }
+
+  /**
+   * Mirrors what an analysis does in {@code SecurityReviewMeasuresVisitor}: the percentage of reviewed hotspots is
+   * undefined when the component has no hotspot at all, in which case the measure is dropped rather than left
+   * untouched. Keeping it would freeze the percentage computed when the component still had hotspots.
+   */
+  private static void setOrUnsetHotspotsReviewed(MeasureUpdateFormula.Context context, long hotspotsToReview, long hotspotsReviewed) {
+    Optional<Double> percent = computePercent(hotspotsToReview, hotspotsReviewed);
+    if (percent.isPresent()) {
+      context.setValue(percent.get());
+    } else {
+      context.unsetValue();
+    }
+  }
+
+  /**
+   * The rating is computed from the hotspot counts, as an analysis does, and not from the percentage measure: that
+   * measure is absent when the component has no hotspot, and reading a stale one would keep the rating stale too.
+   */
+  private static void setSecurityReviewRating(MeasureUpdateFormula.Context context, Metric<?> hotspotsToReviewStatusMetric,
+    Metric<?> hotspotsReviewedStatusMetric) {
+    Optional<Double> percent = computePercent(statusCount(context, hotspotsToReviewStatusMetric), statusCount(context, hotspotsReviewedStatusMetric));
+    context.setValue(computeRating(percent.orElse(null)));
+  }
+
+  private static long statusCount(MeasureUpdateFormula.Context context, Metric<?> metric) {
+    return context.getValue(metric).orElse(0D).longValue();
+  }
 
   private static double debtDensity(Metric<?> maintainabilityRemediationEffortMetric, MeasureUpdateFormula.Context context) {
     double debt = Math.max(context.getValue(maintainabilityRemediationEffortMetric).orElse(0.0D), 0.0D);
@@ -453,6 +572,17 @@ public class MeasureUpdateFormulaFactoryImpl implements MeasureUpdateFormulaFact
       if (max.isPresent()) {
         int currentRating = context.getValue(formula.getMetric()).map(Double::intValue).orElse(Rating.A.getIndex());
         context.setValue(Rating.valueOf(Math.max(currentRating, max.getAsInt())));
+      }
+    }
+  }
+
+  private static class MaxValueChildren implements BiConsumer<MeasureUpdateFormula.Context, MeasureUpdateFormula> {
+    @Override
+    public void accept(MeasureUpdateFormula.Context context, MeasureUpdateFormula formula) {
+      OptionalInt max = context.getChildrenValues().stream().mapToInt(Double::intValue).max();
+      if (max.isPresent()) {
+        int current = context.getValue(formula.getMetric()).map(Double::intValue).orElse(SeverityValues.NO_ISSUES);
+        context.setValue(Math.max(current, max.getAsInt()));
       }
     }
   }

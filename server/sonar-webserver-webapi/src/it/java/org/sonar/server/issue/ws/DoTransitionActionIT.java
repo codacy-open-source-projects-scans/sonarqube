@@ -23,23 +23,27 @@ import java.util.List;
 import java.util.stream.IntStream;
 import javax.annotation.Nullable;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.ArgumentCaptor;
 import org.sonar.api.impl.utils.TestSystem2;
+import org.sonar.api.issue.IssueStatus;
 import org.sonar.api.issue.impact.Severity;
 import org.sonar.api.issue.impact.SoftwareQuality;
 import org.sonar.api.rule.RuleKey;
 import org.sonar.api.server.ws.Request;
 import org.sonar.api.server.ws.Response;
 import org.sonar.api.utils.System2;
+import org.sonar.core.issue.IssueProducer;
 import org.sonar.core.rule.RuleType;
 import org.sonar.core.util.SequenceUuidFactory;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbTester;
 import org.sonar.db.component.BranchType;
 import org.sonar.db.component.ComponentDto;
+import org.sonar.db.component.ProjectData;
 import org.sonar.db.issue.ImpactDto;
 import org.sonar.db.issue.IssueDto;
 import org.sonar.db.report.IssueStatsByRuleKeyDaoImpl;
@@ -95,6 +99,7 @@ import static org.sonar.db.permission.ProjectPermission.CODEVIEWER;
 import static org.sonar.db.permission.ProjectPermission.ISSUE_ADMIN;
 import static org.sonar.db.permission.ProjectPermission.USER;
 
+@Tag("elasticsearch")
 class DoTransitionActionIT {
 
   private static final long NOW = 999_776_888L;
@@ -127,18 +132,21 @@ class DoTransitionActionIT {
     mock(NotificationManager.class), issueChangePostProcessor, issuesChangesSerializer);
   private ArgumentCaptor<SearchResponseData> preloadedSearchResponseDataCaptor = ArgumentCaptor.forClass(SearchResponseData.class);
   private IssueStatsByRuleKeyDaoImpl issueStatsByRuleKeyDaoImpl = new IssueStatsByRuleKeyDaoImpl(dbClient);
+  private IssueEventsPublisher issueEventsPublisher = mock(IssueEventsPublisher.class);
 
   private WsAction underTest = new DoTransitionAction(dbClient, userSession, issueChangeEventService,
-    new IssueFinder(dbClient, userSession), issueUpdater, transitionService, responseWriter, system2, new IssueIngestionService(issueStatsByRuleKeyDaoImpl));
+    new IssueFinder(dbClient, userSession), issueUpdater, transitionService, responseWriter, system2,
+    new IssueIngestionService(issueStatsByRuleKeyDaoImpl), issueEventsPublisher);
   private WsActionTester tester = new WsActionTester(underTest);
 
   @Test
   void do_transition() {
-    ComponentDto project = db.components().insertPrivateProject().getMainBranchComponent();
+    ProjectData projectData = db.components().insertPrivateProject();
+    ComponentDto project = projectData.getMainBranchComponent();
     ComponentDto file = db.components().insertComponent(newFileDto(project));
     RuleDto rule = db.rules().insertIssueRule();
     IssueDto issue = db.issues().insertIssue(rule, project, file, i -> i.setStatus(STATUS_OPEN).setResolution(null).setType(CODE_SMELL));
-    userSession.logIn(db.users().insertUser()).addProjectPermission(USER, project, file);
+    userSession.logIn(db.users().insertUser()).addProjectPermission(USER, projectData.getProjectDto()).registerBranches(projectData.getMainBranchDto());
 
     call(issue.getKey(), "confirm");
 
@@ -148,6 +156,36 @@ class DoTransitionActionIT {
     IssueDto issueReloaded = db.getDbClient().issueDao().selectByKey(db.getSession(), issue.getKey()).get();
     assertThat(issueReloaded.getStatus()).isEqualTo(STATUS_CONFIRMED);
     assertThat(issueChangePostProcessor.calledComponents()).containsExactlyInAnyOrder(file);
+  }
+
+  @Test
+  void do_transition_publishes_status_updated_event_for_hunter_agent_issue() {
+    ProjectData projectData = db.components().insertPrivateProject();
+    ComponentDto project = projectData.getMainBranchComponent();
+    ComponentDto file = db.components().insertComponent(newFileDto(project));
+    RuleDto rule = db.rules().insertIssueRule();
+    IssueDto issue = db.issues().insertIssue(rule, project, file,
+      i -> i.setStatus(STATUS_OPEN).setResolution(null).setType(CODE_SMELL).setIssueProducer(IssueProducer.HUNTER_AGENT));
+    userSession.logIn(db.users().insertUser()).addProjectPermission(USER, projectData.getProjectDto()).registerBranches(projectData.getMainBranchDto());
+
+    call(issue.getKey(), "confirm");
+
+    verify(issueEventsPublisher).publishStatusUpdated(issue.getKey(), IssueStatus.CONFIRMED);
+  }
+
+  @Test
+  void do_transition_does_not_publish_status_updated_event_for_scanner_issue() {
+    ProjectData projectData = db.components().insertPrivateProject();
+    ComponentDto project = projectData.getMainBranchComponent();
+    ComponentDto file = db.components().insertComponent(newFileDto(project));
+    RuleDto rule = db.rules().insertIssueRule();
+    IssueDto issue = db.issues().insertIssue(rule, project, file,
+      i -> i.setStatus(STATUS_OPEN).setResolution(null).setType(CODE_SMELL).setIssueProducer(IssueProducer.SCANNER));
+    userSession.logIn(db.users().insertUser()).addProjectPermission(USER, projectData.getProjectDto()).registerBranches(projectData.getMainBranchDto());
+
+    call(issue.getKey(), "confirm");
+
+    verifyNoInteractions(issueEventsPublisher);
   }
 
   @ParameterizedTest
@@ -161,7 +199,8 @@ class DoTransitionActionIT {
     1,RESOLVED,reopen,1
     """)
   void issue_transition_updates_issue_stats(int existingIssueCount, String status, String transition, int expectedIssueCount) {
-    ComponentDto project = db.components().insertPrivateProject().getMainBranchComponent();
+    ProjectData projectData = db.components().insertPrivateProject();
+    ComponentDto project = projectData.getMainBranchComponent();
     ComponentDto file = db.components().insertComponent(newFileDto(project));
     RuleKey ruleKey = RuleKey.of("java", "S123");
     RuleDto rule = db.rules().insertIssueRule(ruleKey);
@@ -172,8 +211,9 @@ class DoTransitionActionIT {
         .addImpact(new ImpactDto(SoftwareQuality.SECURITY, Severity.BLOCKER))))
       .toList();
     userSession.logIn(db.users().insertUser())
-      .addProjectPermission(USER, project, file)
-      .addProjectPermission(ISSUE_ADMIN, project, file);
+      .addProjectPermission(USER, projectData.getProjectDto())
+      .addProjectPermission(ISSUE_ADMIN, projectData.getProjectDto())
+      .registerBranches(projectData.getMainBranchDto());
     IssueStatsByRuleKeyDaoImpl issueStatsByRuleKeyDao = new IssueStatsByRuleKeyDaoImpl(dbClient);
     if (!issues.isEmpty() && !status.equals("RESOLVED")) {
       issueStatsByRuleKeyDao.deleteAndInsertIssueStats(project.uuid(), AggregationType.PROJECT, List.of(
@@ -199,7 +239,8 @@ class DoTransitionActionIT {
   @Test
   void do_transition_is_not_distributed_for_pull_request() {
     RuleDto rule = db.rules().insertIssueRule();
-    ComponentDto project = db.components().insertPrivateProject().getMainBranchComponent();
+    ProjectData projectData = db.components().insertPrivateProject();
+    ComponentDto project = projectData.getMainBranchComponent();
 
     ComponentDto pullRequest = db.components().insertProjectBranch(project, b -> b.setKey("myBranch1")
       .setBranchType(BranchType.PULL_REQUEST)
@@ -208,7 +249,7 @@ class DoTransitionActionIT {
     ComponentDto file = db.components().insertComponent(newFileDto(pullRequest));
     IssueDto issue = newIssue(rule, pullRequest, file).setType(CODE_SMELL).setSeverity(MAJOR);
     db.issues().insertIssue(issue);
-    userSession.logIn(db.users().insertUser()).addProjectPermission(USER, pullRequest, file);
+    userSession.logIn(db.users().insertUser()).addProjectPermission(USER, projectData.getProjectDto()).addProjectBranchMapping(projectData.projectUuid(), pullRequest);
 
     call(issue.getKey(), "confirm");
 
@@ -217,11 +258,12 @@ class DoTransitionActionIT {
 
   @Test
   void transition_succeeds_on_external_issue() {
-    ComponentDto project = db.components().insertPrivateProject().getMainBranchComponent();
+    ProjectData projectData = db.components().insertPrivateProject();
+    ComponentDto project = projectData.getMainBranchComponent();
     ComponentDto file = db.components().insertComponent(newFileDto(project));
     RuleDto externalRule = db.rules().insertIssueRule(r -> r.setIsExternal(true));
     IssueDto externalIssue = db.issues().insertIssue(externalRule, project, file, i -> i.setStatus(STATUS_OPEN).setResolution(null).setType(CODE_SMELL));
-    userSession.logIn(db.users().insertUser()).addProjectPermission(USER, project, file);
+    userSession.logIn(db.users().insertUser()).addProjectPermission(USER, projectData.getProjectDto()).registerBranches(projectData.getMainBranchDto());
 
     call(externalIssue.getKey(), "confirm");
     IssueDto issueReloaded = db.getDbClient().issueDao().selectByKey(db.getSession(), externalIssue.getKey()).get();
@@ -230,11 +272,12 @@ class DoTransitionActionIT {
 
   @Test
   void fail_if_hotspot() {
-    ComponentDto project = db.components().insertPrivateProject().getMainBranchComponent();
+    ProjectData projectData = db.components().insertPrivateProject();
+    ComponentDto project = projectData.getMainBranchComponent();
     ComponentDto file = db.components().insertComponent(newFileDto(project));
     RuleDto rule = db.rules().insertHotspotRule();
     IssueDto hotspot = db.issues().insertHotspot(rule, project, file, i -> i.setType(RuleType.SECURITY_HOTSPOT));
-    userSession.logIn().addProjectPermission(USER, project, file);
+    userSession.logIn().addProjectPermission(USER, projectData.getProjectDto()).registerBranches(projectData.getMainBranchDto());
 
     String hotspotKey = hotspot.getKey();
     assertThatThrownBy(() -> call(hotspotKey, "confirm"))
@@ -260,11 +303,12 @@ class DoTransitionActionIT {
 
   @Test
   void fail_if_no_transition_param() {
-    ComponentDto project = db.components().insertPrivateProject().getMainBranchComponent();
+    ProjectData projectData = db.components().insertPrivateProject();
+    ComponentDto project = projectData.getMainBranchComponent();
     ComponentDto file = db.components().insertComponent(newFileDto(project));
     RuleDto rule = db.rules().insertIssueRule();
     IssueDto issue = db.issues().insertIssue(rule, project, file, i -> i.setStatus(STATUS_OPEN).setResolution(null).setType(CODE_SMELL));
-    userSession.logIn().addProjectPermission(USER, project, file);
+    userSession.logIn().addProjectPermission(USER, projectData.getProjectDto()).registerBranches(projectData.getMainBranchDto());
 
     assertThatThrownBy(() -> call(issue.getKey(), null))
       .isInstanceOf(IllegalArgumentException.class);
@@ -272,11 +316,12 @@ class DoTransitionActionIT {
 
   @Test
   void fail_if_not_enough_permission_to_access_issue() {
-    ComponentDto project = db.components().insertPrivateProject().getMainBranchComponent();
+    ProjectData projectData = db.components().insertPrivateProject();
+    ComponentDto project = projectData.getMainBranchComponent();
     ComponentDto file = db.components().insertComponent(newFileDto(project));
     RuleDto rule = db.rules().insertIssueRule();
     IssueDto issue = db.issues().insertIssue(rule, project, file, i -> i.setStatus(STATUS_OPEN).setResolution(null).setType(CODE_SMELL));
-    userSession.logIn().addProjectPermission(CODEVIEWER, project, file);
+    userSession.logIn().addProjectPermission(CODEVIEWER, projectData.getProjectDto()).registerBranches(projectData.getMainBranchDto());
 
     assertThatThrownBy(() -> call(issue.getKey(), "confirm"))
       .isInstanceOf(ForbiddenException.class);
@@ -284,11 +329,12 @@ class DoTransitionActionIT {
 
   @Test
   void fail_if_not_enough_permission_to_apply_transition() {
-    ComponentDto project = db.components().insertPrivateProject().getMainBranchComponent();
+    ProjectData projectData = db.components().insertPrivateProject();
+    ComponentDto project = projectData.getMainBranchComponent();
     ComponentDto file = db.components().insertComponent(newFileDto(project));
     RuleDto rule = db.rules().insertIssueRule();
     IssueDto issue = db.issues().insertIssue(rule, project, file, i -> i.setStatus(STATUS_OPEN).setResolution(null).setType(CODE_SMELL));
-    userSession.logIn().addProjectPermission(USER, project, file);
+    userSession.logIn().addProjectPermission(USER, projectData.getProjectDto()).registerBranches(projectData.getMainBranchDto());
 
     // False-positive transition is requiring issue admin permission
     assertThatThrownBy(() -> call(issue.getKey(), "falsepositive"))

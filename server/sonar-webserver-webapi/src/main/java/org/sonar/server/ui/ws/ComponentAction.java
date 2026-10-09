@@ -57,6 +57,7 @@ import org.sonar.server.project.Visibility;
 import org.sonar.server.qualitygate.QualityGateFinder;
 import org.sonar.server.qualityprofile.QPMeasureData;
 import org.sonar.server.qualityprofile.QualityProfile;
+import org.sonar.server.qualityprofile.QualityProfileDisplayNames;
 import org.sonar.server.ui.PageRepository;
 import org.sonar.server.user.UserSession;
 
@@ -67,6 +68,7 @@ import static org.sonar.api.CoreProperties.CORE_ALLOW_PERMISSION_MANAGEMENT_FOR_
 import static org.sonar.api.measures.CoreMetrics.QUALITY_PROFILES_KEY;
 import static org.sonar.api.utils.DateUtils.formatDateTime;
 import static org.sonar.db.permission.ProjectPermission.ADMIN;
+import static org.sonar.db.permission.ProjectPermission.ARCHITECTURE_ADMIN;
 import static org.sonar.db.permission.ProjectPermission.USER;
 import static org.sonar.db.permission.GlobalPermission.ADMINISTER_QUALITY_GATES;
 import static org.sonar.db.permission.GlobalPermission.ADMINISTER_QUALITY_PROFILES;
@@ -168,6 +170,7 @@ public class ComponentAction implements NavigationWsAction {
         writeProfiles(json, session, component);
         writeQualityGate(json, session, projectOrPortfolioUuid);
         if (userSession.hasComponentPermission(ADMIN, component) ||
+          userSession.hasComponentPermission(ARCHITECTURE_ADMIN, component) ||
           userSession.hasPermission(ADMINISTER_QUALITY_PROFILES) ||
           userSession.hasPermission(ADMINISTER_QUALITY_GATES)) {
           writeConfiguration(json, component);
@@ -190,12 +193,13 @@ public class ComponentAction implements NavigationWsAction {
     }
   }
 
-  private static void writeToJson(JsonWriter json, QualityProfile profile, boolean deleted) {
+  private static void writeToJson(JsonWriter json, QualityProfile profile, @Nullable QProfileDto dto) {
+    boolean isBuiltIn = dto != null && dto.isBuiltIn();
     json.beginObject()
       .prop("key", profile.getQpKey())
-      .prop("name", profile.getQpName())
+      .prop("name", QualityProfileDisplayNames.toDisplayName(profile.getQpName(), isBuiltIn))
       .prop("language", profile.getLanguageKey())
-      .prop("deleted", deleted)
+      .prop("deleted", dto == null)
       .endObject();
   }
 
@@ -255,7 +259,7 @@ public class ComponentAction implements NavigationWsAction {
       .stream()
       .collect(Collectors.toMap(QProfileDto::getKee, Function.identity()));
     json.name("qualityProfiles").beginArray();
-    qualityProfiles.forEach(qp -> writeToJson(json, qp, !dtoByQPKey.containsKey(qp.getQpKey())));
+    qualityProfiles.forEach(qp -> writeToJson(json, qp, dtoByQPKey.get(qp.getQpKey())));
     json.endArray();
   }
 
@@ -314,6 +318,7 @@ public class ComponentAction implements NavigationWsAction {
     json.prop("showHistory", isProjectAdmin && componentTypeHasProperty(component, PROPERTY_MODIFIABLE_HISTORY));
     json.prop("showUpdateKey", isProjectAdmin && componentTypeHasProperty(component, PROPERTY_UPDATABLE_KEY));
     json.prop("showBackgroundTasks", showBackgroundTasks);
+    json.prop("canAdminArchitecture", userSession.hasComponentPermission(ARCHITECTURE_ADMIN, component));
     json.prop("canApplyPermissionTemplate", isGlobalAdmin);
     json.prop("canBrowseProject", canBrowseProject);
     json.prop("canUpdateProjectVisibilityToPrivate", isProjectAdmin);

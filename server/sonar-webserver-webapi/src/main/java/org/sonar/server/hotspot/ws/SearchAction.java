@@ -33,9 +33,8 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import javax.annotation.Nullable;
-import org.apache.lucene.search.TotalHits;
-import org.elasticsearch.action.search.SearchResponse;
-import org.elasticsearch.search.SearchHit;
+import co.elastic.clients.elasticsearch.core.SearchResponse;
+import co.elastic.clients.elasticsearch.core.search.Hit;
 import org.jetbrains.annotations.NotNull;
 import org.sonar.core.rule.RuleType;
 import org.sonar.api.server.ws.Change;
@@ -98,7 +97,6 @@ import static org.sonarqube.ws.client.issue.IssuesWsParameters.PARAM_COMPLIANCE_
 public class SearchAction implements HotspotsWsAction {
   private static final Set<String> SUPPORTED_QUALIFIERS = Set.of(ComponentQualifiers.PROJECT, ComponentQualifiers.APP);
   private static final String PARAM_PROJECT = "project";
-  private static final String PARAM_PROJECT_KEY = "projectKey";
   private static final String PARAM_STATUS = "status";
   private static final String PARAM_RESOLUTION = "resolution";
   private static final String PARAM_HOTSPOTS = "hotspots";
@@ -244,10 +242,14 @@ public class SearchAction implements HotspotsWsAction {
         + "For applications, it also requires 'Browse' permission on its child projects. <br>"
         + "When issue indexing is in progress returns 503 service unavailable HTTP code.")
       .setSince("8.1")
+      .setDeprecatedSince("2026.4")
       .setChangelog(
+        new Change("2026.5", "Parameter 'projectKey' is removed. Use 'project' instead."),
+        new Change("2026.4", "Hotspots are deprecated and replaced by security issues (software quality) and vulnerabilities (type). " +
+        "Please use the API of security issues / vulnerabilities instead."),
         new Change(V_2025_6, format(NEW_PARAM_ADDED_MESSAGE, PARAM_COMPLIANCE_STANDARDS)),
         new Change("10.7", format("Added parameter '%s' and '%s'", PARAM_STIG_ASD_V5R3, PARAM_CASA)),
-        new Change("10.2", format("Parameter '%s' renamed to '%s'", PARAM_PROJECT_KEY, PARAM_PROJECT)),
+        new Change("10.2", "Parameter 'projectKey' renamed to 'project'"),
         new Change("10.0", "Parameter 'sansTop25' is deprecated"),
         new Change("9.6", "Added parameters 'pciDss-3.2' and 'pciDss-4.0"),
         new Change("9.7", "Hotspot flows in the response may contain a description and a type"),
@@ -257,7 +259,6 @@ public class SearchAction implements HotspotsWsAction {
 
     action.addPagingParams(100);
     action.createParam(PARAM_PROJECT)
-      .setDeprecatedKey(PARAM_PROJECT_KEY, "10.2")
       .setDescription(format(
         "Key of the project or application. This parameter is required unless %s is provided.",
         PARAM_HOTSPOTS))
@@ -322,7 +323,7 @@ public class SearchAction implements HotspotsWsAction {
       .setSince("9.7")
       .setExampleValue("6,6.1.2");
     action.createParam(PARAM_ONLY_MINE)
-      .setDescription("If 'projectKey' is provided, returns only Security Hotspots assigned to the current user")
+      .setDescription("If 'project' is provided, returns only Security Hotspots assigned to the current user")
       .setBooleanPossibleValues()
       .setRequired(false);
     action.createParam(PARAM_OWASP_TOP_10_2017)
@@ -370,20 +371,19 @@ public class SearchAction implements HotspotsWsAction {
   }
 
   private SearchResponseData searchHotspots(WsRequest wsRequest, DbSession dbSession, @Nullable ProjectAndBranch projectorApp) {
-    SearchResponse result = doIndexSearch(wsRequest, dbSession, projectorApp);
-    result.getHits();
-    List<String> issueKeys = Arrays.stream(result.getHits().getHits())
-      .map(SearchHit::getId)
+    SearchResponse<Object> result = doIndexSearch(wsRequest, dbSession, projectorApp);
+    List<String> issueKeys = result.hits().hits().stream()
+      .map(Hit::id)
       .toList();
 
     List<IssueDto> hotspots = toIssueDtos(dbSession, issueKeys);
 
-    Paging paging = forPageIndex(wsRequest.getPage()).withPageSize(wsRequest.getIndex()).andTotal((int) getTotalHits(result).value);
+    Paging paging = forPageIndex(wsRequest.getPage()).withPageSize(wsRequest.getIndex()).andTotal((int) getTotalHits(result));
     return new SearchResponseData(paging, hotspots);
   }
 
-  private static TotalHits getTotalHits(SearchResponse response) {
-    return ofNullable(response.getHits().getTotalHits()).orElseThrow(() -> new IllegalStateException("Could not get total hits of search results"));
+  private static long getTotalHits(SearchResponse<Object> response) {
+    return ofNullable(response.hits().total()).orElseThrow(() -> new IllegalStateException("Could not get total hits of search results")).value();
   }
 
   private List<IssueDto> toIssueDtos(DbSession dbSession, List<String> issueKeys) {
@@ -398,7 +398,7 @@ public class SearchAction implements HotspotsWsAction {
       .toList();
   }
 
-  private SearchResponse doIndexSearch(WsRequest wsRequest, DbSession dbSession, @Nullable ProjectAndBranch projectOrAppAndBranch) {
+  private SearchResponse<Object> doIndexSearch(WsRequest wsRequest, DbSession dbSession, @Nullable ProjectAndBranch projectOrAppAndBranch) {
     var builder = IssueQuery.builder()
       .types(singleton(RuleType.SECURITY_HOTSPOT.name()))
       .sort(IssueQuery.SORT_HOTSPOTS)

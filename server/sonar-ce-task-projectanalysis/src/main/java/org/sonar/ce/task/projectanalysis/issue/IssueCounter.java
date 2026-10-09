@@ -23,6 +23,7 @@ import com.google.common.collect.EnumMultiset;
 import com.google.common.collect.HashMultiset;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Multiset;
+import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.Map;
 import javax.annotation.Nullable;
@@ -37,6 +38,7 @@ import org.sonar.ce.task.projectanalysis.metric.Metric;
 import org.sonar.ce.task.projectanalysis.metric.MetricRepository;
 import org.sonar.core.issue.DefaultIssue;
 import org.sonar.core.metric.SoftwareQualitiesMetrics;
+import org.sonar.api.measures.SeverityValues;
 import org.sonar.server.measure.ImpactMeasureBuilder;
 
 import static org.sonar.api.issue.Issue.STATUS_CONFIRMED;
@@ -70,11 +72,26 @@ import static org.sonar.api.measures.CoreMetrics.NEW_SECURITY_HOTSPOTS_KEY;
 import static org.sonar.api.measures.CoreMetrics.NEW_SECURITY_ISSUES_KEY;
 import static org.sonar.api.measures.CoreMetrics.NEW_VIOLATIONS_KEY;
 import static org.sonar.api.measures.CoreMetrics.NEW_VULNERABILITIES_KEY;
+import static org.sonar.api.measures.CoreMetrics.MAINTAINABILITY_ISSUE_SEVERITY_KEY;
+import static org.sonar.api.measures.CoreMetrics.NEW_BUGS_SEVERITY_KEY;
+import static org.sonar.api.measures.CoreMetrics.NEW_CODE_SMELLS_SEVERITY_KEY;
+import static org.sonar.api.measures.CoreMetrics.NEW_MAINTAINABILITY_ISSUE_SEVERITY_KEY;
+import static org.sonar.api.measures.CoreMetrics.NEW_RELIABILITY_ISSUE_SEVERITY_KEY;
+import static org.sonar.api.measures.CoreMetrics.NEW_SECURITY_ISSUE_SEVERITY_KEY;
+import static org.sonar.api.measures.CoreMetrics.NEW_SOFTWARE_QUALITY_MAINTAINABILITY_ISSUES_KEY;
+import static org.sonar.api.measures.CoreMetrics.NEW_SOFTWARE_QUALITY_RELIABILITY_ISSUES_KEY;
+import static org.sonar.api.measures.CoreMetrics.NEW_SOFTWARE_QUALITY_SECURITY_ISSUES_KEY;
+import static org.sonar.api.measures.CoreMetrics.NEW_VULNERABILITIES_SEVERITY_KEY;
 import static org.sonar.api.measures.CoreMetrics.OPEN_ISSUES_KEY;
 import static org.sonar.api.measures.CoreMetrics.RELIABILITY_ISSUES_KEY;
+import static org.sonar.api.measures.CoreMetrics.RELIABILITY_ISSUE_SEVERITY_KEY;
 import static org.sonar.api.measures.CoreMetrics.REOPENED_ISSUES_KEY;
 import static org.sonar.api.measures.CoreMetrics.SECURITY_HOTSPOTS_KEY;
 import static org.sonar.api.measures.CoreMetrics.SECURITY_ISSUES_KEY;
+import static org.sonar.api.measures.CoreMetrics.SECURITY_ISSUE_SEVERITY_KEY;
+import static org.sonar.api.measures.CoreMetrics.SOFTWARE_QUALITY_MAINTAINABILITY_ISSUES_KEY;
+import static org.sonar.api.measures.CoreMetrics.SOFTWARE_QUALITY_RELIABILITY_ISSUES_KEY;
+import static org.sonar.api.measures.CoreMetrics.SOFTWARE_QUALITY_SECURITY_ISSUES_KEY;
 import static org.sonar.api.measures.CoreMetrics.VIOLATIONS_KEY;
 import static org.sonar.api.measures.CoreMetrics.VULNERABILITIES_KEY;
 import static org.sonar.api.rule.Severity.BLOCKER;
@@ -99,7 +116,7 @@ import static org.sonar.core.rule.RuleType.VULNERABILITY;
  * </ul>
  * For each value, the variation on configured periods is also computed.
  */
-public class IssueCounter extends IssueVisitor {
+public class IssueCounter extends IssueVisitor implements IssueMeasureVisitor {
 
   private static final Map<String, String> SEVERITY_TO_METRIC_KEY = ImmutableMap.of(
     BLOCKER, BLOCKER_VIOLATIONS_KEY,
@@ -140,14 +157,14 @@ public class IssueCounter extends IssueVisitor {
     SoftwareQuality.MAINTAINABILITY.name(), NEW_MAINTAINABILITY_ISSUES_KEY);
 
   static final Map<String, String> IMPACT_TO_METRIC_KEY = Map.of(
-    SoftwareQuality.SECURITY.name(), SoftwareQualitiesMetrics.SOFTWARE_QUALITY_SECURITY_ISSUES_KEY,
-    SoftwareQuality.RELIABILITY.name(), SoftwareQualitiesMetrics.SOFTWARE_QUALITY_RELIABILITY_ISSUES_KEY,
-    SoftwareQuality.MAINTAINABILITY.name(), SoftwareQualitiesMetrics.SOFTWARE_QUALITY_MAINTAINABILITY_ISSUES_KEY);
+    SoftwareQuality.SECURITY.name(), SOFTWARE_QUALITY_SECURITY_ISSUES_KEY,
+    SoftwareQuality.RELIABILITY.name(), SOFTWARE_QUALITY_RELIABILITY_ISSUES_KEY,
+    SoftwareQuality.MAINTAINABILITY.name(), SOFTWARE_QUALITY_MAINTAINABILITY_ISSUES_KEY);
 
   static final Map<String, String> IMPACT_TO_NEW_METRIC_KEY = Map.of(
-    SoftwareQuality.SECURITY.name(), SoftwareQualitiesMetrics.NEW_SOFTWARE_QUALITY_SECURITY_ISSUES_KEY,
-    SoftwareQuality.RELIABILITY.name(), SoftwareQualitiesMetrics.NEW_SOFTWARE_QUALITY_RELIABILITY_ISSUES_KEY,
-    SoftwareQuality.MAINTAINABILITY.name(), SoftwareQualitiesMetrics.NEW_SOFTWARE_QUALITY_MAINTAINABILITY_ISSUES_KEY);
+    SoftwareQuality.SECURITY.name(), NEW_SOFTWARE_QUALITY_SECURITY_ISSUES_KEY,
+    SoftwareQuality.RELIABILITY.name(), NEW_SOFTWARE_QUALITY_RELIABILITY_ISSUES_KEY,
+    SoftwareQuality.MAINTAINABILITY.name(), NEW_SOFTWARE_QUALITY_MAINTAINABILITY_ISSUES_KEY);
 
   private static final Map<RuleType, String> TYPE_TO_METRIC_KEY = ImmutableMap.<RuleType, String>builder()
     .put(CODE_SMELL, CODE_SMELLS_KEY)
@@ -161,6 +178,21 @@ public class IssueCounter extends IssueVisitor {
     .put(VULNERABILITY, NEW_VULNERABILITIES_KEY)
     .put(SECURITY_HOTSPOT, NEW_SECURITY_HOTSPOTS_KEY)
     .build();
+
+  private static final Map<RuleType, String> TYPE_TO_NEW_SEVERITY_METRIC_KEY = Map.of(
+    BUG, NEW_BUGS_SEVERITY_KEY,
+    VULNERABILITY, NEW_VULNERABILITIES_SEVERITY_KEY,
+    CODE_SMELL, NEW_CODE_SMELLS_SEVERITY_KEY);
+
+  private static final Map<SoftwareQuality, String> QUALITY_TO_NEW_SEVERITY_METRIC_KEY = Map.of(
+    SoftwareQuality.RELIABILITY, NEW_RELIABILITY_ISSUE_SEVERITY_KEY,
+    SoftwareQuality.SECURITY, NEW_SECURITY_ISSUE_SEVERITY_KEY,
+    SoftwareQuality.MAINTAINABILITY, NEW_MAINTAINABILITY_ISSUE_SEVERITY_KEY);
+
+  private static final Map<SoftwareQuality, String> QUALITY_TO_SEVERITY_METRIC_KEY = Map.of(
+    SoftwareQuality.RELIABILITY, RELIABILITY_ISSUE_SEVERITY_KEY,
+    SoftwareQuality.SECURITY, SECURITY_ISSUE_SEVERITY_KEY,
+    SoftwareQuality.MAINTAINABILITY, MAINTAINABILITY_ISSUE_SEVERITY_KEY);
 
   private final MetricRepository metricRepository;
   private final MeasureRepository measureRepository;
@@ -199,6 +231,7 @@ public class IssueCounter extends IssueVisitor {
   public void afterComponent(Component component) {
     addMeasuresBySeverity(component);
     addMeasuresByImpactSeverity(component);
+    addMeasuresByQualitySeverity(component);
     addMeasuresByStatus(component);
     addMeasuresByType(component);
     addMeasuresByImpact(component);
@@ -212,6 +245,13 @@ public class IssueCounter extends IssueVisitor {
 
   private void addMeasuresByImpactSeverity(Component component) {
     addMeasures(component, IMPACT_SEVERITY_TO_METRIC_KEY, currentCounters.counter().impactSeverityBag);
+  }
+
+  private void addMeasuresByQualitySeverity(Component component) {
+    for (Map.Entry<SoftwareQuality, String> entry : QUALITY_TO_SEVERITY_METRIC_KEY.entrySet()) {
+      int max = currentCounters.counter().highestSeverityByQuality.getOrDefault(entry.getKey(), SeverityValues.NO_ISSUES);
+      addMeasure(component, entry.getValue(), max);
+    }
   }
 
   private void addMeasuresByStatus(Component component) {
@@ -282,6 +322,15 @@ public class IssueCounter extends IssueVisitor {
 
     addMeasure(component, NEW_ACCEPTED_ISSUES_KEY, currentCounters.counterForPeriod().accepted);
     addMeasure(component, NEW_ISSUES_IN_SANDBOX_KEY, currentCounters.counterForPeriod().inSandbox);
+
+    for (Map.Entry<RuleType, String> entry : TYPE_TO_NEW_SEVERITY_METRIC_KEY.entrySet()) {
+      int max = currentCounters.counterForPeriod().highestSeverityByType.getOrDefault(entry.getKey(), SeverityValues.NO_ISSUES);
+      addMeasure(component, entry.getValue(), max);
+    }
+    for (Map.Entry<SoftwareQuality, String> entry : QUALITY_TO_NEW_SEVERITY_METRIC_KEY.entrySet()) {
+      int max = currentCounters.counterForPeriod().highestSeverityByQuality.getOrDefault(entry.getKey(), SeverityValues.NO_ISSUES);
+      addMeasure(component, entry.getValue(), max);
+    }
   }
 
   /**
@@ -303,6 +352,8 @@ public class IssueCounter extends IssueVisitor {
      */
     private final Map<String, Map<String, Long>> impactsBag = new HashMap<>();
     private final EnumMultiset<RuleType> typeBag = EnumMultiset.create(RuleType.class);
+    private final Map<RuleType, Integer> highestSeverityByType = new EnumMap<>(RuleType.class);
+    private final Map<SoftwareQuality, Integer> highestSeverityByQuality = new EnumMap<>(SoftwareQuality.class);
 
     public Counter() {
       initImpactsBag();
@@ -326,6 +377,8 @@ public class IssueCounter extends IssueVisitor {
       severityBag.addAll(counter.severityBag);
       impactSeverityBag.addAll(counter.impactSeverityBag);
       typeBag.addAll(counter.typeBag);
+      counter.highestSeverityByType.forEach((type, sev) -> highestSeverityByType.merge(type, sev, Math::max));
+      counter.highestSeverityByQuality.forEach((q, sev) -> highestSeverityByQuality.merge(q, sev, Math::max));
 
       // Add impacts
       for (Map.Entry<String, Map<String, Long>> impactEntry : counter.impactsBag.entrySet()) {
@@ -350,7 +403,11 @@ public class IssueCounter extends IssueVisitor {
       if (issue.resolution() == null) {
         unresolved++;
         typeBag.add(issue.type());
-        severityBag.add(issue.severity());
+        String severity = issue.severity();
+        severityBag.add(severity);
+        if (severity != null) {
+          highestSeverityByType.merge(issue.type(), SeverityValues.fromRuleSeverity(severity), Math::max);
+        }
       } else if (IssueStatus.FALSE_POSITIVE.equals(issue.issueStatus())) {
         falsePositives++;
       } else if (IssueStatus.ACCEPTED.equals(issue.issueStatus())) {
@@ -372,10 +429,10 @@ public class IssueCounter extends IssueVisitor {
         default:
           // Other statuses are ignored
       }
-      countIssueImpacts(issue);
+      processIssueImpactsOfUnresolved(issue);
     }
 
-    private void countIssueImpacts(DefaultIssue issue) {
+    private void processIssueImpactsOfUnresolved(DefaultIssue issue) {
       if (IssueStatus.OPEN == issue.issueStatus() || IssueStatus.CONFIRMED == issue.issueStatus()) {
         for (Map.Entry<SoftwareQuality, Severity> impact : issue.impacts().entrySet()) {
           impactsBag.compute(impact.getKey().name(), (key, value) -> {
@@ -383,6 +440,7 @@ public class IssueCounter extends IssueVisitor {
             value.compute(ImpactMeasureBuilder.TOTAL_KEY, (total, count) -> count == null ? 1 : count + 1);
             return value;
           });
+          highestSeverityByQuality.merge(impact.getKey(), SeverityValues.fromImpactSeverity(impact.getValue()), Math::max);
         }
         issue.impacts().values().stream().distinct().forEach(impactSeverityBag::add);
       }

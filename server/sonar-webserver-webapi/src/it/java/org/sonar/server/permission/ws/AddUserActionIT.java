@@ -26,6 +26,7 @@ import org.sonar.db.component.ComponentQualifiers;
 import org.sonar.server.component.ComponentTypes;
 import org.sonar.db.permission.ProjectPermission;
 import org.sonar.db.component.ComponentDto;
+import org.sonar.db.component.ProjectData;
 import org.sonar.server.component.ComponentTypesRule;
 import org.sonar.db.permission.GlobalPermission;
 import org.sonar.db.portfolio.PortfolioDto;
@@ -386,7 +387,7 @@ public class AddUserActionIT extends BasePermissionWsIT<AddUserAction> {
       .setParam(PARAM_PERMISSION, ProjectPermission.USER.getKey())
       .execute();
 
-    assertThat(db.users().selectAnyonePermissions(project.getUuid())).isEmpty();
+    assertThat(db.users().selectEntityPermissionOfUser(user, project.getUuid())).isEmpty();
   }
 
   @Test
@@ -400,13 +401,14 @@ public class AddUserActionIT extends BasePermissionWsIT<AddUserAction> {
       .setParam(PARAM_PERMISSION, ProjectPermission.CODEVIEWER.getKey())
       .execute();
 
-    assertThat(db.users().selectAnyonePermissions(project.getUuid())).isEmpty();
+    assertThat(db.users().selectEntityPermissionOfUser(user, project.getUuid())).isEmpty();
   }
 
   @Test
   public void fail_when_using_branch_uuid() {
-    ComponentDto project = db.components().insertPublicProject().getMainBranchComponent();
-    userSession.logIn().addProjectPermission(ProjectPermission.ADMIN, project);
+    ProjectData projectData = db.components().insertPublicProject();
+    ComponentDto project = projectData.getMainBranchComponent();
+    userSession.logIn().addProjectPermission(ProjectPermission.ADMIN, projectData.getProjectDto());
     ComponentDto branch = db.components().insertProjectBranch(project);
 
     TestRequest request = newRequest()

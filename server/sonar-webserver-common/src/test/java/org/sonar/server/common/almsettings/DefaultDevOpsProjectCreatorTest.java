@@ -34,6 +34,7 @@ import org.sonar.db.component.ComponentQualifiers;
 import org.sonar.db.permission.ProjectPermission;
 import org.sonar.auth.DevOpsPlatformSettings;
 import org.sonar.db.DbClient;
+import org.sonar.db.DbSession;
 import org.sonar.db.alm.setting.ALM;
 import org.sonar.db.alm.setting.AlmSettingDto;
 import org.sonar.db.alm.setting.ProjectAlmSettingDao;
@@ -49,6 +50,7 @@ import org.sonar.server.common.permission.PermissionUpdater;
 import org.sonar.server.common.permission.UserPermissionChange;
 import org.sonar.server.common.project.ProjectCreator;
 import org.sonar.server.component.ComponentCreationData;
+import org.sonar.server.exceptions.ResourceForbiddenException;
 import org.sonar.server.management.ManagedProjectService;
 import org.sonar.server.permission.PermissionService;
 import org.sonar.server.permission.PermissionServiceImpl;
@@ -63,6 +65,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.sonar.db.project.CreationMethod.ALM_IMPORT_API;
@@ -80,6 +83,8 @@ class DefaultDevOpsProjectCreatorTest {
   private static final String ALM_SETTING_KEY = "github_config_1";
   private static final String USER_LOGIN = "userLogin";
   private static final String USER_UUID = "userUuid";
+  private static final String REPOSITORY_URL = "http://api.com/orga2/repo1";
+  private static final String REPOSITORY_ID = "9001";
 
   @Mock(answer = Answers.RETURNS_DEEP_STUBS)
   private DbClient dbClient;
@@ -126,6 +131,8 @@ class DefaultDevOpsProjectCreatorTest {
     lenient().when(devOpsProjectCreationContext.name()).thenReturn(REPOSITORY_NAME);
     lenient().when(devOpsProjectCreationContext.devOpsPlatformIdentifier()).thenReturn(ORGANIZATION_NAME + "/" + REPOSITORY_NAME);
     lenient().when(devOpsProjectCreationContext.fullName()).thenReturn(ORGANIZATION_NAME + "/" + REPOSITORY_NAME);
+    lenient().when(devOpsProjectCreationContext.url()).thenReturn(REPOSITORY_URL);
+    lenient().when(devOpsProjectCreationContext.repoId()).thenReturn(REPOSITORY_ID);
     lenient().when(devOpsProjectCreationContext.defaultBranchName()).thenReturn(MAIN_BRANCH_NAME);
 
     ProjectCreator projectCreator = new ProjectCreator(dbClient, userSession, projectDefaultVisibility, componentUpdater);
@@ -155,7 +162,7 @@ class DefaultDevOpsProjectCreatorTest {
 
     // when
     ComponentCreationData actualComponentCreationData = defaultDevOpsProjectCreator.createProjectAndBindToDevOpsPlatform(dbClient.openSession(true),
-      SCANNER_API_DEVOPS_AUTO_CONFIG, false, null, null, false);
+      SCANNER_API_DEVOPS_AUTO_CONFIG, false, null, null, false, true, null);
 
     // then
     assertThat(actualComponentCreationData.projectDto()).isEqualTo(componentCreationData.projectDto());
@@ -186,7 +193,7 @@ class DefaultDevOpsProjectCreatorTest {
 
     // when
     ComponentCreationData actualComponentCreationData = defaultDevOpsProjectCreator.createProjectAndBindToDevOpsPlatform(dbClient.openSession(true),
-      SCANNER_API_DEVOPS_AUTO_CONFIG, false, null, null, false);
+      SCANNER_API_DEVOPS_AUTO_CONFIG, false, null, null, false, null, null);
 
     // then
     assertThat(actualComponentCreationData.projectDto()).isEqualTo(componentCreationData.projectDto());
@@ -210,7 +217,7 @@ class DefaultDevOpsProjectCreatorTest {
 
     // when
     ComponentCreationData actualComponentCreationData = defaultDevOpsProjectCreator.createProjectAndBindToDevOpsPlatform(dbClient.openSession(true),
-      SCANNER_API_DEVOPS_AUTO_CONFIG, false, null, null, false);
+      SCANNER_API_DEVOPS_AUTO_CONFIG, false, null, null, false, null, null);
 
     // then
     assertThat(actualComponentCreationData.projectDto()).isEqualTo(componentCreationData.projectDto());
@@ -235,7 +242,7 @@ class DefaultDevOpsProjectCreatorTest {
     // when
     ComponentCreationData actualComponentCreationData = defaultDevOpsProjectCreator.createProjectAndBindToDevOpsPlatform(dbClient.openSession(true), ALM_IMPORT_API, false,
       projectKey,
-      null, false);
+      null, false, true, null);
 
     // then
     assertThat(actualComponentCreationData.projectDto()).isEqualTo(componentCreationData.projectDto());
@@ -269,7 +276,7 @@ class DefaultDevOpsProjectCreatorTest {
     // when
     ComponentCreationData actualComponentCreationData = defaultDevOpsProjectCreator.createProjectAndBindToDevOpsPlatform(dbClient.openSession(true), ALM_IMPORT_API, false,
       projectKey,
-      null, false);
+      null, false, true, null);
 
     // then
     assertThat(actualComponentCreationData.projectDto()).isEqualTo(componentCreationData.projectDto());
@@ -287,6 +294,27 @@ class DefaultDevOpsProjectCreatorTest {
     verify(projectAlmSettingDao).insertOrUpdate(any(), projectAlmSettingDtoCaptor.capture(), eq(ALM_SETTING_KEY), eq(REPOSITORY_NAME), eq(projectKey));
     ProjectAlmSettingDto projectAlmSettingDto = projectAlmSettingDtoCaptor.getValue();
     assertAlmSettingsDtoContainsCorrectInformation(almSettingDto, requireNonNull(componentCreationData.projectDto()), projectAlmSettingDto);
+  }
+
+  @Test
+  void createProjectAndBindToDevOpsPlatformFromApi_whenRebindingExistingProjectAndUserLacksProjectAdminPermission_throwsAndDoesNotMutateAnything() {
+    // given
+    String projectKey = "customProjectKey";
+    ProjectDto existingProject = mock(ProjectDto.class);
+    when(dbClient.projectDao().selectProjectByKey(any(), any())).thenReturn(Optional.of(existingProject));
+    when(userSession.checkEntityPermissionOrElseThrowResourceForbiddenException(ProjectPermission.ADMIN, existingProject))
+      .thenThrow(new ResourceForbiddenException());
+
+    DbSession dbSession = dbClient.openSession(true);
+
+    // when / then
+    assertThatException()
+      .isThrownBy(() -> defaultDevOpsProjectCreator.createProjectAndBindToDevOpsPlatform(dbSession, ALM_IMPORT_API, false, projectKey, null, true, null, null))
+      .isInstanceOf(ResourceForbiddenException.class);
+
+    verify(dbClient.projectAlmSettingDao(), never()).insertOrUpdate(any(), any(), any(), any(), any());
+    verify(permissionUpdater, never()).apply(any(), any());
+    verify(managedProjectService, never()).queuePermissionSyncTask(any(), any(), any());
   }
 
   private void verifyProjectSyncTaskWasCreated(ComponentCreationData componentCreationData) {
@@ -343,12 +371,36 @@ class DefaultDevOpsProjectCreatorTest {
   }
 
   private static void assertAlmSettingsDtoContainsCorrectInformation(AlmSettingDto almSettingDto, ProjectDto projectDto, ProjectAlmSettingDto projectAlmSettingDto) {
+    assertAlmSettingsDtoContainsCorrectInformation(almSettingDto, projectDto, projectAlmSettingDto, true);
+  }
+
+  private static void assertAlmSettingsDtoContainsCorrectInformation(AlmSettingDto almSettingDto, ProjectDto projectDto, ProjectAlmSettingDto projectAlmSettingDto,
+    Boolean expectedSummaryCommentEnabled) {
     assertThat(projectAlmSettingDto.getAlmRepo()).isEqualTo(DEVOPS_PROJECT_DESCRIPTOR.repositoryIdentifier());
-    assertThat(projectAlmSettingDto.getAlmSlug()).isNull();
+    assertThat(projectAlmSettingDto.getAlmSlug()).isEqualTo(ORGANIZATION_NAME + "/" + REPOSITORY_NAME);
+    assertThat(projectAlmSettingDto.getUrl()).isEqualTo(REPOSITORY_URL);
+    assertThat(projectAlmSettingDto.getRepoId()).isEqualTo(REPOSITORY_ID);
     assertThat(projectAlmSettingDto.getAlmSettingUuid()).isEqualTo(almSettingDto.getUuid());
     assertThat(projectAlmSettingDto.getProjectUuid()).isEqualTo(projectDto.getUuid());
     assertThat(projectAlmSettingDto.getMonorepo()).isFalse();
-    assertThat(projectAlmSettingDto.getSummaryCommentEnabled()).isTrue();
+    assertThat(projectAlmSettingDto.getSummaryCommentEnabled()).isEqualTo(expectedSummaryCommentEnabled);
+  }
+
+  @Test
+  void createProjectAndBindToDevOpsPlatform_whenSummaryCommentEnabledFalse_persistsFalse() {
+    String projectKey = "customProjectKey";
+    mockGeneratedProjectKey();
+
+    ComponentCreationData componentCreationData = mockProjectCreation(projectKey);
+    ProjectAlmSettingDao projectAlmSettingDao = mock();
+    when(dbClient.projectAlmSettingDao()).thenReturn(projectAlmSettingDao);
+    when(projectDefaultVisibility.get(any())).thenReturn(Visibility.PRIVATE);
+
+    defaultDevOpsProjectCreator.createProjectAndBindToDevOpsPlatform(dbClient.openSession(true), ALM_IMPORT_API, false, projectKey, null, false, false, null);
+
+    verify(projectAlmSettingDao).insertOrUpdate(any(), projectAlmSettingDtoCaptor.capture(), eq(ALM_SETTING_KEY), eq(REPOSITORY_NAME), eq(projectKey));
+    ProjectAlmSettingDto projectAlmSettingDto = projectAlmSettingDtoCaptor.getValue();
+    assertAlmSettingsDtoContainsCorrectInformation(almSettingDto, requireNonNull(componentCreationData.projectDto()), projectAlmSettingDto, false);
   }
 
 }

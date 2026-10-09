@@ -325,6 +325,61 @@ public class UserServiceIT {
   }
 
   @Test
+  public void updateUser_whenExternalIdentityChanges_revokesSessionsAndTokens() {
+    UserDto user = db.users().insertUser(u -> u
+      .setLocal(false)
+      .setExternalIdentityProvider("github")
+      .setExternalLogin("victim")
+      .setExternalId("victim-id"));
+    db.users().insertToken(user);
+    db.users().insertSessionToken(user, st -> st.setExpirationDate(Long.MAX_VALUE));
+    assertThat(db.countRowsOfTable(dbSession, "user_tokens")).isOne();
+    assertThat(db.countRowsOfTable(dbSession, "session_tokens")).isOne();
+
+    userService.updateUser(user.getUuid(), new UpdateUser()
+      .setExternalIdentityProviderId("attacker-id")
+      .setExternalIdentityProviderLogin("attacker"));
+
+    assertThat(db.countRowsOfTable(dbSession, "user_tokens")).isZero();
+    assertThat(db.countRowsOfTable(dbSession, "session_tokens")).isZero();
+  }
+
+  @Test
+  public void updateUser_whenOnlyNameChanges_keepsSessionsAndTokens() {
+    UserDto user = db.users().insertUser(u -> u
+      .setLocal(false)
+      .setExternalIdentityProvider("github")
+      .setExternalLogin("victim")
+      .setExternalId("victim-id"));
+    db.users().insertToken(user);
+    db.users().insertSessionToken(user, st -> st.setExpirationDate(Long.MAX_VALUE));
+
+    userService.updateUser(user.getUuid(), new UpdateUser().setName("New Name"));
+
+    assertThat(db.countRowsOfTable(dbSession, "user_tokens")).isOne();
+    assertThat(db.countRowsOfTable(dbSession, "session_tokens")).isOne();
+  }
+
+  @Test
+  public void updateUser_whenOnlyLoginChangesForLocalUser_keepsSessionsAndTokens() {
+    // Renaming a local user's login cascades into external_login/external_id, but it is not an external-identity
+    // rebind, so sessions and tokens must be preserved (SSF-1094 precision - no revocation on benign login rename).
+    UserDto user = db.users().insertUser(u -> u
+      .setLocal(true)
+      .setLogin("victim")
+      .setExternalIdentityProvider("sonarqube")
+      .setExternalLogin("victim")
+      .setExternalId("victim"));
+    db.users().insertToken(user);
+    db.users().insertSessionToken(user, st -> st.setExpirationDate(Long.MAX_VALUE));
+
+    userService.updateUser(user.getUuid(), new UpdateUser().setLogin("victim-renamed"));
+
+    assertThat(db.countRowsOfTable(dbSession, "user_tokens")).isOne();
+    assertThat(db.countRowsOfTable(dbSession, "session_tokens")).isOne();
+  }
+
+  @Test
   public void return_user_not_having_email() {
     UserDto user = db.users().insertUser(u -> u.setEmail(null));
 
@@ -485,7 +540,7 @@ public class UserServiceIT {
 
   @Test
   public void search_whenFilteringConnectionDate_shouldApplyFilter() {
-    final Instant lastConnection = Instant.now();
+    final Instant lastConnection = Instant.ofEpochMilli(1_704_067_200_000L);
     UserDto user = db.users().insertUser(u -> u
       .setLogin("user-%_%-login")
       .setName("user-name")
@@ -517,7 +572,7 @@ public class UserServiceIT {
 
   @Test
   public void search_whenNoLastConnection_shouldReturnForBeforeOnly() {
-    final Instant lastConnection = Instant.now();
+    final Instant lastConnection = Instant.ofEpochMilli(1_704_067_200_000L);
     UserDto user = db.users().insertUser(u -> u
       .setLogin("user-%_%-login")
       .setName("user-name")
@@ -607,7 +662,7 @@ public class UserServiceIT {
   public void deactivate_user_deletes_their_permissions() {
     createAdminUser();
     UserDto user = db.users().insertUser();
-    ComponentDto project = db.components().insertPrivateProject().getMainBranchComponent();
+    ProjectDto project = db.components().insertPrivateProject().getProjectDto();
     db.users().insertGlobalPermissionOnUser(user, GlobalPermission.SCAN);
     db.users().insertGlobalPermissionOnUser(user, GlobalPermission.ADMINISTER_QUALITY_PROFILES);
     db.users().insertProjectPermissionOnUser(user, ProjectPermission.USER, project);
@@ -616,7 +671,7 @@ public class UserServiceIT {
     userService.deactivate(user.getUuid(), false);
 
     assertThat(db.getDbClient().userPermissionDao().selectGlobalPermissionsOfUser(dbSession, user.getUuid())).isEmpty();
-    assertThat(db.getDbClient().userPermissionDao().selectEntityPermissionsOfUser(dbSession, user.getUuid(), project.uuid())).isEmpty();
+    assertThat(db.getDbClient().userPermissionDao().selectEntityPermissionsOfUser(dbSession, user.getUuid(), project.getUuid())).isEmpty();
   }
 
   @Test

@@ -98,13 +98,18 @@ public class CommandFactoryImpl implements CommandFactory {
   public JavaCommand<EsServerCliJvmOptions> createEsCommand() {
     EsInstallation esInstallation = createEsInstallation();
     String esHomeDirectoryAbsolutePath = esInstallation.getHomeDirectory().getAbsolutePath();
+    String javaHome = System.getProperties().getProperty("java.home");
     return new JavaCommand<EsServerCliJvmOptions>(ProcessId.ELASTICSEARCH, esInstallation.getHomeDirectory())
       .setEsInstallation(esInstallation)
-      .setJvmOptions(new EsServerCliJvmOptions(esInstallation))
-      .setEnvVariable("ES_JAVA_HOME", System.getProperties().getProperty("java.home"))
-      .setClassName("org.elasticsearch.launcher.CliToolLauncher")
-      .addClasspath(Paths.get(esHomeDirectoryAbsolutePath, "lib").toAbsolutePath() + File.separator + "*")
-      .addClasspath(Paths.get(esHomeDirectoryAbsolutePath, "lib", "cli-launcher").toAbsolutePath() + File.separator + "*");
+      .setJvmOptions(new EsServerCliJvmOptions())
+      .setEnvVariable("ES_JAVA_HOME", javaHome)
+      .setEnvVariable("JAVA", javaHome + File.separator + "bin" + File.separator + "java")
+      .setEnvVariable("JAVA_TYPE", "ES_JAVA_HOME")
+      .setEnvVariable("ES_HOME", esHomeDirectoryAbsolutePath)
+      .setEnvVariable("ES_PATH_CONF", esInstallation.getConfDirectory().getAbsolutePath())
+      .setEnvVariable("ES_DISTRIBUTION_TYPE", "tar")
+      .setClassName("org.elasticsearch.server.launcher.ServerLauncher")
+      .addClasspath(Paths.get(esHomeDirectoryAbsolutePath, "lib", "tools", "server-launcher").toAbsolutePath() + File.separator + "*");
   }
 
   private EsInstallation createEsInstallation() {
@@ -195,7 +200,10 @@ public class CommandFactoryImpl implements CommandFactory {
 
   private <T extends JvmOptions> void addProxyJvmOptions(JvmOptions<T> jvmOptions) {
     for (String key : PROXY_PROPERTY_KEYS) {
-      getPropsValue(key).ifPresent(val -> jvmOptions.add("-D" + key + "=" + val));
+      // skip if user already set this property in process-level javaOpts
+      if (!jvmOptions.containsOptionStartingWith("-D" + key + "=")) {
+        getPropsValue(key).ifPresent(val -> jvmOptions.add("-D" + key + "=" + val));
+      }
     }
 
     // defaults of HTTPS are the same than HTTP defaults

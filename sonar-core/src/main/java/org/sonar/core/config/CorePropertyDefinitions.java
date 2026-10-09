@@ -35,6 +35,9 @@ import static org.sonar.api.PropertyType.INTEGER;
 import static org.sonar.api.PropertyType.SINGLE_SELECT_LIST;
 import static org.sonar.api.PropertyType.STRING;
 import static org.sonar.api.PropertyType.TEXT;
+import static org.sonar.api.config.internal.Encryption.PREVIOUS_SECRET_KEY_PATH;
+import static org.sonar.api.config.internal.EnvironmentVariableSecretKeySource.ENVIRONMENT_VARIABLE;
+import static org.sonar.api.config.internal.EnvironmentVariableSecretKeySource.PREVIOUS_KEY_ENVIRONMENT_VARIABLE;
 import static org.sonar.core.extension.PluginRiskConsent.NOT_ACCEPTED;
 
 public class CorePropertyDefinitions {
@@ -73,6 +76,7 @@ public class CorePropertyDefinitions {
     defs.addAll(ScannerProperties.all());
     defs.addAll(MQRModeProperties.all());
     defs.addAll(AiCodefixPropertyDefinitions.all());
+    defs.addAll(NewsProperties.all());
 
     defs.addAll(asList(
       PropertyDefinition.builder(CoreProperties.MODULE_LEVEL_ARCHIVED_SETTINGS)
@@ -103,7 +107,18 @@ public class CorePropertyDefinitions {
         .build(),
       PropertyDefinition.builder(CoreProperties.ENCRYPTION_SECRET_KEY_PATH)
         .name("Encryption secret key path")
-        .description("Path to a file that contains encryption secret key that is used to encrypting other settings.")
+        .description("Path to a file that contains encryption secret key that is used to encrypting other settings. "
+          + "When this property is set but no file is found at that path, the key is read from the " + ENVIRONMENT_VARIABLE
+          + " environment variable. When it is not set, the key is read from that environment variable, then from the "
+          + "sonar-secret.txt file in the .sonar directory of the home directory.")
+        .type(STRING)
+        .hidden()
+        .build(),
+      PropertyDefinition.builder(PREVIOUS_SECRET_KEY_PATH)
+        .name("Previous encryption secret key path")
+        .description("Path to a file that contains the encryption secret key being replaced. Decryption falls back to "
+          + "it, so that values written with it stay readable until they have been rewritten with the current key. The "
+          + PREVIOUS_KEY_ENVIRONMENT_VARIABLE + " environment variable supplies the same key.")
         .type(STRING)
         .hidden()
         .build(),

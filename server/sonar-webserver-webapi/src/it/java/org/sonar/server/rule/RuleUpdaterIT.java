@@ -22,11 +22,11 @@ package org.sonar.server.rule;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Sets;
-import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.sonar.api.config.Configuration;
 import org.sonar.api.impl.utils.TestSystem2;
@@ -70,11 +70,12 @@ import static org.sonar.db.rule.RuleTesting.newTemplateRule;
 import static org.sonar.server.rule.RuleUpdate.createForCustomRule;
 import static org.sonar.server.rule.RuleUpdate.createForPluginRule;
 
+@Tag("elasticsearch")
 class RuleUpdaterIT {
 
   private static final RuleKey RULE_KEY = RuleKey.of("java", "S001");
 
-  private final System2 system2 = new TestSystem2().setNow(Instant.now().toEpochMilli());
+  private final System2 system2 = new TestSystem2().setNow(1_704_067_200_000L);
 
   @RegisterExtension
   private final UserSessionRule userSessionRule = UserSessionRule.standalone();

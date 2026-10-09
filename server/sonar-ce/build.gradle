@@ -8,6 +8,7 @@ sonar {
 
 dependencies {
   // please keep the list grouped by configuration and ordered by name
+  api 'org.apache.httpcomponents:httpclient'
   api 'com.google.guava:guava'
   api 'com.google.protobuf:protobuf-java'
   api 'com.hazelcast:hazelcast'
@@ -26,7 +27,9 @@ dependencies {
   api project(':sonar-core')
   api project(':sonar-plugin-api-impl')
   api project(':sonar-ws')
-
+  implementation 'org.sonarsource.sonarqube:history-server-app'
+  api 'org.sonarsource.sonarqube:gessie-server-app'
+  api 'org.sonarsource.sonarqube:sonar-events-server'
 
   compileOnlyApi 'com.github.spotbugs:spotbugs-annotations'
 

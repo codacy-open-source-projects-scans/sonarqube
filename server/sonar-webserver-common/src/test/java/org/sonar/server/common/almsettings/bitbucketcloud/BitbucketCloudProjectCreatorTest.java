@@ -67,6 +67,8 @@ class BitbucketCloudProjectCreatorTest {
   private static final String PROJECT_UUID = "projectUuid";
   private static final String WORKSPACE = "workspace";
   private static final String MAIN_BRANCH_NAME = "defaultBranch";
+  private static final String REPOSITORY_UUID = "{repo-uuid}";
+  private static final String REPOSITORY_URL = "https://bitbucket.org/workspace/repositoryName";
 
   @Mock(answer = Answers.RETURNS_DEEP_STUBS)
   private DbClient dbClient;
@@ -108,7 +110,7 @@ class BitbucketCloudProjectCreatorTest {
   @Test
   void createProjectAndBindToDevOpsPlatform_whenPatIsMissing_shouldThrow() {
     assertThatExceptionOfType(IllegalArgumentException.class)
-      .isThrownBy(() -> underTest.createProjectAndBindToDevOpsPlatform(mock(DbSession.class), CreationMethod.ALM_IMPORT_API, false, null, null, false))
+      .isThrownBy(() -> underTest.createProjectAndBindToDevOpsPlatform(mock(DbSession.class), CreationMethod.ALM_IMPORT_API, false, null, null, false, null, null))
       .withMessage("personal access token for 'bitbucketcloud_config_1' is missing");
   }
 
@@ -116,7 +118,7 @@ class BitbucketCloudProjectCreatorTest {
   void createProjectAndBindToDevOpsPlatform_whenWorkspaceIsNotDefined_shouldThrow() {
     mockPatForUser();
     assertThatExceptionOfType(IllegalArgumentException.class)
-      .isThrownBy(() -> underTest.createProjectAndBindToDevOpsPlatform(mock(DbSession.class), CreationMethod.ALM_IMPORT_API, false, null, null, false))
+      .isThrownBy(() -> underTest.createProjectAndBindToDevOpsPlatform(mock(DbSession.class), CreationMethod.ALM_IMPORT_API, false, null, null, false, null, null))
       .withMessage("workspace for alm setting bitbucketcloud_config_1 is missing");
   }
 
@@ -126,7 +128,7 @@ class BitbucketCloudProjectCreatorTest {
     when(almSettingDto.getAppId()).thenReturn("workspace");
     when(bitbucketCloudRestClient.getRepo(USER_PAT, "workspace", REPOSITORY_SLUG)).thenThrow(new IllegalStateException("Problem fetching repository from Bitbucket Cloud"));
     assertThatExceptionOfType(IllegalStateException.class)
-      .isThrownBy(() -> underTest.createProjectAndBindToDevOpsPlatform(mock(DbSession.class), CreationMethod.ALM_IMPORT_API, false, null, null, false))
+      .isThrownBy(() -> underTest.createProjectAndBindToDevOpsPlatform(mock(DbSession.class), CreationMethod.ALM_IMPORT_API, false, null, null, false, null, null))
       .withMessage("Problem fetching repository from Bitbucket Cloud");
   }
 
@@ -140,7 +142,7 @@ class BitbucketCloudProjectCreatorTest {
     ArgumentCaptor<ProjectCreationRequest> projectCreationRequestCaptor = ArgumentCaptor.forClass(ProjectCreationRequest.class);
     mockProjectCreation("projectKey", "projectName", projectCreationRequestCaptor);
 
-    underTest.createProjectAndBindToDevOpsPlatform(mock(DbSession.class), CreationMethod.ALM_IMPORT_API, true, "projectKey", "projectName", false);
+    underTest.createProjectAndBindToDevOpsPlatform(mock(DbSession.class), CreationMethod.ALM_IMPORT_API, true, "projectKey", "projectName", false, null, null);
 
     ProjectCreationRequest capturedRequest = projectCreationRequestCaptor.getValue();
     assertThat(capturedRequest.projectKey()).isEqualTo("projectKey");
@@ -157,6 +159,8 @@ class BitbucketCloudProjectCreatorTest {
 
     assertThat(createdProjectAlmSettingDto.getAlmSettingUuid()).isEqualTo(ALM_SETTING_UUID);
     assertThat(createdProjectAlmSettingDto.getAlmRepo()).isEqualTo(REPOSITORY_SLUG);
+    assertThat(createdProjectAlmSettingDto.getUrl()).isEqualTo(REPOSITORY_URL);
+    assertThat(createdProjectAlmSettingDto.getRepoId()).isEqualTo(REPOSITORY_UUID);
     assertThat(createdProjectAlmSettingDto.getProjectUuid()).isEqualTo(PROJECT_UUID);
     assertThat(createdProjectAlmSettingDto.getMonorepo()).isTrue();
   }
@@ -172,7 +176,7 @@ class BitbucketCloudProjectCreatorTest {
     when(projectKeyGenerator.generateUniqueProjectKey(WORKSPACE, REPOSITORY_SLUG)).thenReturn(generatedProjectKey);
     mockProjectCreation(generatedProjectKey, REPOSITORY_NAME);
 
-    underTest.createProjectAndBindToDevOpsPlatform(mock(DbSession.class), CreationMethod.ALM_IMPORT_API, true, null, null, false);
+    underTest.createProjectAndBindToDevOpsPlatform(mock(DbSession.class), CreationMethod.ALM_IMPORT_API, true, null, null, false, null, null);
 
     ArgumentCaptor<ProjectAlmSettingDto> projectAlmSettingCaptor = ArgumentCaptor.forClass(ProjectAlmSettingDto.class);
 
@@ -182,6 +186,8 @@ class BitbucketCloudProjectCreatorTest {
 
     assertThat(createdProjectAlmSettingDto.getAlmSettingUuid()).isEqualTo(ALM_SETTING_UUID);
     assertThat(createdProjectAlmSettingDto.getAlmRepo()).isEqualTo(REPOSITORY_SLUG);
+    assertThat(createdProjectAlmSettingDto.getUrl()).isEqualTo(REPOSITORY_URL);
+    assertThat(createdProjectAlmSettingDto.getRepoId()).isEqualTo(REPOSITORY_UUID);
     assertThat(createdProjectAlmSettingDto.getProjectUuid()).isEqualTo(PROJECT_UUID);
     assertThat(createdProjectAlmSettingDto.getMonorepo()).isTrue();
   }
@@ -197,6 +203,8 @@ class BitbucketCloudProjectCreatorTest {
     when(repository.getMainBranch().getName()).thenReturn(MAIN_BRANCH_NAME);
     when(repository.getSlug()).thenReturn(REPOSITORY_SLUG);
     when(repository.getName()).thenReturn(REPOSITORY_NAME);
+    when(repository.getUuid()).thenReturn(REPOSITORY_UUID);
+    when(repository.getHtmlHref()).thenReturn(REPOSITORY_URL);
     when(bitbucketCloudRestClient.getRepo(USER_PAT, WORKSPACE, REPOSITORY_SLUG)).thenReturn(repository);
   }
 

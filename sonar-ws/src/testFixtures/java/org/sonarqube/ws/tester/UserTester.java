@@ -42,11 +42,24 @@ import org.sonarqube.ws.client.users.UpdateRequest;
 import org.sonarqube.ws.client.users.UsersService;
 import org.sonarqube.ws.client.usertokens.GenerateRequest;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import static java.util.Arrays.stream;
 
 public class UserTester {
 
+  private static final Logger LOG = LoggerFactory.getLogger(UserTester.class);
   private static final AtomicInteger ID_GENERATOR = new AtomicInteger();
+  private static final List<String> ADMIN_DISMISSED_NOTICES = List.of(
+    "showDesignAndArchitectureTour",
+    "showDesignAndArchitectureBanner",
+    "showDesignAndArchitectureOptInBanner",
+    "showSandboxedIssuesIntro",
+    "showProjectCoverageTour",
+    "educationPrinciples",
+    "showEnableSca",
+    "sonarlintAd");
 
   private final TesterSession session;
 
@@ -62,6 +75,8 @@ public class UserTester {
         PostRequest request = new PostRequest("api/users/deactivate").setParam("login", u.getLogin());
         try (final WsResponse response = session.wsClient().wsConnector().call(request)) {
           response.failIfNotSuccessful();
+        } catch (Throwable t) {
+          LOG.warn("Failed to deactivate user '{}' during teardown", u.getLogin(), t);
         }
       });
   }
@@ -128,8 +143,7 @@ public class UserTester {
       new org.sonarqube.ws.client.permissions.AddUserRequest()
         .setLogin(u.getLogin())
         .setPermission("admin"));
-    dimissDnaTour(u);
-    dismissSandboxIssuesIntro(u);
+    dismissAdminNotices(u);
     return u;
   }
 
@@ -141,23 +155,20 @@ public class UserTester {
     User user = generate(populators);
     session.wsClient().permissions().addUser(new org.sonarqube.ws.client.permissions.AddUserRequest().setLogin(user.getLogin()).setPermission("admin"));
     session.wsClient().userGroups().addUser(new AddUserRequest().setLogin(user.getLogin()).setName("sonar-administrators"));
-    dimissDnaTour(user);
-    dismissSandboxIssuesIntro(user);
+    dismissAdminNotices(user);
     return user;
   }
 
-  private void dimissDnaTour(User user) {
-    WsClientFactories.getDefault().newClient(HttpConnector.newBuilder()
+  /**
+   * Dismisses the one-time tours and intros the web app shows to a fresh global administrator.
+   * They are rendered as overlays (teaching bubbles, modals) which intercept clicks and break page tests.
+   */
+  private void dismissAdminNotices(User user) {
+    UsersService users = WsClientFactories.getDefault().newClient(HttpConnector.newBuilder()
       .url(session.wsClient().wsConnector().baseUrl())
       .credentials(user.getLogin(), user.getLogin())
-      .build()).users().dismissNotice("showDesignAndArchitectureTour");
-  }
-
-  private void dismissSandboxIssuesIntro(User user) {
-    WsClientFactories.getDefault().newClient(HttpConnector.newBuilder()
-      .url(session.wsClient().wsConnector().baseUrl())
-      .credentials(user.getLogin(), user.getLogin())
-      .build()).users().dismissNotice("showSandboxedIssuesIntro");
+      .build()).users();
+    ADMIN_DISMISSED_NOTICES.forEach(users::dismissNotice);
   }
 
   public UsersService service() {

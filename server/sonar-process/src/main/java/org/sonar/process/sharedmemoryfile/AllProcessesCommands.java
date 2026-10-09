@@ -64,7 +64,7 @@ import static org.sonar.process.sharedmemoryfile.ProcessCommands.MAX_PROCESSES;
  * </ul>
  * </p>
  */
-public class AllProcessesCommands implements AutoCloseable {
+public final class AllProcessesCommands implements AutoCloseable {
   private static final int UP_BYTE_OFFSET = 0;
   private static final int HARD_STOP_BYTE_OFFSET = 1;
   private static final int STOP_BYTE_OFFSET = 2;
@@ -196,6 +196,19 @@ public class AllProcessesCommands implements AutoCloseable {
     writeByte(processNumber, RESTART_BYTE_OFFSET, EMPTY);
   }
 
+  void ping(int processNumber) {
+    ping(processNumber, System.currentTimeMillis());
+  }
+
+  // VisibleForTesting
+  void ping(int processNumber, long timestamp) {
+    writeLong(processNumber, PING_BYTE_OFFSET, timestamp);
+  }
+
+  long getLastPing(int processNumber) {
+    return readLong(processNumber, PING_BYTE_OFFSET);
+  }
+
   @Override
   public void close() {
     IOUtils.closeQuietly(sharedMemory);
@@ -235,6 +248,14 @@ public class AllProcessesCommands implements AutoCloseable {
       bytes[i] = mappedByteBuffer.get(bufferOffset + i);
     }
     return bytes;
+  }
+
+  private void writeLong(int processNumber, int offset, long value) {
+    mappedByteBuffer.putLong(offset(processNumber) + offset, value);
+  }
+
+  private long readLong(int processNumber, int offset) {
+    return mappedByteBuffer.getLong(offset(processNumber) + offset);
   }
 
   // VisibleForTesting
@@ -313,6 +334,16 @@ public class AllProcessesCommands implements AutoCloseable {
     @Override
     public void acknowledgeAskForRestart() {
       AllProcessesCommands.this.acknowledgeAskForRestart(processNumber);
+    }
+
+    @Override
+    public void ping() {
+      AllProcessesCommands.this.ping(processNumber);
+    }
+
+    @Override
+    public long getLastPing() {
+      return AllProcessesCommands.this.getLastPing(processNumber);
     }
 
     @Override

@@ -19,25 +19,33 @@
  */
 package org.sonar.server.source;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
+import org.sonar.api.config.Configuration;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
+import org.sonar.db.issue.IssueDto;
 import org.sonar.db.protobuf.DbFileSources;
 import org.sonar.db.source.FileSourceDto;
+import org.sonar.server.issue.SecretIssueRedactor;
+import org.sonar.server.issue.SecretIssueRedactionRules;
 
 import static com.google.common.base.Preconditions.checkArgument;
+import static org.sonar.core.config.SecurityProperties.SECRET_SOURCE_REDACTION_ENABLED;
 
 public class SourceService {
 
   private final DbClient dbClient;
   private final HtmlSourceDecorator htmlDecorator;
+  private final Configuration configuration;
   private final Function<DbFileSources.Line, String> lineToHtml;
 
-  public SourceService(DbClient dbClient, HtmlSourceDecorator htmlDecorator) {
+  public SourceService(DbClient dbClient, HtmlSourceDecorator htmlDecorator, Configuration configuration) {
     this.dbClient = dbClient;
     this.htmlDecorator = htmlDecorator;
+    this.configuration = configuration;
     this.lineToHtml = lineToHtml();
   }
 
@@ -48,11 +56,18 @@ public class SourceService {
    * @param toInclusive starts from 1, must be greater than or equal param {@code from}
    */
   public Optional<Iterable<DbFileSources.Line>> getLines(DbSession dbSession, String fileUuid, int from, int toInclusive) {
-    return getLines(dbSession, fileUuid, from, toInclusive, Function.identity());
+    return getLines(dbSession, fileUuid, from, toInclusive, Function.identity(), true);
   }
 
   public Optional<Iterable<DbFileSources.Line>> getLines(DbSession dbSession, String fileUuid, Set<Integer> lines) {
-    return getLines(dbSession, fileUuid, lines, Function.identity());
+    return getLines(dbSession, fileUuid, lines, Function.identity(), true);
+  }
+
+  /**
+   * Returns source lines for SCM metadata serialization without loading secret-redaction metadata.
+   */
+  public Optional<Iterable<DbFileSources.Line>> getScmLines(DbSession dbSession, String fileUuid, int from, int toInclusive) {
+    return getLines(dbSession, fileUuid, from, toInclusive, Function.identity(), false);
   }
 
   /**
@@ -61,36 +76,52 @@ public class SourceService {
    * @see #getLines(DbSession, String, int, int)
    */
   public Optional<Iterable<String>> getLinesAsRawText(DbSession dbSession, String fileUuid, int from, int toInclusive) {
-    return getLines(dbSession, fileUuid, from, toInclusive, DbFileSources.Line::getSource);
+    return getLines(dbSession, fileUuid, from, toInclusive, DbFileSources.Line::getSource, true);
   }
 
   public Optional<Iterable<String>> getLinesAsHtml(DbSession dbSession, String fileUuid, int from, int toInclusive) {
-    return getLines(dbSession, fileUuid, from, toInclusive, lineToHtml);
+    return getLines(dbSession, fileUuid, from, toInclusive, lineToHtml, true);
   }
 
-  private <E> Optional<Iterable<E>> getLines(DbSession dbSession, String fileUuid, int from, int toInclusive, Function<DbFileSources.Line, E> function) {
+  private <E> Optional<Iterable<E>> getLines(DbSession dbSession, String fileUuid, int from, int toInclusive, Function<DbFileSources.Line, E> function, boolean redactSource) {
     verifyLine(from);
     checkArgument(toInclusive >= from, String.format("Line number must greater than or equal to %d, got %d", from, toInclusive));
     FileSourceDto dto = dbClient.fileSourceDao().selectByFileUuid(dbSession, fileUuid);
     if (dto == null) {
       return Optional.empty();
     }
-    return Optional.of(dto.getSourceData().getLinesList().stream()
+    List<DbFileSources.Line> sourceLines = dto.getSourceData().getLinesList().stream()
       .filter(line -> line.hasLine() && line.getLine() >= from)
       .limit((toInclusive - from) + 1L)
+      .toList();
+    return Optional.of(redactIfNecessary(dbSession, fileUuid, sourceLines, redactSource).stream()
       .map(function)
       .toList());
   }
 
-  private <E> Optional<Iterable<E>> getLines(DbSession dbSession, String fileUuid, Set<Integer> lines, Function<DbFileSources.Line, E> function) {
+  private <E> Optional<Iterable<E>> getLines(DbSession dbSession, String fileUuid, Set<Integer> lines, Function<DbFileSources.Line, E> function, boolean redactSource) {
     FileSourceDto dto = dbClient.fileSourceDao().selectByFileUuid(dbSession, fileUuid);
     if (dto == null) {
       return Optional.empty();
     }
-    return Optional.of(dto.getSourceData().getLinesList().stream()
+    List<DbFileSources.Line> sourceLines = dto.getSourceData().getLinesList().stream()
       .filter(line -> line.hasLine() && lines.contains(line.getLine()))
+      .toList();
+    return Optional.of(redactIfNecessary(dbSession, fileUuid, sourceLines, redactSource).stream()
       .map(function)
       .toList());
+  }
+
+  private List<DbFileSources.Line> redactIfNecessary(DbSession dbSession, String fileUuid, List<DbFileSources.Line> sourceLines, boolean redactSource) {
+    if (!redactSource || !configuration.getBoolean(SECRET_SOURCE_REDACTION_ENABLED).orElse(false)) {
+      return sourceLines;
+    }
+    List<IssueDto> issues = dbClient.issueDao().selectSourceRedactionIssues(
+      dbSession,
+      fileUuid,
+      SecretIssueRedactionRules.sourceRedactionRuleKeys()
+    );
+    return SecretIssueRedactor.redactSourceLines(sourceLines, issues);
   }
 
   private static void verifyLine(int line) {

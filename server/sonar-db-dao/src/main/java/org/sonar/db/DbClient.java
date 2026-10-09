@@ -19,6 +19,8 @@
  */
 package org.sonar.db;
 
+import org.sonar.db.adminalert.AdminAlertStatusDao;
+import org.sonar.db.agent.AgentJobDao;
 import org.sonar.db.alm.pat.AlmPatDao;
 import org.sonar.db.alm.setting.AlmSettingDao;
 import org.sonar.db.alm.setting.ProjectAlmSettingDao;
@@ -58,6 +60,7 @@ import org.sonar.db.measure.ProjectMeasureDao;
 import org.sonar.db.metric.MetricDao;
 import org.sonar.db.migrationlog.MigrationLogDao;
 import org.sonar.db.newcodeperiod.NewCodePeriodDao;
+import org.sonar.db.notification.NotificationGroupSubscriptionsDao;
 import org.sonar.db.notification.NotificationQueueDao;
 import org.sonar.db.permission.AuthorizationDao;
 import org.sonar.db.permission.GroupPermissionDao;
@@ -169,6 +172,7 @@ public class DbClient extends AbstractDbClient {
   private final QualityGateUserPermissionsDao qualityGateUserPermissionsDao;
   private final ProjectQgateAssociationDao projectQgateAssociationDao;
   private final DuplicationDao duplicationDao;
+  private final NotificationGroupSubscriptionsDao notificationGroupSubscriptionsDao;
   private final NotificationQueueDao notificationQueueDao;
   private final MetricDao metricDao;
   private final MigrationLogDao migrationLogDao;
@@ -177,6 +181,8 @@ public class DbClient extends AbstractDbClient {
   private final RuleDao ruleDao;
   private final RuleRepositoryDao ruleRepositoryDao;
   private final ActiveRuleDao activeRuleDao;
+  private final AdminAlertStatusDao adminAlertStatusDao;
+  private final AgentJobDao agentJobDao;
   private final QProfileChangeDao qProfileChangeDao;
   private final UserPermissionDao userPermissionDao;
   private final DefaultQProfileDao defaultQProfileDao;
@@ -266,6 +272,7 @@ public class DbClient extends AbstractDbClient {
     projectQgateAssociationDao = getDao(ProjectQgateAssociationDao.class);
     duplicationDao = getDao(DuplicationDao.class);
     regulatoryReportDao = getDao(RegulatoryReportDao.class);
+    notificationGroupSubscriptionsDao = getDao(NotificationGroupSubscriptionsDao.class);
     notificationQueueDao = getDao(NotificationQueueDao.class);
     metricDao = getDao(MetricDao.class);
     migrationLogDao = getDao(MigrationLogDao.class);
@@ -276,6 +283,8 @@ public class DbClient extends AbstractDbClient {
     ruleDao = getDao(RuleDao.class);
     ruleRepositoryDao = getDao(RuleRepositoryDao.class);
     activeRuleDao = getDao(ActiveRuleDao.class);
+    adminAlertStatusDao = getDao(AdminAlertStatusDao.class);
+    agentJobDao = getDao(AgentJobDao.class);
     qProfileChangeDao = getDao(QProfileChangeDao.class);
     userPermissionDao = getDao(UserPermissionDao.class);
     defaultQProfileDao = getDao(DefaultQProfileDao.class);
@@ -545,6 +554,10 @@ public class DbClient extends AbstractDbClient {
     return duplicationDao;
   }
 
+  public NotificationGroupSubscriptionsDao notificationGroupSubscriptionsDao() {
+    return notificationGroupSubscriptionsDao;
+  }
+
   public NotificationQueueDao notificationQueueDao() {
     return notificationQueueDao;
   }
@@ -583,6 +596,14 @@ public class DbClient extends AbstractDbClient {
 
   public ActiveRuleDao activeRuleDao() {
     return activeRuleDao;
+  }
+
+  public AdminAlertStatusDao adminAlertStatusDao() {
+    return adminAlertStatusDao;
+  }
+
+  public AgentJobDao agentJobDao() {
+    return agentJobDao;
   }
 
   public QProfileChangeDao qProfileChangeDao() {

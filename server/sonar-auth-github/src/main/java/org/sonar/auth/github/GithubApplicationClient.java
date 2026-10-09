@@ -21,6 +21,7 @@ package org.sonar.auth.github;
 
 import com.google.gson.annotations.SerializedName;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import javax.annotation.CheckForNull;
@@ -44,6 +45,21 @@ public interface GithubApplicationClient {
   UserAccessToken createUserAccessToken(String appUrl, String clientId, String clientSecret, String code);
 
   /**
+   * Convert a temporary code obtained through the GitHub App Manifest flow into the newly created
+   * App's credentials (app id, client id, client secret, private key, webhook secret).
+   *
+   * See https://docs.github.com/en/apps/sharing-github-apps/registering-a-github-app-from-a-manifest
+   *
+   * This call is unauthenticated: the App does not exist yet when it is made. The temporary code is
+   * single-use and expires one hour after the manifest flow was initiated.
+   *
+   * @param apiEndpoint the GitHub API endpoint (e.g. {@code https://api.github.com})
+   * @param code the temporary code returned by GitHub on the manifest flow redirect
+   * @throws IllegalStateException if the exchange failed (network issue, invalid/expired code, etc.)
+   */
+  GithubAppCredentials convertAppManifest(String apiEndpoint, String code);
+
+  /**
    * Create an installation access token for the specified installation ID.
    *
    * IMPORTANT: each call consumes one hit of the App GLOBAL quotas (5'000 hits per hour).
@@ -55,6 +71,16 @@ public interface GithubApplicationClient {
    *         created (network issue, parsing error, Github error, ...).
    */
   Optional<ExpiringAppInstallationToken> createAppInstallationToken(GithubAppConfiguration githubAppConfiguration, long installationId);
+
+  /**
+   * Same as {@link #createAppInstallationToken(GithubAppConfiguration, long)}, but the resulting
+   * token's access is narrowed to just {@code repositoryName} rather than every repository the
+   * installation covers (SONAR-30903) — least-privilege for callers that only need to act on one
+   * specific repository.
+   *
+   * @param repositoryName bare repository name (no {@code owner/} prefix), e.g. {@code "widgets"}
+   */
+  Optional<ExpiringAppInstallationToken> createAppInstallationToken(GithubAppConfiguration githubAppConfiguration, long installationId, String repositoryName);
 
   GithubBinding.GsonApp getApp(GithubAppConfiguration githubAppConfiguration);
 
@@ -86,6 +112,58 @@ public interface GithubApplicationClient {
    * Checks if an app has all the permissions required.
    */
   void checkAppPermissions(GithubAppConfiguration githubAppConfiguration);
+
+  /**
+   * Same as {@link #checkAppPermissions(GithubAppConfiguration)}, but against an explicit
+   * permission map rather than the default {@code GithubAppPermissions.REQUIRED_PERMISSIONS} — for
+   * callers that need a stricter (or different) check for their specific flow (SONAR-31023).
+   */
+  void checkAppPermissions(GithubAppConfiguration githubAppConfiguration, Map<String, String> requiredPermissions);
+
+  /**
+   * Same permission check as {@link #checkAppPermissions(GithubAppConfiguration, Map)}, but returns the sorted list of
+   * missing permission keys (empty when all {@code requiredPermissions} are granted) instead of throwing when some are
+   * missing — for callers that need the structured result rather than a failure (SONAR-31626). Still throws
+   * {@link IllegalArgumentException} on authentication or connectivity failures.
+   */
+  List<String> findMissingAppPermissions(GithubAppConfiguration githubAppConfiguration, Map<String, String> requiredPermissions);
+
+  /**
+   * Permissions currently granted to the app itself, as configured on its GitHub App settings page, keyed by GitHub
+   * permission name. This is what {@link #checkAppPermissions(GithubAppConfiguration, Map)} and
+   * {@link #findMissingAppPermissions(GithubAppConfiguration, Map)} compare against; exposed directly for callers that
+   * also need the granted level, not just the name of what is missing (SONAR-32166).
+   *
+   * @throws IllegalArgumentException on authentication or connectivity failures
+   */
+  Map<String, String> getAppPermissions(GithubAppConfiguration githubAppConfiguration);
+
+  /**
+   * Every installation of the app, with the permissions each one actually granted.
+   *
+   * <p>Unlike {@link #getWhitelistedGithubAppInstallations(GithubAppConfiguration)}, this applies no organization
+   * allowlist and keeps installations owned by personal accounts: the Remediation Agent has to report on every
+   * installation that has not yet approved a permission change, whoever owns it and whether or not that owner is
+   * allowed to authenticate against this instance (SONAR-32166). All pages are followed, and a page that cannot be
+   * read completely fails the call rather than returning a short list that would read as "nothing to approve".
+   *
+   * @throws IllegalArgumentException if one of the arguments is invalid (for example, wrong private key)
+   * @throws IllegalStateException if any page could not be retrieved or parsed
+   */
+  List<GithubAppInstallationDetails> getAllAppInstallations(GithubAppConfiguration githubAppConfiguration);
+
+  /**
+   * The single installation covering {@code repositorySlug}, with the permissions it actually granted.
+   *
+   * <p>Reads the same endpoint as {@link #getInstallationId(GithubAppConfiguration, String)} but throws instead of
+   * collapsing every failure into {@code Optional.empty()}, so that "the app is not installed on this repository"
+   * (HTTP 404) stays distinguishable from an authentication or connectivity failure (SONAR-32166), and returns the
+   * permission map the response already carries rather than only the id.
+   *
+   * @param repositorySlug {@code owner/repository}
+   * @throws RuntimeException if GitHub answered with a non-OK status, or the response carried no usable installation
+   */
+  GithubAppInstallationDetails getRepositoryInstallation(GithubAppConfiguration githubAppConfiguration, String repositorySlug);
 
   /**
    * Returns the repository identified by the repositoryKey owned by the provided organization.

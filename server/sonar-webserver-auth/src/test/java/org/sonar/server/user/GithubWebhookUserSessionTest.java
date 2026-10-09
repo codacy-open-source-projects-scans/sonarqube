@@ -27,6 +27,7 @@ import org.sonar.db.permission.ProjectPermission;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
 import static org.sonar.server.user.GithubWebhookUserSession.GITHUB_WEBHOOK_USER_NAME;
+import static org.sonar.server.user.ServiceIdentity.GITHUB_WEBHOOK;
 
 public class GithubWebhookUserSessionTest {
 
@@ -73,6 +74,12 @@ public class GithubWebhookUserSessionTest {
   }
 
   @Test
+  public void isServiceSession() {
+    assertThat(githubWebhookUserSession.isServiceSession()).isTrue();
+    assertThat(githubWebhookUserSession.getServiceIdentity()).contains(GITHUB_WEBHOOK);
+  }
+
+  @Test
   public void isSystemAdministrator() {
     assertThat(githubWebhookUserSession.isSystemAdministrator()).isFalse();
   }
@@ -114,9 +121,9 @@ public class GithubWebhookUserSessionTest {
   }
 
   @Test
-  public void hasComponentUuidPermission_returnsAlwaysTrue() {
+  public void hasComponentUuidPermission_returnsAlwaysFalse() {
     Arrays.stream(ProjectPermission.values()).forEach(projectPermission ->
-      assertThat(githubWebhookUserSession.hasComponentUuidPermission(projectPermission, "project")).isTrue());
+      assertThat(githubWebhookUserSession.hasComponentUuidPermission(projectPermission, "project")).isFalse());
   }
 
   @Test

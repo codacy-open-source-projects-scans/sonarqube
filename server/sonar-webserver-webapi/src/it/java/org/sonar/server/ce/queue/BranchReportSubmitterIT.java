@@ -255,6 +255,55 @@ public class BranchReportSubmitterIT {
   }
 
   @Test
+  public void submit_report_on_missing_branch_of_existing_project_fails_with_ForbiddenException_and_does_not_persist_branch_when_no_scan_permission() {
+    ProjectData projectData = db.components().insertPublicProject();
+    ComponentDto mainBranch = projectData.getMainBranchComponent();
+    BranchSupport.ComponentKey componentKey = createComponentKeyOfBranch(mainBranch.getKey(), "new-branch");
+    when(branchSupportDelegate.createComponentKey(mainBranch.getKey(), CHARACTERISTICS)).thenReturn(componentKey);
+    InputStream reportInput = IOUtils.toInputStream("{binary}", StandardCharsets.UTF_8);
+    // No scan permission added to userSession
+
+    String key = mainBranch.getKey();
+    String name = mainBranch.name();
+    assertThatThrownBy(() -> underTest.submit(key, name, CHARACTERISTICS, reportInput))
+      .isInstanceOf(ForbiddenException.class)
+      .hasMessage("Insufficient privileges");
+    verifyNoInteractions(queue);
+    // the branch must never even be built: authorization happens before any write, so the absence of a ghost record
+    // does not depend on the transaction being rolled back
+    verify(branchSupport, times(0)).createBranchComponent(any(), any(), any(), any());
+    verify(branchSupportDelegate, times(0)).createBranchComponent(any(), any(), any(), any());
+    assertThat(db.getDbClient().branchDao().selectByBranchKey(db.getSession(), projectData.projectUuid(), "new-branch"))
+      .isEmpty();
+    assertThat(db.getDbClient().componentDao().selectByKeyAndBranch(db.getSession(), mainBranch.getKey(), "new-branch"))
+      .isEmpty();
+  }
+
+  @Test
+  public void submit_a_report_on_missing_branch_of_existing_project_with_project_scan_permission_only() {
+    ProjectData projectData = db.components().insertPublicProject();
+    ComponentDto mainBranch = projectData.getMainBranchComponent();
+    BranchDto existingProjectMainBranch = db.getDbClient().branchDao().selectByUuid(db.getSession(), mainBranch.uuid()).get();
+    UserDto user = db.users().insertUser();
+    // only a project-scoped scan permission: the submission must be authorized against the persisted main branch,
+    // not against the branch component that this very transaction is about to create
+    userSession.logIn(user).addProjectPermission(ProjectPermission.SCAN, projectData.getProjectDto())
+      .registerBranches(projectData.getMainBranchDto());
+    ComponentDto createdBranch = createButDoNotInsertBranch(mainBranch, projectData.projectUuid());
+    BranchSupport.ComponentKey componentKey = createComponentKeyOfBranch(mainBranch.getKey(), "branch1");
+    when(branchSupportDelegate.createComponentKey(mainBranch.getKey(), CHARACTERISTICS)).thenReturn(componentKey);
+    when(branchSupportDelegate.createBranchComponent(any(DbSession.class), same(componentKey), eq(mainBranch), eq(existingProjectMainBranch)))
+      .thenReturn(createdBranch);
+    InputStream reportInput = IOUtils.toInputStream("{binary}", StandardCharsets.UTF_8);
+    String taskUuid = mockSuccessfulPrepareSubmitCall();
+
+    underTest.submit(mainBranch.getKey(), mainBranch.name(), CHARACTERISTICS, reportInput);
+
+    verify(branchSupportDelegate).createBranchComponent(any(DbSession.class), same(componentKey), eq(mainBranch), eq(existingProjectMainBranch));
+    verifyQueueSubmit(mainBranch, createdBranch, user, CHARACTERISTICS, taskUuid);
+  }
+
+  @Test
   public void submit_report_on_missing_branch_of_missing_project_fails_with_ForbiddenException_if_only_scan_permission() {
     ComponentDto nonExistingBranch = newPrivateProjectDto();
     UserDto user = db.users().insertUser();

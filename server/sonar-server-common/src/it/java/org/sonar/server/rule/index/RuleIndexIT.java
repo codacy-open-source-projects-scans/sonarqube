@@ -28,6 +28,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.function.Consumer;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -112,6 +113,7 @@ import static org.sonar.server.rule.index.RuleIndexDefinition.TYPE_RULE;
 import static org.sonar.server.security.SecurityStandards.SANS_TOP_25_INSECURE_INTERACTION;
 import static org.sonar.server.security.SecurityStandards.SANS_TOP_25_RISKY_RESOURCE;
 
+@Tag("elasticsearch")
 class RuleIndexIT {
 
   private final System2 system2 = new AlwaysIncreasingSystem2();
@@ -492,6 +494,23 @@ class RuleIndexIT {
     query = new RuleQuery().setIncludeExternal(false);
     results = underTest.searchV2(query, new SearchOptions());
     assertThat(results.getUuids()).containsOnly(ruleIsNotExternal.getUuid());
+  }
+
+  @Test
+  void hunter_agent_rules_are_not_indexed_by_full_reindex_and_excluded_from_default_search() {
+    RuleDto normalRule = createRule(setIsExternal(false));
+    RuleDto hunterRule = createRule(setRepositoryKey("hunter-agent"), setIsExternal(true), r -> r.setIsAdHoc(true));
+    index();
+
+    // With includeExternal=true the hunter-agent rule is still absent — it was never indexed
+    assertThat(underTest.searchV2(new RuleQuery().setIncludeExternal(true), new SearchOptions()).getUuids())
+      .contains(normalRule.getUuid())
+      .doesNotContain(hunterRule.getUuid());
+
+    // Default search (external excluded by default filter) also does not contain it
+    assertThat(underTest.searchV2(new RuleQuery(), new SearchOptions()).getUuids())
+      .contains(normalRule.getUuid())
+      .doesNotContain(hunterRule.getUuid());
   }
 
   @Test
@@ -1515,7 +1534,7 @@ class RuleIndexIT {
 
   @Test
   void default_sort_is_by_updated_at_desc() {
-    long currentTimeMillis = System.currentTimeMillis();
+    long currentTimeMillis = 1_704_067_200_000L;
 
     RuleDto old = createRule(setCreatedAt(1000L), setUpdatedAt(currentTimeMillis + 1000L));
     RuleDto oldest = createRule(setCreatedAt(1000L), setUpdatedAt(currentTimeMillis + 3000L));

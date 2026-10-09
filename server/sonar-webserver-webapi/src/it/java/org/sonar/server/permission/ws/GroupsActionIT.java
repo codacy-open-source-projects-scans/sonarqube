@@ -22,10 +22,10 @@ package org.sonar.server.permission.ws;
 import java.util.Set;
 import org.junit.Before;
 import org.junit.Test;
-import org.sonar.api.security.DefaultGroups;
 import org.sonar.api.server.ws.Change;
 import org.sonar.api.server.ws.WebService.Action;
 import org.sonar.db.permission.ProjectPermission;
+import org.sonar.db.component.BranchDto;
 import org.sonar.db.component.ComponentDto;
 import org.sonar.db.component.ComponentQualifiers;
 import org.sonar.db.permission.GlobalPermission;
@@ -64,16 +64,16 @@ public class GroupsActionIT extends BasePermissionWsIT<GroupsAction> {
   private GroupDto group1;
   private GroupDto group2;
   private final ComponentTypes componentTypes = new ComponentTypesRule().setRootQualifiers(ComponentQualifiers.PROJECT);
-  private final PermissionService permissionService = new PermissionServiceImpl(componentTypes);
-  private final WsParameters wsParameters = new WsParameters(permissionService);
   private final ManagedInstanceService managedInstanceService = mock(ManagedInstanceService.class);
 
   @Override
   protected GroupsAction buildWsAction() {
+    PermissionService permissionService = new PermissionServiceImpl(componentTypes, db.getDbClient());
+    WsParameters wsParameters = new WsParameters(permissionService);
     return new GroupsAction(
       db.getDbClient(),
       userSession,
-      newPermissionWsSupport(), wsParameters, managedInstanceService);
+      newPermissionWsSupport(), wsParameters, managedInstanceService, permissionService);
   }
 
   @Before
@@ -84,7 +84,6 @@ public class GroupsActionIT extends BasePermissionWsIT<GroupsAction> {
     db.users().insertPermissionOnGroup(group1, GlobalPermission.SCAN);
     db.users().insertPermissionOnGroup(group2, GlobalPermission.SCAN);
     db.users().insertPermissionOnGroup(group3, GlobalPermission.ADMINISTER);
-    db.users().insertPermissionOnAnyone(GlobalPermission.SCAN);
     db.commit();
   }
 
@@ -113,15 +112,9 @@ public class GroupsActionIT extends BasePermissionWsIT<GroupsAction> {
       "  \"paging\": {\n" +
       "    \"pageIndex\": 1,\n" +
       "    \"pageSize\": 20,\n" +
-      "    \"total\": 3\n" +
+      "    \"total\": 2\n" +
       "  },\n" +
       "  \"groups\": [\n" +
-      "    {\n" +
-      "      \"name\": \"Anyone\",\n" +
-      "      \"permissions\": [\n" +
-      "        \"scan\"\n" +
-      "      ]\n" +
-      "    },\n" +
       "    {\n" +
       "      \"name\": \"group-1-name\",\n" +
       "      \"description\": \"" + group1.getDescription() + "\",\n" +
@@ -150,7 +143,7 @@ public class GroupsActionIT extends BasePermissionWsIT<GroupsAction> {
       .execute()
       .getInput();
 
-    assertThat(result).containsSubsequence(DefaultGroups.ANYONE, "group-1", "group-2");
+    assertThat(result).containsSubsequence("group-1", "group-2");
   }
 
   @Test
@@ -159,7 +152,7 @@ public class GroupsActionIT extends BasePermissionWsIT<GroupsAction> {
     String result = newRequest()
       .setParam(PARAM_PERMISSION, GlobalPermission.SCAN.getKey())
       .setParam(PAGE_SIZE, "1")
-      .setParam(PAGE, "3")
+      .setParam(PAGE, "2")
       .execute()
       .getInput();
 
@@ -178,8 +171,7 @@ public class GroupsActionIT extends BasePermissionWsIT<GroupsAction> {
       .getInput();
 
     assertThat(result)
-      .contains("group-1", "group-2")
-      .doesNotContain(DefaultGroups.ANYONE);
+      .contains("group-1", "group-2");
   }
 
   @Test
@@ -244,22 +236,6 @@ public class GroupsActionIT extends BasePermissionWsIT<GroupsAction> {
       .getInput();
 
     assertThat(result).contains(group.getName()).doesNotContain(groupWithoutPermission.getName());
-  }
-
-  @Test
-  public void return_anyone_group_when_search_query_and_no_param_permission() {
-    ProjectDto project = db.components().insertPrivateProject().getProjectDto();
-    GroupDto group = db.users().insertGroup("group-with-permission");
-    db.users().insertEntityPermissionOnGroup(group, ISSUE_ADMIN, project);
-
-    loginAsAdmin();
-    String result = newRequest()
-      .setParam(PARAM_PROJECT_ID, project.getUuid())
-      .setParam(TEXT_QUERY, "nyo")
-      .execute()
-      .getInput();
-
-    assertThat(result).contains("Anyone");
   }
 
   @Test
@@ -357,16 +333,16 @@ public class GroupsActionIT extends BasePermissionWsIT<GroupsAction> {
 
   @Test
   public void fail_when_using_branch_uuid() {
-    ComponentDto project = db.components().insertPublicProject().getMainBranchComponent();
-    ComponentDto branch = db.components().insertProjectBranch(project);
+    ProjectDto project = db.components().insertPublicProject().getProjectDto();
+    BranchDto branch = db.components().insertProjectBranch(project);
     GroupDto group = db.users().insertGroup();
-    db.users().insertProjectPermissionOnGroup(group, ISSUE_ADMIN, project);
+    db.users().insertEntityPermissionOnGroup(group, ISSUE_ADMIN, project);
     loginAsAdmin();
 
     assertThatThrownBy(() -> {
       newRequest()
         .setParam(PARAM_PERMISSION, ISSUE_ADMIN.getKey())
-        .setParam(PARAM_PROJECT_ID, branch.uuid())
+        .setParam(PARAM_PROJECT_ID, branch.getUuid())
         .execute();
     })
       .isInstanceOf(NotFoundException.class)

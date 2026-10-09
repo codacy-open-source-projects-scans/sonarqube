@@ -42,6 +42,7 @@ import org.sonar.core.rule.RuleType;
 import org.sonar.api.utils.DateUtils;
 import org.sonar.api.utils.System2;
 import org.sonar.core.issue.FieldDiffs;
+import org.sonar.core.issue.IssueProducer;
 import org.sonar.core.util.UuidFactoryFast;
 import org.sonar.core.util.Uuids;
 import org.sonar.db.DbSession;
@@ -58,6 +59,7 @@ import static org.assertj.core.api.Assertions.tuple;
 
 class IssueMapperIT {
 
+  private static final long NOW = 1_704_067_200_000L;
   private static final long NO_FILTERING_ON_CLOSE_DATE = 1L;
 
   @RegisterExtension
@@ -257,11 +259,82 @@ class IssueMapperIT {
   }
 
   @Test
+  void scrollNonClosedByComponentUuid_returns_producer() {
+    underTest.insert(newIssue().setIssueProducer(IssueProducer.HUNTER_AGENT));
+    dbTester.getSession().commit();
+
+    RecorderResultHandler resultHandler = new RecorderResultHandler();
+    underTest.scrollNonClosedByComponentUuid(file.uuid(), resultHandler);
+
+    assertThat(resultHandler.issues).hasSize(1);
+    assertThat(resultHandler.issues.iterator().next().getIssueProducer()).isEqualTo(IssueProducer.HUNTER_AGENT);
+  }
+
+  @Test
+  void scrollClosedByComponentUuid_returns_producer() {
+    RuleType ruleType = randomSupportedRuleType();
+    ComponentDto component = randomComponent();
+    IssueDto issue = insertNewClosedIssue(component, ruleType, t -> t.setIssueProducer(IssueProducer.HUNTER_AGENT));
+    insertToClosedDiff(issue);
+
+    RecorderResultHandler resultHandler = new RecorderResultHandler();
+    underTest.scrollClosedByComponentUuid(component.uuid(), NO_FILTERING_ON_CLOSE_DATE, resultHandler);
+
+    assertThat(resultHandler.issues).hasSize(1);
+    assertThat(resultHandler.issues.iterator().next().getIssueProducer()).isEqualTo(IssueProducer.HUNTER_AGENT);
+  }
+
+  @Test
+  void scrollNonClosedScannerIssuesByComponentUuid_returns_only_scanner_issues() {
+    underTest.insert(newIssue().setKee("scanner-issue").setIssueProducer(IssueProducer.SCANNER));
+    underTest.insert(newIssue().setKee("hunter-agent-issue").setIssueProducer(IssueProducer.HUNTER_AGENT));
+    dbTester.getSession().commit();
+
+    RecorderResultHandler resultHandler = new RecorderResultHandler();
+    underTest.scrollNonClosedScannerIssuesByComponentUuid(file.uuid(), resultHandler);
+
+    assertThat(resultHandler.issues)
+      .extracting(IssueWithoutRuleInfoDto::getKey, IssueWithoutRuleInfoDto::getIssueProducer)
+      .containsExactly(tuple("scanner-issue", IssueProducer.SCANNER));
+  }
+
+  @Test
+  void scrollNonClosedHunterAgentIssuesByComponentUuid_returns_only_hunter_agent_issues() {
+    underTest.insert(newIssue().setKee("scanner-issue").setIssueProducer(IssueProducer.SCANNER));
+    underTest.insert(newIssue().setKee("hunter-agent-issue").setIssueProducer(IssueProducer.HUNTER_AGENT));
+    dbTester.getSession().commit();
+
+    RecorderResultHandler resultHandler = new RecorderResultHandler();
+    underTest.scrollNonClosedHunterAgentIssuesByComponentUuid(file.uuid(), resultHandler);
+
+    assertThat(resultHandler.issues)
+      .extracting(IssueWithoutRuleInfoDto::getKey, IssueWithoutRuleInfoDto::getIssueProducer)
+      .containsExactly(tuple("hunter-agent-issue", IssueProducer.HUNTER_AGENT));
+  }
+
+  @Test
+  void scrollClosedScannerIssuesByComponentUuid_returns_only_scanner_issues() {
+    RuleType ruleType = randomSupportedRuleType();
+    ComponentDto component = randomComponent();
+    IssueDto scannerIssue = insertNewClosedIssue(component, ruleType, t -> t.setIssueProducer(IssueProducer.SCANNER));
+    insertToClosedDiff(scannerIssue);
+    IssueDto hunterAgentIssue = insertNewClosedIssue(component, ruleType, t -> t.setIssueProducer(IssueProducer.HUNTER_AGENT));
+    insertToClosedDiff(hunterAgentIssue);
+
+    RecorderResultHandler resultHandler = new RecorderResultHandler();
+    underTest.scrollClosedScannerIssuesByComponentUuid(component.uuid(), NO_FILTERING_ON_CLOSE_DATE, resultHandler);
+
+    assertThat(resultHandler.issues)
+      .extracting(IssueWithoutRuleInfoDto::getKey, IssueWithoutRuleInfoDto::getIssueProducer)
+      .containsExactly(tuple(scannerIssue.getKey(), IssueProducer.SCANNER));
+  }
+
+  @Test
   void scrollClosedByComponentUuid_returns_empty_when_no_issue_for_component() {
     String componentUuid = secure().nextAlphabetic(10);
     RecorderResultHandler resultHandler = new RecorderResultHandler();
 
-    underTest.scrollClosedByComponentUuid(componentUuid, new Date().getTime(), resultHandler);
+    underTest.scrollClosedByComponentUuid(componentUuid, new Date(NOW).getTime(), resultHandler);
 
     assertThat(resultHandler.issues).isEmpty();
   }
@@ -406,7 +479,7 @@ class IssueMapperIT {
   void scrollClosedByComponentUuid_return_one_row_per_status_diff_to_CLOSED_sorted_by_most_recent_creation_date_first(RuleType ruleType) {
     ComponentDto component = randomComponent();
     IssueDto issue = insertNewClosedIssue(component, ruleType);
-    Date date = new Date();
+    Date date = new Date(NOW);
     IssueChangeDto[] changes = new IssueChangeDto[]{
       insertToClosedDiff(issue, DateUtils.addDays(date, -10)),
       insertToClosedDiff(issue, DateUtils.addDays(date, -60)),
@@ -429,7 +502,7 @@ class IssueMapperIT {
   void scrollClosedByComponentUuid_does_not_return_row_for_status_change_from_close(RuleType ruleType) {
     ComponentDto component = randomComponent();
     IssueDto issue = insertNewClosedIssue(component, ruleType);
-    Date date = new Date();
+    Date date = new Date(NOW);
     IssueChangeDto[] changes = new IssueChangeDto[]{
       insertToClosedDiff(issue, DateUtils.addDays(date, -10), Issue.STATUS_CLOSED, Issue.STATUS_REOPENED),
       insertToClosedDiff(issue, DateUtils.addDays(date, -60)),
@@ -449,7 +522,7 @@ class IssueMapperIT {
   }
 
   private IssueChangeDto insertToClosedDiff(IssueDto issueDto) {
-    return insertToClosedDiff(issueDto, new Date());
+    return insertToClosedDiff(issueDto, new Date(NOW));
   }
 
   private IssueChangeDto insertToClosedDiff(IssueDto issueDto, Date date) {

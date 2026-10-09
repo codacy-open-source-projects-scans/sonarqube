@@ -21,6 +21,7 @@ package org.sonar.server.user.ws;
 
 import java.time.Instant;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.Set;
 import java.util.stream.IntStream;
@@ -243,17 +244,27 @@ public class SearchActionIT {
   }
 
   @Test
-  public void return_scm_accounts() {
+  public void return_scm_accounts_only_when_system_administer_or_self() {
     UserDto user = db.users().insertUser(u -> u.setScmAccounts(asList("john1", "john2")));
 
-    userSession.logIn();
+    userSession.logIn().setSystemAdministrator();
+    assertThat(ws.newRequest()
+      .executeProtobuf(SearchWsResponse.class).getUsersList())
+        .extracting(User::getLogin, u -> u.getScmAccounts().getScmAccountsList())
+        .containsExactlyInAnyOrder(tuple(user.getLogin(), asList("john1", "john2")));
 
-    SearchWsResponse response = ws.newRequest()
-      .executeProtobuf(SearchWsResponse.class);
+    userSession.logIn(user);
+    assertThat(ws.newRequest()
+      .executeProtobuf(SearchWsResponse.class).getUsersList())
+        .extracting(User::getLogin, u -> u.getScmAccounts().getScmAccountsList())
+        .containsExactlyInAnyOrder(tuple(user.getLogin(), asList("john1", "john2")));
 
-    assertThat(response.getUsersList())
-      .extracting(User::getLogin, u -> u.getScmAccounts().getScmAccountsList())
-      .containsExactlyInAnyOrder(tuple(user.getLogin(), asList("john1", "john2")));
+    UserDto otherUser = db.users().insertUser();
+    userSession.logIn(otherUser);
+    assertThat(ws.newRequest()
+      .executeProtobuf(SearchWsResponse.class).getUsersList())
+        .extracting(User::getLogin, User::hasScmAccounts)
+        .contains(tuple(user.getLogin(), false));
   }
 
   @Test
@@ -414,7 +425,7 @@ public class SearchActionIT {
         .extracting(User::getLogin, User::getName, User::hasEmail, User::hasExternalIdentity, User::hasExternalProvider,
           User::hasScmAccounts, User::hasAvatar, User::hasGroups, User::hasTokensCount, User::hasLastConnectionDate)
         .containsExactlyInAnyOrder(
-          tuple(user.getLogin(), user.getName(), false, false, true, true, true, false, false, false));
+          tuple(user.getLogin(), user.getName(), false, false, true, false, true, false, false, false));
   }
 
   @Test
@@ -514,7 +525,7 @@ public class SearchActionIT {
   @Test
   public void search_whenFilteringConnectionDate_shouldApplyFilter() {
     userSession.logIn().setSystemAdministrator();
-    final Instant lastConnection = Instant.now();
+    final Instant lastConnection = Instant.ofEpochMilli(1_704_067_200_000L);
     UserDto user = db.users().insertUser(u -> u
       .setLogin("user-%_%-login")
       .setName("user-name")
@@ -547,7 +558,7 @@ public class SearchActionIT {
   @Test
   public void search_whenNoLastConnection_shouldReturnForBeforeOnly() {
     userSession.logIn().setSystemAdministrator();
-    final Instant lastConnection = Instant.now();
+    final Instant lastConnection = Instant.ofEpochMilli(1_704_067_200_000L);
     UserDto user = db.users().insertUser(u -> u
       .setLogin("user-%_%-login")
       .setName("user-name")
@@ -568,7 +579,7 @@ public class SearchActionIT {
 
     Stream.of(SearchAction.LAST_CONNECTION_DATE_FROM, SearchAction.LAST_CONNECTION_DATE_TO,
       SearchAction.SONAR_LINT_LAST_CONNECTION_DATE_FROM, SearchAction.SONAR_LINT_LAST_CONNECTION_DATE_TO)
-      .map(param -> ws.newRequest().setParam(param, formatDateTime(OffsetDateTime.now())))
+      .map(param -> ws.newRequest().setParam(param, formatDateTime(OffsetDateTime.of(2024, 1, 1, 0, 0, 0, 0, ZoneOffset.UTC))))
       .forEach(SearchActionIT::assertForbiddenException);
   }
 

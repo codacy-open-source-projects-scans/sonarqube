@@ -22,22 +22,27 @@ package org.sonar.server.almsettings.ws;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
+import org.sonar.alm.client.azure.AzureDevOpsValidator;
 import org.sonar.api.config.internal.Encryption;
 import org.sonar.api.server.ws.WebService;
 import org.sonar.db.DbTester;
 import org.sonar.db.alm.setting.AlmSettingDto;
 import org.sonar.db.user.UserDto;
 import org.sonar.server.almsettings.MultipleAlmFeature;
+import org.sonar.server.common.almsettings.telemetry.DevOpsConfigurationTelemetry;
 import org.sonar.server.component.ComponentFinder;
 import org.sonar.server.exceptions.BadRequestException;
 import org.sonar.server.exceptions.ForbiddenException;
 import org.sonar.server.tester.UserSessionRule;
+import org.sonar.server.ws.TestRequest;
 import org.sonar.server.ws.WsActionTester;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.groups.Tuple.tuple;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class CreateAzureActionIT {
@@ -49,10 +54,12 @@ public class CreateAzureActionIT {
 
   private final Encryption encryption = mock(Encryption.class);
   private final MultipleAlmFeature multipleAlmFeature = mock(MultipleAlmFeature.class);
+  private final DevOpsConfigurationTelemetry devOpsConfigurationTelemetry = mock(DevOpsConfigurationTelemetry.class);
+  private final AzureDevOpsValidator azureDevOpsValidator = mock(AzureDevOpsValidator.class);
 
   private WsActionTester ws = new WsActionTester(new CreateAzureAction(db.getDbClient(), userSession,
     new AlmSettingsSupport(db.getDbClient(), userSession, new ComponentFinder(db.getDbClient(), null),
-      multipleAlmFeature)));
+      multipleAlmFeature), devOpsConfigurationTelemetry, azureDevOpsValidator));
 
   @Before
   public void before() {
@@ -75,6 +82,43 @@ public class CreateAzureActionIT {
         s -> s.getDecryptedPersonalAccessToken(encryption),
         AlmSettingDto::getUrl)
       .containsOnly(tuple("Azure Server - Dev Team", "98765432100", "https://ado.sonarqube.com/"));
+    verify(devOpsConfigurationTelemetry).sendManualDevOpsConfig(org.sonar.db.alm.setting.ALM.AZURE_DEVOPS);
+  }
+
+  @Test
+  public void fail_when_pat_is_global() {
+    UserDto user = db.users().insertUser();
+    userSession.logIn(user).setSystemAdministrator();
+    doThrow(new IllegalArgumentException(AzureDevOpsValidator.GLOBAL_PAT_ERROR_MESSAGE))
+      .when(azureDevOpsValidator).checkPatIsNotGlobal("https://dev.azure.com/myorg", "98765432100");
+
+    TestRequest request = ws.newRequest()
+      .setParam("key", "Azure Cloud - Dev Team")
+      .setParam("personalAccessToken", "98765432100")
+      .setParam("url", "https://dev.azure.com/myorg");
+
+    assertThatThrownBy(request::execute)
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage(AzureDevOpsValidator.GLOBAL_PAT_ERROR_MESSAGE);
+
+    assertThat(db.getDbClient().almSettingDao().selectAll(db.getSession())).isEmpty();
+  }
+
+  @Test
+  public void fail_when_url_is_invalid() {
+    UserDto user = db.users().insertUser();
+    userSession.logIn(user).setSystemAdministrator();
+
+    TestRequest request = ws.newRequest()
+      .setParam("key", "Azure Server - Dev Team")
+      .setParam("personalAccessToken", "98765432100")
+      .setParam("url", "not a url");
+
+    assertThatThrownBy(request::execute)
+      .isInstanceOf(BadRequestException.class)
+      .hasMessage("Invalid URL: 'not a url'.");
+
+    assertThat(db.getDbClient().almSettingDao().selectAll(db.getSession())).isEmpty();
   }
 
   @Test

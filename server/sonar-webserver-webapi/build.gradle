@@ -1,3 +1,5 @@
+import org.sonar.build.DbAwareTest
+
 sonar {
   properties {
     property 'sonar.projectName', "${projectTitle} :: WebServer :: WebAPI"
@@ -13,6 +15,13 @@ dependencies {
   api 'io.prometheus:simpleclient_servlet'
   implementation "org.sonarsource.compliancereports:compliance-reports:${complianceReportsVersion}"
   implementation 'org.apache.commons:commons-text'
+  implementation 'org.sonarsource.sonarqube:sonar-events-server'
+  implementation 'org.sonarsource.sonarqube:issue-workflow-events'
+  implementation "org.sonarsource.sonarqube:history-api"
+  implementation "org.sonarsource.sonarqube:history-core"
+  implementation "org.sonarsource.sonarqube:history-server-app"
+  implementation "org.sonarsource.sonarqube:dop-translation-api"
+  implementation "org.sonarsource.sonarqube:organizations-server-app"
 
   api project(':server:sonar-ce-common')
   api project(':server:sonar-ce-task')
@@ -27,7 +36,7 @@ dependencies {
   api (project(':server:sonar-auth-saml')) {
     exclude group:'org.apache.santuario'
   }
-  api 'com.sonarsource.scanner.engine:scanner-engine-protocol-server'
+  api 'org.sonarsource.scanner.engine:scanner-engine-protocol-server'
 
   compileOnlyApi 'com.github.spotbugs:spotbugs-annotations'
   compileOnlyApi 'jakarta.servlet:jakarta.servlet-api'
@@ -64,4 +73,6 @@ dependencies {
 test {
   // Enabling the JUnit Platform (see https://github.com/junit-team/junit5-samples/tree/master/junit5-migration-gradle)
   useJUnitPlatform()
+  // Only the project dump status runs its own JDBC statement; the rest goes through sonar-db-dao
+  DbAwareTest.configure(it, ['org.sonar.server.projectdump.ws.StatusActionIT'])
 }

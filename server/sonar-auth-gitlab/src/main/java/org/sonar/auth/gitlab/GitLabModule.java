@@ -31,6 +31,7 @@ public class GitLabModule extends Module {
   protected void configureModule() {
     add(
       GitLabIdentityProvider.class,
+      GitLabGraphQlClient.class,
       GitLabRestClient.class,
       GitLabSettings.class,
       ScribeGitLabOauth2Api.class);

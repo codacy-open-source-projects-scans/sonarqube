@@ -21,6 +21,7 @@ package org.sonar.server.almsettings.ws;
 
 import org.junit.Rule;
 import org.junit.Test;
+import org.sonar.alm.client.azure.AzureDevOpsValidator;
 import org.sonar.api.config.internal.Encryption;
 import org.sonar.api.server.ws.WebService;
 import org.sonar.db.DbTester;
@@ -28,6 +29,7 @@ import org.sonar.db.alm.setting.AlmSettingDto;
 import org.sonar.db.user.UserDto;
 import org.sonar.server.almsettings.MultipleAlmFeature;
 import org.sonar.server.component.ComponentFinder;
+import org.sonar.server.exceptions.BadRequestException;
 import org.sonar.server.exceptions.ForbiddenException;
 import org.sonar.server.exceptions.NotFoundException;
 import org.sonar.server.tester.UserSessionRule;
@@ -38,6 +40,7 @@ import static java.lang.String.format;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.groups.Tuple.tuple;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 
 public class UpdateAzureActionIT {
@@ -50,10 +53,11 @@ public class UpdateAzureActionIT {
   private static String AZURE_URL = "https://ado.sonarqube.com/";
 
   private final Encryption encryption = mock(Encryption.class);
+  private final AzureDevOpsValidator azureDevOpsValidator = mock(AzureDevOpsValidator.class);
 
   private WsActionTester ws = new WsActionTester(new UpdateAzureAction(db.getDbClient(), userSession,
     new AlmSettingsSupport(db.getDbClient(), userSession, new ComponentFinder(db.getDbClient(), null),
-      mock(MultipleAlmFeature.class))));
+      mock(MultipleAlmFeature.class)), azureDevOpsValidator));
 
   @Test
   public void update() {
@@ -106,6 +110,70 @@ public class UpdateAzureActionIT {
     assertThat(db.getDbClient().almSettingDao().selectAll(db.getSession()))
       .extracting(AlmSettingDto::getKey, AlmSettingDto::getUrl, s -> s.getDecryptedPersonalAccessToken(encryption))
       .containsOnly(tuple(almSettingDto.getKey(), AZURE_URL, "0123456789"));
+  }
+
+  @Test
+  public void fail_when_pat_is_global() {
+    UserDto user = db.users().insertUser();
+    userSession.logIn(user).setSystemAdministrator();
+
+    AlmSettingDto almSettingDto = db.almSettings().insertAzureAlmSetting();
+    String url = "https://dev.azure.com/myorg";
+    doThrow(new IllegalArgumentException(AzureDevOpsValidator.GLOBAL_PAT_ERROR_MESSAGE))
+      .when(azureDevOpsValidator).checkPatIsNotGlobal(url, "98765432100");
+
+    TestRequest request = ws.newRequest()
+      .setParam("key", almSettingDto.getKey())
+      .setParam("personalAccessToken", "98765432100")
+      .setParam("url", url);
+
+    assertThatThrownBy(request::execute)
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage(AzureDevOpsValidator.GLOBAL_PAT_ERROR_MESSAGE);
+
+    assertThat(db.getDbClient().almSettingDao().selectAll(db.getSession()))
+      .extracting(AlmSettingDto::getKey, AlmSettingDto::getUrl, s -> s.getDecryptedPersonalAccessToken(encryption))
+      .containsOnly(tuple(almSettingDto.getKey(), almSettingDto.getUrl(), almSettingDto.getDecryptedPersonalAccessToken(encryption)));
+  }
+
+  @Test
+  public void fail_when_url_is_invalid() {
+    UserDto user = db.users().insertUser();
+    userSession.logIn(user).setSystemAdministrator();
+
+    AlmSettingDto almSettingDto = db.almSettings().insertAzureAlmSetting();
+
+    TestRequest request = ws.newRequest()
+      .setParam("key", almSettingDto.getKey())
+      .setParam("personalAccessToken", "10987654321")
+      .setParam("url", "not a url");
+
+    assertThatThrownBy(request::execute)
+      .isInstanceOf(BadRequestException.class)
+      .hasMessage("Invalid URL: 'not a url'.");
+
+    assertThat(db.getDbClient().almSettingDao().selectAll(db.getSession()))
+      .extracting(AlmSettingDto::getKey, AlmSettingDto::getUrl, s -> s.getDecryptedPersonalAccessToken(encryption))
+      .containsOnly(tuple(almSettingDto.getKey(), almSettingDto.getUrl(), almSettingDto.getDecryptedPersonalAccessToken(encryption)));
+  }
+
+  @Test
+  public void allow_pat_rotation_when_existing_url_is_invalid() {
+    UserDto user = db.users().insertUser();
+    userSession.logIn(user).setSystemAdministrator();
+
+    String preExistingBadUrl = "not a url";
+    AlmSettingDto almSettingDto = db.almSettings().insertAzureAlmSetting(s -> s.setUrl(preExistingBadUrl));
+
+    ws.newRequest()
+      .setParam("key", almSettingDto.getKey())
+      .setParam("personalAccessToken", "rotated_pat")
+      .setParam("url", preExistingBadUrl)
+      .execute();
+
+    assertThat(db.getDbClient().almSettingDao().selectAll(db.getSession()))
+      .extracting(AlmSettingDto::getKey, AlmSettingDto::getUrl, s -> s.getDecryptedPersonalAccessToken(encryption))
+      .containsOnly(tuple(almSettingDto.getKey(), preExistingBadUrl, "rotated_pat"));
   }
 
   @Test

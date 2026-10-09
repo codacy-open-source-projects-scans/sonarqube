@@ -19,8 +19,6 @@
  */
 package org.sonar.server.authentication;
 
-import java.time.LocalDateTime;
-import java.time.ZoneOffset;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -77,11 +75,17 @@ public class UserSessionInitializerIT {
   }
 
   @Test
-  public void check_urls() {
+  public void urls_requiring_authentication_are_not_ignored() {
     assertPathIsNotIgnored("/");
     assertPathIsNotIgnored("/foo");
     assertPathIsNotIgnored("/api/server_id/show");
 
+    assertPathIsNotIgnored("/api/v2/integrations/user-bindings");
+    assertPathIsNotIgnored("/api/v2/integrations/integration-configurations");
+  }
+
+  @Test
+  public void authentication_and_system_urls_are_ignored() {
     assertPathIsIgnored("/api/authentication/login");
     assertPathIsIgnored("/api/authentication/logout");
     assertPathIsIgnored("/api/authentication/validate");
@@ -100,22 +104,37 @@ public class UserSessionInitializerIT {
     assertPathIsIgnored("/api/server/version");
     assertPathIsIgnored("/api/users/identity_providers");
     assertPathIsIgnored("/api/l10n/index");
+  }
 
+  @Test
+  public void project_badge_and_slack_urls_are_ignored() {
     // exclude project_badge url, as they can be auth. by a token as queryparam
     assertPathIsIgnored("/api/project_badges/measure");
     assertPathIsIgnored("/api/project_badges/quality_gate");
     assertPathIsIgnored("/api/project_badges/ai_code_assurance");
 
-    // exlude passcode urls
+    // Slack endpoints authenticate via Slack's HMAC signature, not a SonarQube session.
+    assertPathIsIgnored("/api/v2/integrations/slack/events");
+    assertPathIsIgnored("/api/v2/integrations/slack/slash-commands");
+  }
+
+  @Test
+  public void passcode_urls_are_ignored_with_anonymous_access() {
     assertPathIsIgnoredWithAnonymousAccess("/api/ce/info");
-    assertPathIsIgnoredWithAnonymousAccess("/api/ce/pause");
-    assertPathIsIgnoredWithAnonymousAccess("/api/ce/resume");
     assertPathIsIgnoredWithAnonymousAccess("/api/system/health");
     assertPathIsIgnoredWithAnonymousAccess("/api/system/liveness");
     assertPathIsIgnoredWithAnonymousAccess("/api/system/logs");
     assertPathIsIgnoredWithAnonymousAccess("/api/monitoring/metrics");
+  }
 
-    // exclude static resources
+  @Test
+  public void ce_pause_and_resume_urls_do_not_allow_anonymous_access() {
+    assertAnonymousAccessIsRejected("/api/ce/pause");
+    assertAnonymousAccessIsRejected("/api/ce/resume");
+  }
+
+  @Test
+  public void static_resource_urls_are_ignored() {
     assertPathIsIgnored("/css/style.css");
     assertPathIsIgnored("/images/logo.png");
     assertPathIsIgnored("/js/jquery.js");
@@ -206,7 +225,7 @@ public class UserSessionInitializerIT {
 
   @Test
   public void expiration_header_added_when_authenticating_with_an_expiring_token() {
-    long expirationTimestamp = LocalDateTime.now().toInstant(ZoneOffset.UTC).toEpochMilli();
+    long expirationTimestamp = 1_704_067_200_000L;
     UserDto userDto = new UserDto();
     UserTokenDto userTokenDto = new UserTokenDto().setExpirationDate(expirationTimestamp);
     UserSession session = new TokenUserSession(DbTester.create().getDbClient(), userDto, userTokenDto);
@@ -267,6 +286,17 @@ public class UserSessionInitializerIT {
 
     verify(threadLocalSession).set(session);
     reset(threadLocalSession, authenticator);
+  }
+
+  private void assertAnonymousAccessIsRejected(String path) {
+    when(request.getRequestURI()).thenReturn(path);
+    when(authenticator.authenticate(request, response)).thenReturn(new AnonymousMockUserSession());
+
+    assertThat(underTest.initUserSession(request, response)).isFalse();
+
+    verify(response).setStatus(401);
+    verifyNoMoreInteractions(threadLocalSession);
+    reset(threadLocalSession, authenticator, response);
   }
 
   private void assertPathIsNotIgnored(String path) {

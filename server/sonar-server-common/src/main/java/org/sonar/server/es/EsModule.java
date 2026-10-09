@@ -24,6 +24,7 @@ import org.sonar.core.platform.Module;
 public class EsModule extends Module {
   @Override
   protected void configureModule() {
-    add(new EsClientProvider());
+    add(new EsClientProvider(),
+      EsClusterOperationalChecker.class);
   }
 }

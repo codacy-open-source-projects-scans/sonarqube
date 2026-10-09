@@ -45,7 +45,6 @@ import org.sonar.ce.task.projectanalysis.duplication.DuplicationMeasures;
 import org.sonar.ce.task.projectanalysis.duplication.DuplicationRepositoryImpl;
 import org.sonar.ce.task.projectanalysis.duplication.IntegrateCrossProjectDuplications;
 import org.sonar.ce.task.projectanalysis.event.EventRepositoryImpl;
-import org.sonar.ce.task.projectanalysis.filemove.AddedFileRepositoryImpl;
 import org.sonar.ce.task.projectanalysis.filemove.FileSimilarityImpl;
 import org.sonar.ce.task.projectanalysis.filemove.HeapSizeCheckerImpl;
 import org.sonar.ce.task.projectanalysis.filemove.MutableMovedFilesRepositoryImpl;
@@ -61,21 +60,24 @@ import org.sonar.ce.task.projectanalysis.issue.ClosedIssuesInputFactory;
 import org.sonar.ce.task.projectanalysis.issue.ComponentIssuesLoader;
 import org.sonar.ce.task.projectanalysis.issue.ComponentIssuesRepositoryImpl;
 import org.sonar.ce.task.projectanalysis.issue.ComponentsWithUnprocessedIssues;
-import org.sonar.ce.task.projectanalysis.issue.LocationHashesService;
 import org.sonar.ce.task.projectanalysis.issue.DebtCalculator;
 import org.sonar.ce.task.projectanalysis.issue.DefaultAssignee;
 import org.sonar.ce.task.projectanalysis.issue.EffortAggregator;
 import org.sonar.ce.task.projectanalysis.issue.IntegrateIssuesVisitor;
 import org.sonar.ce.task.projectanalysis.issue.IssueAssigner;
 import org.sonar.ce.task.projectanalysis.issue.IssueChangesToDeleteRepository;
+import org.sonar.ce.task.projectanalysis.issue.IssueCountByRuleVisitor;
 import org.sonar.ce.task.projectanalysis.issue.IssueCounter;
+import org.sonar.ce.task.projectanalysis.issue.IssueCountsByRuleHolderImpl;
 import org.sonar.ce.task.projectanalysis.issue.IssueCreationDateCalculator;
 import org.sonar.ce.task.projectanalysis.issue.IssueLifecycle;
 import org.sonar.ce.task.projectanalysis.issue.IssueOnReferenceBranchVisitor;
+import org.sonar.ce.task.projectanalysis.issue.IssueResolutionVisitor;
 import org.sonar.ce.task.projectanalysis.issue.IssueTrackingDelegator;
 import org.sonar.ce.task.projectanalysis.issue.IssueVisitors;
 import org.sonar.ce.task.projectanalysis.issue.IssuesRepositoryVisitor;
 import org.sonar.ce.task.projectanalysis.issue.LoadComponentUuidsHavingOpenIssuesVisitor;
+import org.sonar.ce.task.projectanalysis.issue.LocationHashesService;
 import org.sonar.ce.task.projectanalysis.issue.MovedIssueVisitor;
 import org.sonar.ce.task.projectanalysis.issue.NewEffortAggregator;
 import org.sonar.ce.task.projectanalysis.issue.NewIssueClassifier;
@@ -99,7 +101,6 @@ import org.sonar.ce.task.projectanalysis.issue.TrackerReferenceBranchInputFactor
 import org.sonar.ce.task.projectanalysis.issue.TrackerSourceBranchInputFactory;
 import org.sonar.ce.task.projectanalysis.issue.TrackerTargetBranchInputFactory;
 import org.sonar.ce.task.projectanalysis.issue.TransitionIssuesToAnticipatedStatesVisitor;
-import org.sonar.ce.task.projectanalysis.issue.IssueResolutionVisitor;
 import org.sonar.ce.task.projectanalysis.issue.UpdateConflictResolver;
 import org.sonar.ce.task.projectanalysis.issue.filter.IssueFilter;
 import org.sonar.ce.task.projectanalysis.issue.fixedissues.PullRequestFixedIssueRepositoryImpl;
@@ -294,6 +295,8 @@ public final class ProjectAnalysisTaskContainerPopulator implements ContainerPop
       NewEffortAggregator.class,
       IssueAssigner.class,
       IssueCounter.class,
+      IssueCountsByRuleHolderImpl.class,
+      IssueCountByRuleVisitor.class,
       MovedIssueVisitor.class,
       IssuesRepositoryVisitor.class,
       RemoveProcessedComponentsVisitor.class,
@@ -342,7 +345,6 @@ public final class ProjectAnalysisTaskContainerPopulator implements ContainerPop
       SourceSimilarityImpl.class,
       FileSimilarityImpl.class,
       MutableMovedFilesRepositoryImpl.class,
-      AddedFileRepositoryImpl.class,
       HeapSizeCheckerImpl.class,
 
       // duplication

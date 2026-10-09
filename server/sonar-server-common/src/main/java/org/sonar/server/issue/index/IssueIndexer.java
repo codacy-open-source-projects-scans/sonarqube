@@ -25,11 +25,15 @@ import com.google.common.collect.ListMultimap;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
-import org.elasticsearch.action.index.IndexRequest;
-import org.elasticsearch.action.search.SearchRequest;
-import org.elasticsearch.search.builder.SearchSourceBuilder;
+import java.util.stream.Collectors;
+import javax.annotation.CheckForNull;
+import co.elastic.clients.elasticsearch._types.query_dsl.Query;
+import co.elastic.clients.elasticsearch.core.SearchRequest;
+import co.elastic.clients.elasticsearch.core.bulk.BulkOperation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.sonar.db.component.ComponentQualifiers;
@@ -54,8 +58,6 @@ import org.sonar.server.permission.index.AuthorizationScope;
 import org.sonar.server.permission.index.NeedAuthorizationIndexer;
 
 import static java.util.Collections.emptyList;
-import static org.elasticsearch.index.query.QueryBuilders.boolQuery;
-import static org.elasticsearch.index.query.QueryBuilders.termQuery;
 import static org.sonar.server.issue.index.IssueIndexDefinition.FIELD_ISSUE_BRANCH_UUID;
 import static org.sonar.server.issue.index.IssueIndexDefinition.FIELD_ISSUE_PROJECT_UUID;
 import static org.sonar.server.issue.index.IssueIndexDefinition.TYPE_ISSUE;
@@ -198,16 +200,52 @@ public class IssueIndexer implements EventIndexer, AnalysisIndexer, NeedAuthoriz
    */
   public void commitAndIndexIssues(DbSession dbSession, Collection<IssueDto> issues) {
     ListMultimap<String, EsQueueDto> itemsByIssueKey = ArrayListMultimap.create();
-    issues.stream()
-      .map(issue -> createQueueDto(issue.getKey(), ID_TYPE_ISSUE_KEY, issue.getProjectUuid()))
-      // a mutable ListMultimap is needed for doIndexIssueItems, so MoreCollectors.index() is
-      // not used
-      .forEach(i -> itemsByIssueKey.put(i.getDocId(), i));
+    createIssueRecoveryItems(dbSession, issues).forEach(i -> itemsByIssueKey.put(i.getDocId(), i));
     dbClient.esQueueDao().insert(dbSession, itemsByIssueKey.values());
 
     dbSession.commit();
 
     doIndexIssueItems(dbSession, itemsByIssueKey);
+  }
+
+  /**
+   * Inserts the es_queue index requests for the given issues WITHOUT committing, and returns them. Lets a caller
+   * commit the index requests atomically together with its own DB changes in a single transaction, then pass the
+   * returned items to {@link #index(DbSession, Collection)} to perform the (post-commit) ES write. If the ES write
+   * never happens (crash), the committed es_queue rows are replayed by the recovery indexer.
+   */
+  public Collection<EsQueueDto> enqueueForIndexing(DbSession dbSession, Collection<IssueDto> issues) {
+    List<EsQueueDto> items = createIssueRecoveryItems(dbSession, issues);
+    dbClient.esQueueDao().insert(dbSession, items);
+    return items;
+  }
+
+  /**
+   * Issue documents are routed on the uuid of the project <em>entity</em> ({@code projects.uuid}), whereas
+   * {@link IssueDto#getProjectUuid()} holds the uuid of the branch the issue belongs to. Each branch is therefore
+   * resolved to its project, so that the routing stored in {@code es_queue} targets the shard that holds the
+   * document. A branch that no longer exists cannot be resolved to a project, so there is no valid routing to
+   * target and the issue is skipped. Its document, if any, is only removed when the project is deleted.
+   */
+  private List<EsQueueDto> createIssueRecoveryItems(DbSession dbSession, Collection<IssueDto> issues) {
+    Set<String> branchUuids = issues.stream().map(IssueDto::getProjectUuid).collect(Collectors.toSet());
+    Map<String, String> projectUuidByBranchUuid = dbClient.branchDao().selectByUuids(dbSession, branchUuids).stream()
+      .collect(Collectors.toMap(BranchDto::getUuid, BranchDto::getProjectUuid));
+    return issues.stream()
+      .map(issue -> toIssueRecoveryItem(issue, projectUuidByBranchUuid))
+      .filter(Objects::nonNull)
+      .toList();
+  }
+
+  @CheckForNull
+  private static EsQueueDto toIssueRecoveryItem(IssueDto issue, Map<String, String> projectUuidByBranchUuid) {
+    String branchUuid = issue.getProjectUuid();
+    String projectUuid = projectUuidByBranchUuid.get(branchUuid);
+    if (projectUuid == null) {
+      LOGGER.warn("Branch {} of issue {} does not exist, the issue is not indexed", branchUuid, issue.getKey());
+      return null;
+    }
+    return createQueueDto(issue.getKey(), ID_TYPE_ISSUE_KEY, projectUuid);
   }
 
   @Override
@@ -246,7 +284,7 @@ public class IssueIndexer implements EventIndexer, AnalysisIndexer, NeedAuthoriz
     try (IssueIterator issues = issueIteratorFactory.createForIssueKeys(itemsByIssueKey.keySet())) {
       while (issues.hasNext()) {
         IssueDoc issue = issues.next();
-        bulkIndexer.add(newIndexRequest(issue));
+        bulkIndexer.add(newBulkOperation(issue));
         itemsByIssueKey.removeAll(issue.getId());
       }
     }
@@ -284,7 +322,7 @@ public class IssueIndexer implements EventIndexer, AnalysisIndexer, NeedAuthoriz
         if (issues.hasNext()) {
           do {
             IssueDoc doc = issues.next();
-            bulkIndexer.add(newIndexRequest(doc));
+            bulkIndexer.add(newBulkOperation(doc));
           } while (issues.hasNext());
         } else {
           // branch does not exist or has no issues. In both cases,
@@ -320,33 +358,41 @@ public class IssueIndexer implements EventIndexer, AnalysisIndexer, NeedAuthoriz
     bulk.start();
     while (issues.hasNext()) {
       IssueDoc issue = issues.next();
-      bulk.add(newIndexRequest(issue));
+      bulk.add(newBulkOperation(issue));
     }
     bulk.stop();
   }
 
-  private static IndexRequest newIndexRequest(IssueDoc issue) {
-    return new IndexRequest(TYPE_ISSUE.getMainType().getIndex().getName())
+  private static BulkOperation newBulkOperation(IssueDoc issue) {
+    String routing = issue.getRouting().orElseThrow(() -> new IllegalStateException("IssueDoc should define a routing"));
+    return BulkOperation.of(b -> b.index(i -> i
+      .index(TYPE_ISSUE.getMainType().getIndex().getName())
       .id(issue.getId())
-      .routing(issue.getRouting().orElseThrow(() -> new IllegalStateException("IssueDoc should define a routing")))
-      .source(issue.getFields());
+      .routing(routing)
+      .document(issue.getFields())));
   }
 
   private static void addProjectDeletionToBulkIndexer(BulkIndexer bulkIndexer, String projectUuid) {
-    SearchRequest search = EsClient.prepareSearch(TYPE_ISSUE.getMainType())
+    SearchRequest search = SearchRequest.of(s -> s
+      .index(TYPE_ISSUE.getMainType().getIndex().getName())
       .routing(AuthorizationDoc.idOf(projectUuid))
-      .source(new SearchSourceBuilder().query(boolQuery().must(termQuery(FIELD_ISSUE_PROJECT_UUID, projectUuid))));
+      .query(Query.of(q -> q.bool(bq -> bq.must(m -> m.term(t -> t.field(FIELD_ISSUE_PROJECT_UUID).value(projectUuid))))))
+      .sort(so -> so.field(f -> f.field("_doc")))
+      .size(100));
 
     bulkIndexer.addDeletion(search);
   }
 
   private static void addBranchDeletionToBulkIndexer(BulkIndexer bulkIndexer, String projectUUid, String branchUuid) {
-    SearchRequest search = EsClient.prepareSearch(TYPE_ISSUE.getMainType())
+    SearchRequest search = SearchRequest.of(s -> s
+      .index(TYPE_ISSUE.getMainType().getIndex().getName())
       // routing is based on the parent (See BaseDoc#getRouting).
       // The parent is set to the projectUUid when an issue is indexed (See IssueDoc#setProjectUuid). We need to set it here
       // so that the search finds the indexed docs to be deleted.
       .routing(AuthorizationDoc.idOf(projectUUid))
-      .source(new SearchSourceBuilder().query(boolQuery().must(termQuery(FIELD_ISSUE_BRANCH_UUID, branchUuid))));
+      .query(Query.of(q -> q.bool(bq -> bq.must(m -> m.term(t -> t.field(FIELD_ISSUE_BRANCH_UUID).value(branchUuid))))))
+      .sort(so -> so.field(f -> f.field("_doc")))
+      .size(100));
 
     bulkIndexer.addDeletion(search);
   }

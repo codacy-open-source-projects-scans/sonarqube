@@ -18,11 +18,12 @@ processResources {
 dependencies {
   // please keep the list grouped by configuration and ordered by name
 
-  api 'ch.qos.logback.access:common'
+  api 'ch.qos.logback.access:logback-access-common'
   api 'ch.qos.logback:logback-classic'
   api 'ch.qos.logback:logback-core'
   api 'com.google.code.gson:gson'
   api 'com.google.protobuf:protobuf-java'
+  api 'com.google.protobuf:protobuf-java-util'
   api 'io.jsonwebtoken:jjwt-api'
   api 'io.jsonwebtoken:jjwt-impl'
   api 'org.apache.logging.log4j:log4j-api'
@@ -40,14 +41,17 @@ dependencies {
   api project(':server:sonar-process')
   api project(':server:sonar-server-common')
   api project(':server:sonar-webserver-api')
+  api project(':server:sonar-webserver-monitoring')
   api project(':server:sonar-webserver-pushapi')
   api project(':server:sonar-webserver-es')
   api project(':sonar-core')
   api project(':sonar-duplications')
-  api 'com.sonarsource.scanner.engine:scanner-engine-protocol-server'
+  api 'org.sonarsource.scanner.engine:scanner-engine-protocol-server'
   api project(':sonar-markdown')
   api project(':sonar-plugin-api-impl')
   api project(':sonar-ws')
+  implementation 'org.sonarsource.sonarqube:history-core'
+  implementation 'org.sonarsource.sonarqube:history-server-app'
   implementation project(path: ':server:sonar-webserver-webapi')
 
   compileOnlyApi 'com.github.spotbugs:spotbugs-annotations'

@@ -46,7 +46,10 @@ import static org.sonar.db.component.ComponentTesting.newPrivateProjectDto;
 import static org.sonar.server.measure.index.ProjectMeasuresIndexDefinition.TYPE_PROJECT_MEASURES;
 import static org.sonar.server.measure.index.ProjectMeasuresQuery.Operator.GT;
 import static org.sonar.server.measure.index.ProjectMeasuresQuery.Operator.LT;
+import org.junit.experimental.categories.Category;
+import org.sonar.test.tags.ElasticsearchTest;
 
+@Category(ElasticsearchTest.class)
 public class ProjectMeasuresIndexTextSearchTest {
 
   private static final String NCLOC = "ncloc";
@@ -305,7 +308,7 @@ public class ProjectMeasuresIndexTextSearchTest {
   }
 
   private void assertResults(ProjectMeasuresQuery query, String... expectedProjectUuids) {
-    List<String> result = underTest.search(query, new SearchOptions()).getUuids();
+    List<String> result = underTest.searchV2(query, new SearchOptions()).getUuids();
     assertThat(result).containsExactly(expectedProjectUuids);
   }
 
@@ -319,7 +322,7 @@ public class ProjectMeasuresIndexTextSearchTest {
 
   private void assertNclocFacet(ProjectMeasuresQuery query, Long... facetExpectedValues) {
     checkArgument(facetExpectedValues.length == 5, "5 facet values is required");
-    Facets facets = underTest.search(query, new SearchOptions().addFacets(NCLOC)).getFacets();
+    Facets facets = underTest.searchV2(query, new SearchOptions().addFacets(NCLOC)).getFacets();
     assertThat(facets.get(NCLOC)).containsExactly(
       entry("*-1000.0", facetExpectedValues[0]),
       entry("1000.0-10000.0", facetExpectedValues[1]),

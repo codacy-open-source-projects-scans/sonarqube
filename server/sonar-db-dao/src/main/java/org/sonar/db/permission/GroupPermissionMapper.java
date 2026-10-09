@@ -37,17 +37,13 @@ public interface GroupPermissionMapper {
 
   void groupsCountByEntityUuidAndPermission(Map<String, Object> parameters, ResultHandler<CountPerEntityPermission> resultHandler);
 
-  List<String> selectProjectKeysWithAnyonePermissions(int max);
-
-  int countEntitiesWithAnyonePermissions();
-
   void insert(GroupPermissionDto dto);
 
-  int delete(@Param("permission") String permission, @Nullable @Param("groupUuid") String groupUuid, @Nullable @Param("entityUuid") String entityUuid);
+  int delete(@Param("permission") String permission, @Param("groupUuid") String groupUuid, @Nullable @Param("entityUuid") String entityUuid);
 
-  List<String> selectGlobalPermissionsOfGroup(@Nullable @Param("groupUuid") String groupUuid);
+  List<String> selectGlobalPermissionsOfGroup(@Param("groupUuid") String groupUuid);
 
-  List<String> selectEntityPermissionsOfGroup(@Nullable @Param("groupUuid") String groupUuid, @Param("entityUuid") String entityUuid);
+  List<String> selectEntityPermissionsOfGroup(@Param("groupUuid") String groupUuid, @Param("entityUuid") String entityUuid);
 
   /**
    * Lists uuid of groups with at least one permission on the specified entity but which do not have the specified
@@ -62,7 +58,7 @@ public interface GroupPermissionMapper {
 
   int deleteByEntityUuid(@Param("entityUuid") String entityUuid);
 
-  int deleteByEntityUuidAndGroupUuid(@Param("entityUuid") String entityUuid, @Nullable @Param("groupUuid") String groupUuid);
+  int deleteByEntityUuidAndGroupUuid(@Param("entityUuid") String entityUuid, @Param("groupUuid") String groupUuid);
 
   int deleteByEntityUuidAndPermission(@Param("entityUuid") String entityUuid, @Param("permission") String permission);
 }

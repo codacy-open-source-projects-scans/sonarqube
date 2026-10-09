@@ -37,6 +37,11 @@ import org.sonar.core.util.UuidFactoryImpl;
 import org.sonar.db.DBSessionsImpl;
 import org.sonar.db.DaoModule;
 import org.sonar.db.DbClient;
+import org.sonarsource.history.server.db.mapper.IssueTtrHistoryMapperFragments;
+import org.sonarsource.measures.server.MeasuresServerPlatformLevel1Module;
+import org.sonarsource.metrics.server.bean.MetricsServerPlatformLevel1Module;
+import org.sonarsource.history.server.bean.HistoryServerPlatformLevel1Module;
+import org.sonarsource.projects.server.bean.ProjectsServerPlatformLevel1Module;
 import org.sonarsource.users.server.bean.UsersServerPlatformLevel1Module;
 import org.sonar.db.DefaultDatabase;
 import org.sonar.db.DefaultMyBatis;
@@ -62,6 +67,7 @@ import org.sonar.server.platform.TempFolderProvider;
 import org.sonar.server.platform.UrlSettings;
 import org.sonar.server.platform.WebCoreExtensionsInstaller;
 import org.sonar.server.platform.db.EmbeddedDatabaseFactory;
+import org.sonar.server.platform.web.ApiV2LocalRequestDispatcher;
 import org.sonar.server.rule.index.RuleIndex;
 import org.sonar.server.setting.ThreadLocalSettings;
 import org.sonar.server.user.SystemPasscodeImpl;
@@ -70,6 +76,7 @@ import org.sonar.server.util.GlobalLockManagerImpl;
 import org.sonar.server.util.OkHttpClientProvider;
 import org.sonar.server.util.Paths2Impl;
 import org.sonar.server.util.TempFolderCleaner;
+import org.sonarsource.onboarding.server.config.OnboardingServerComponents;
 
 import static org.sonar.core.extension.CoreExtensionsInstaller.noAdditionalSideFilter;
 import static org.sonar.core.extension.PlatformLevelPredicates.hasPlatformLevel;
@@ -95,6 +102,7 @@ public class PlatformLevel1 extends PlatformLevel {
     SonarEdition edition = MetadataLoader.loadEdition(System2.INSTANCE);
     SonarRuntime sonarRuntime = SonarRuntimeImpl.forSonarQube(apiVersion, SonarQubeSide.SERVER, edition);
 
+    addAll(HistoryServerPlatformLevel1Module.components(IssueTtrHistoryMapperFragments.class));
 
     add(
       new SonarQubeVersion(sqVersion),
@@ -125,6 +133,7 @@ public class PlatformLevel1 extends PlatformLevel {
       // user session
       ThreadLocalUserSession.class,
       SystemPasscodeImpl.class,
+      ApiV2LocalRequestDispatcher.class,
 
       // DB
       DBSessionsImpl.class,
@@ -153,6 +162,14 @@ public class PlatformLevel1 extends PlatformLevel {
     addAll(CorePropertyDefinitions.all());
     // users
     addAll(UsersServerPlatformLevel1Module.components());
+    // metrics
+    addAll(MetricsServerPlatformLevel1Module.components());
+    // measures
+    addAll(MeasuresServerPlatformLevel1Module.components());
+    // projects
+    addAll(ProjectsServerPlatformLevel1Module.components());
+    // onboarding dashboard (unification capability)
+    addAll(OnboardingServerComponents.components());
 
     // cluster
     add(DefaultNodeInformation.class);

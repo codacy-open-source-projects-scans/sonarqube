@@ -115,7 +115,7 @@ class ListActionIT {
     when(dispatchers.getGlobalDispatchers()).thenReturn(singletonList(NOTIF_MY_NEW_ISSUES));
     when(dispatchers.getProjectDispatchers()).thenReturn(singletonList(NOTIF_MY_NEW_ISSUES));
     ProjectData project = db.components().insertPrivateProject();
-    db.users().insertProjectPermissionOnUser(user, USER, project.getMainBranchComponent());
+    db.users().insertProjectPermissionOnUser(user, USER, project.getProjectDto());
     ProjectDto anotherProject = db.components().insertPrivateProject().getProjectDto();
     notificationUpdater.add(dbSession, emailChannel.getKey(), NOTIF_MY_NEW_ISSUES, user, project.getProjectDto());
     notificationUpdater.add(dbSession, emailChannel.getKey(), NOTIF_MY_NEW_ISSUES, user, anotherProject);
@@ -255,7 +255,7 @@ class ListActionIT {
     userSession.logIn(user);
     when(dispatchers.getProjectDispatchers()).thenReturn(singletonList(NOTIF_MY_NEW_ISSUES));
     ProjectData project = db.components().insertPrivateProject();
-    db.users().insertProjectPermissionOnUser(user, USER, project.getMainBranchComponent());
+    db.users().insertProjectPermissionOnUser(user, USER, project.getProjectDto());
     notificationUpdater.add(dbSession, emailChannel.getKey(), NOTIF_MY_NEW_ISSUES, user, project.getProjectDto());
     notificationUpdater.add(dbSession, emailChannel.getKey(), "Unknown Notification", user, project.getProjectDto());
     dbSession.commit();
@@ -342,7 +342,7 @@ class ListActionIT {
     when(dispatchers.getProjectDispatchers()).thenReturn(asList(NOTIF_MY_NEW_ISSUES, NOTIF_NEW_QUALITY_GATE_STATUS));
     ProjectData projectData = db.components().insertPrivateProject(p -> p.setKey(KEY_PROJECT_EXAMPLE_001).setName("My Project"));
     ProjectDto project = projectData.getProjectDto();
-    db.users().insertProjectPermissionOnUser(user, USER, projectData.getMainBranchComponent());
+    db.users().insertProjectPermissionOnUser(user, USER, project);
     notificationUpdater.add(dbSession, twitterChannel.getKey(), NOTIF_MY_NEW_ISSUES, user, null);
     notificationUpdater.add(dbSession, emailChannel.getKey(), NOTIF_MY_NEW_ISSUES, user, null);
     notificationUpdater.add(dbSession, emailChannel.getKey(), NOTIF_NEW_ISSUES, user, null);
@@ -359,6 +359,47 @@ class ListActionIT {
   }
 
   @Test
+  void filter_user_returns_only_user_dispatchers() {
+    UserDto user = db.users().insertUser();
+    userSession.logIn(user);
+    when(dispatchers.getGlobalDispatchers()).thenReturn(asList(NOTIF_MY_NEW_ISSUES, NOTIF_NEW_ISSUES));
+    when(dispatchers.getGroupSubscriptionDispatchers()).thenReturn(singletonList(NOTIF_NEW_QUALITY_GATE_STATUS));
+    when(dispatchers.getPermissionRestrictedDispatchers()).thenReturn(Map.of());
+
+    ListResponse result = ws.newRequest().setParam("filter", "user").executeProtobuf(ListResponse.class);
+
+    assertThat(result.getGlobalTypesList()).containsExactlyInAnyOrder(NOTIF_MY_NEW_ISSUES, NOTIF_NEW_ISSUES);
+    assertThat(result.getGlobalTypesList()).doesNotContain(NOTIF_NEW_QUALITY_GATE_STATUS);
+  }
+
+  @Test
+  void filter_groupSubscription_returns_only_group_dispatchers() {
+    UserDto user = db.users().insertUser();
+    userSession.logIn(user);
+    when(dispatchers.getGlobalDispatchers()).thenReturn(asList(NOTIF_MY_NEW_ISSUES, NOTIF_NEW_ISSUES));
+    when(dispatchers.getGroupSubscriptionDispatchers()).thenReturn(singletonList(NOTIF_NEW_QUALITY_GATE_STATUS));
+    when(dispatchers.getPermissionRestrictedDispatchers()).thenReturn(Map.of());
+
+    ListResponse result = ws.newRequest().setParam("filter", "groupSubscription").executeProtobuf(ListResponse.class);
+
+    assertThat(result.getGlobalTypesList()).containsExactly(NOTIF_NEW_QUALITY_GATE_STATUS);
+    assertThat(result.getGlobalTypesList()).doesNotContain(NOTIF_MY_NEW_ISSUES, NOTIF_NEW_ISSUES);
+  }
+
+  @Test
+  void filter_all_returns_both_user_and_group_dispatchers_sorted() {
+    UserDto user = db.users().insertUser();
+    userSession.logIn(user);
+    when(dispatchers.getGlobalDispatchers()).thenReturn(singletonList(NOTIF_NEW_ISSUES));
+    when(dispatchers.getGroupSubscriptionDispatchers()).thenReturn(singletonList(NOTIF_NEW_QUALITY_GATE_STATUS));
+    when(dispatchers.getPermissionRestrictedDispatchers()).thenReturn(Map.of());
+
+    ListResponse result = ws.newRequest().setParam("filter", "all").executeProtobuf(ListResponse.class);
+
+    assertThat(result.getGlobalTypesList()).contains(NOTIF_NEW_ISSUES, NOTIF_NEW_QUALITY_GATE_STATUS);
+  }
+
+  @Test
   void definition() {
     WebService.Action definition = ws.getDef();
 
@@ -366,7 +407,7 @@ class ListActionIT {
     assertThat(definition.isPost()).isFalse();
     assertThat(definition.since()).isEqualTo("6.3");
     assertThat(definition.responseExampleAsString()).isNotEmpty();
-    assertThat(definition.params()).hasSize(1);
+    assertThat(definition.params()).hasSize(2);
 
     WebService.Param loginParam = definition.param("login");
     assertThat(loginParam.since()).isEqualTo("6.4");

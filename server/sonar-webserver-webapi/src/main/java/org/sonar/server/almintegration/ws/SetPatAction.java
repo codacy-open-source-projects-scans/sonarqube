@@ -21,8 +21,8 @@ package org.sonar.server.almintegration.ws;
 
 import com.google.common.base.Strings;
 import java.util.List;
-import java.util.Optional;
 import javax.annotation.Nullable;
+import org.sonar.alm.client.azure.AzureDevOpsValidator;
 import org.sonar.api.server.ws.Change;
 import org.sonar.api.server.ws.Request;
 import org.sonar.api.server.ws.Response;
@@ -36,6 +36,7 @@ import org.sonar.server.exceptions.NotFoundException;
 import org.sonar.server.user.UserSession;
 
 import static java.util.Objects.requireNonNull;
+import static org.sonar.db.alm.setting.ALM.AZURE_DEVOPS;
 import static org.sonar.db.alm.setting.ALM.BITBUCKET_CLOUD;
 import static org.sonar.db.permission.GlobalPermission.PROVISION_PROJECTS;
 
@@ -48,11 +49,13 @@ public class SetPatAction implements AlmIntegrationsWsAction {
   private final DbClient dbClient;
   private final UserSession userSession;
   private final ImportHelper importHelper;
+  private final AzureDevOpsValidator azureDevOpsValidator;
 
-  public SetPatAction(DbClient dbClient, UserSession userSession, ImportHelper importHelper) {
+  public SetPatAction(DbClient dbClient, UserSession userSession, ImportHelper importHelper, AzureDevOpsValidator azureDevOpsValidator) {
     this.dbClient = dbClient;
     this.userSession = userSession;
     this.importHelper = importHelper;
+    this.azureDevOpsValidator = azureDevOpsValidator;
   }
 
   @Override
@@ -102,20 +105,17 @@ public class SetPatAction implements AlmIntegrationsWsAction {
         Preconditions.checkArgument(!Strings.isNullOrEmpty(username), "Username cannot be null for Bitbucket Cloud");
       }
 
+      if (almSettingDto.getAlm().equals(AZURE_DEVOPS)) {
+        azureDevOpsValidator.checkPatIsNotGlobal(requireNonNull(almSettingDto.getUrl(), "URL cannot be null"), pat);
+      }
+
       String resultingPat = CredentialsEncoderHelper.encodeCredentials(almSettingDto.getAlm(), pat, username);
 
-      Optional<AlmPatDto> almPatDto = dbClient.almPatDao().selectByUserAndAlmSetting(dbSession, userUuid, almSettingDto);
-      if (almPatDto.isPresent()) {
-        AlmPatDto almPat = almPatDto.get();
-        almPat.setPersonalAccessToken(resultingPat);
-        dbClient.almPatDao().update(dbSession, almPat, userSession.getLogin(), almSettingDto.getKey());
-      } else {
-        AlmPatDto almPat = new AlmPatDto()
-          .setPersonalAccessToken(resultingPat)
-          .setAlmSettingUuid(almSettingDto.getUuid())
-          .setUserUuid(userUuid);
-        dbClient.almPatDao().insert(dbSession, almPat, userSession.getLogin(), almSettingDto.getKey());
-      }
+      AlmPatDto almPat = new AlmPatDto()
+        .setPersonalAccessToken(resultingPat)
+        .setAlmSettingUuid(almSettingDto.getUuid())
+        .setUserUuid(userUuid);
+      dbClient.almPatDao().save(dbSession, almPat, userSession.getLogin(), almSettingDto.getKey());
       dbSession.commit();
     }
   }

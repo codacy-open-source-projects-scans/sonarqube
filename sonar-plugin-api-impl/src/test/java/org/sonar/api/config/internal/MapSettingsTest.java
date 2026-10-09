@@ -175,8 +175,8 @@ public class MapSettingsTest {
       (settings, key) -> settings.setProperty(key, 123.2F),
       (settings, key) -> settings.setProperty(key, 123.2D),
       (settings, key) -> settings.setProperty(key, false),
-      (settings, key) -> settings.setProperty(key, new Date()),
-      (settings, key) -> settings.setProperty(key, new Date(), true));
+      (settings, key) -> settings.setProperty(key, new Date(1_704_067_200_000L)),
+      (settings, key) -> settings.setProperty(key, new Date(1_704_067_200_000L), true));
 
     return callers.stream().map(t -> new Object[]{t}).toArray(Object[][]::new);
   }

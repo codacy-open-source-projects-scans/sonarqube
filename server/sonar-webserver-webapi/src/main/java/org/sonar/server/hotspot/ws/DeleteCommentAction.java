@@ -20,6 +20,7 @@
 package org.sonar.server.hotspot.ws;
 
 import java.util.Objects;
+import org.sonar.api.server.ws.Change;
 import org.sonar.api.server.ws.Request;
 import org.sonar.api.server.ws.Response;
 import org.sonar.api.server.ws.WebService;
@@ -55,7 +56,11 @@ public class DeleteCommentAction implements HotspotsWsAction {
       .setDescription("Delete comment from Security Hotpot.<br/>" +
         "Requires authentication and the following permission: 'Browse' on the project of the specified Security Hotspot.")
       .setSince("8.2")
-      .setInternal(true);
+      .setDeprecatedSince("2026.4")
+      .setInternal(true)
+      .setChangelog(
+        new Change("2026.4", "Hotspots are deprecated and replaced by security issues (software quality) and vulnerabilities (type). " +
+        "Please use the API of security issues / vulnerabilities instead."));
 
     action.createParam(PARAM_COMMENT)
       .setDescription("Comment key.")

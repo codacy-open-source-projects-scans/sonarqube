@@ -26,7 +26,7 @@ import org.sonar.core.issue.DefaultIssue;
 /**
  * Base class for issue visitors that compute measures and should exclude issues in sandbox status.
  */
-public abstract class MeasureComputationIssueVisitor extends IssueVisitor {
+public abstract class MeasureComputationIssueVisitor extends IssueVisitor implements IssueMeasureVisitor {
 
   @Override
   public final void onIssue(Component component, DefaultIssue issue) {

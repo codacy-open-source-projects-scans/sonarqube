@@ -27,10 +27,11 @@ import com.google.gson.reflect.TypeToken;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
-import java.util.Arrays;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import javax.annotation.Nullable;
 import okhttp3.Headers;
@@ -47,7 +48,6 @@ import org.sonar.auth.gitlab.GsonGroup;
 import org.sonar.auth.gitlab.GsonProjectMember;
 import org.sonar.auth.gitlab.GsonUser;
 import org.sonarqube.ws.MediaTypes;
-import org.sonarqube.ws.client.OkHttpClientBuilder;
 
 import static java.lang.String.format;
 import static java.net.HttpURLConnection.HTTP_FORBIDDEN;
@@ -65,18 +65,21 @@ public class GitlabApplicationClient {
   private static final TypeToken<List<GsonProjectMember>> GITLAB_PROJECT_MEMBER = new TypeToken<>() {
   };
 
+  private static final int HTTP_TOO_MANY_REQUESTS = 429;
+
   protected static final String PRIVATE_TOKEN = "Private-Token";
   private static final String GITLAB_GROUPS_MEMBERS_ENDPOINT = "/groups/%s/members";
   protected final OkHttpClient client;
 
   private final GitlabPaginatedHttpClient gitlabPaginatedHttpClient;
 
-  public GitlabApplicationClient(GitlabPaginatedHttpClient gitlabPaginatedHttpClient, TimeoutConfiguration timeoutConfiguration) {
+  public GitlabApplicationClient(GitlabPaginatedHttpClient gitlabPaginatedHttpClient, TimeoutConfiguration timeoutConfiguration, OkHttpClient okHttpClient) {
     this.gitlabPaginatedHttpClient = gitlabPaginatedHttpClient;
-    client = new OkHttpClientBuilder()
-      .setConnectTimeoutMs(timeoutConfiguration.getConnectTimeout())
-      .setReadTimeoutMs(timeoutConfiguration.getReadTimeout())
-      .setFollowRedirects(false)
+    client = okHttpClient.newBuilder()
+      .connectTimeout(timeoutConfiguration.getConnectTimeout(), TimeUnit.MILLISECONDS)
+      .readTimeout(timeoutConfiguration.getReadTimeout(), TimeUnit.MILLISECONDS)
+      .followRedirects(false)
+      .followSslRedirects(false)
       .build();
   }
 
@@ -118,7 +121,7 @@ public class GitlabApplicationClient {
     LOG.info(errorMessage, e);
   }
 
-  public void checkToken(String gitlabUrl, String personalAccessToken) {
+  public GsonUser checkToken(String gitlabUrl, String personalAccessToken) {
     String url = format("%s/user", gitlabUrl);
 
     LOG.debug("get current user : [{}]", url);
@@ -132,9 +135,31 @@ public class GitlabApplicationClient {
     String errorMessage = "Could not validate GitLab token. Got an unexpected answer.";
     try (Response response = client.newCall(request).execute()) {
       checkResponseIsSuccessful(response, errorMessage);
-      GsonId.parseOne(response.body().string());
+      return GsonUser.parse(response.body().string());
     } catch (JsonSyntaxException e) {
       throw new IllegalArgumentException("Could not parse GitLab answer to verify token. Got a non-json payload as result.");
+    } catch (IOException e) {
+      logException(url, e);
+      throw new IllegalArgumentException(errorMessage);
+    }
+  }
+
+  public GsonPersonalAccessTokenInfo getPersonalAccessTokenInfo(String gitlabUrl, String personalAccessToken) {
+    String url = format("%s/personal_access_tokens/self", gitlabUrl);
+
+    LOG.debug("get personal access token info : [{}]", url);
+    Request request = new Request.Builder()
+      .addHeader(PRIVATE_TOKEN, personalAccessToken)
+      .url(url)
+      .get()
+      .build();
+
+    String errorMessage = "Could not validate GitLab token scopes. Got an unexpected answer.";
+    try (Response response = client.newCall(request).execute()) {
+      checkResponseIsSuccessful(response, errorMessage);
+      return GsonPersonalAccessTokenInfo.parseOne(response.body().string());
+    } catch (JsonSyntaxException e) {
+      throw new IllegalArgumentException("Could not parse GitLab answer to verify token scopes. Got a non-json payload as result.");
     } catch (IOException e) {
       logException(url, e);
       throw new IllegalArgumentException(errorMessage);
@@ -188,6 +213,10 @@ public class GitlabApplicationClient {
         throw new GitlabServerException(response.code(), "Your GitLab token is expired");
       } else if (isInsufficientScope(response, body)) {
         throw new GitlabServerException(response.code(), "Your GitLab token has insufficient scope");
+      } else if (response.code() == HTTP_FORBIDDEN) {
+        throw new GitlabServerException(response.code(), "Forbidden access to GitLab. Verify your token's permissions and IP restrictions.");
+      } else if (response.code() == HTTP_TOO_MANY_REQUESTS) {
+        throw new GitlabServerException(response.code(), "GitLab API rate limit exceeded. Try again later.");
       } else if (response.code() == HTTP_UNAUTHORIZED) {
         throw new GitlabServerException(response.code(), "Invalid personal access token");
       } else if (response.isRedirect()) {
@@ -232,6 +261,42 @@ public class GitlabApplicationClient {
       }
     }
     return false;
+  }
+
+  /**
+   * Mints a GitLab project access token (SONAR-31165), scoped to both {@code api} (needed to open a
+   * merge request via the REST API) and {@code write_repository} (needed to push over git) — neither
+   * scope is a documented superset of the other, so both are required for the same minted token to
+   * cover both operations.
+   * https://docs.gitlab.com/ee/api/project_access_tokens.html#create-a-project-access-token
+   */
+  public GitlabProjectAccessToken createProjectAccessToken(String gitlabUrl, String personalAccessToken,
+    Long gitlabProjectId, String name, List<String> scopes, LocalDate expiresAt) {
+    String url = format("%s/projects/%s/access_tokens", gitlabUrl, gitlabProjectId);
+    String requestJson = GSON.toJson(new GsonProjectAccessTokenRequest(name, scopes, expiresAt.toString()));
+    LOG.debug("create project access token : [{}]", url);
+    Request request = new Request.Builder()
+      .addHeader(PRIVATE_TOKEN, personalAccessToken)
+      .addHeader("Content-Type", MediaTypes.JSON)
+      .url(url)
+      .post(RequestBody.create(requestJson.getBytes(UTF_8)))
+      .build();
+
+    try (Response response = client.newCall(request).execute()) {
+      checkResponseIsSuccessful(response, "Could not create GitLab project access token");
+      String body = response.body().string();
+      // Never log `body` verbatim: the create-token response's "token" field is the newly minted
+      // secret itself (CWE-532) — only its non-sensitive metadata is safe to trace.
+      GitlabProjectAccessToken token = new GsonBuilder().create().fromJson(body, GitlabProjectAccessToken.class);
+      LOG.trace("create project access token result : id=[{}] name=[{}] expires_at=[{}] scopes=[{}]",
+        token.getId(), token.getName(), token.getExpiresAt(), token.getScopes());
+      return token;
+    } catch (JsonSyntaxException e) {
+      throw new IllegalArgumentException("Could not parse GitLab answer when creating a project access token. Got a non-json payload as result.");
+    } catch (IOException e) {
+      logException(url, e);
+      throw new IllegalStateException(e.getMessage(), e);
+    }
   }
 
   public Project getProject(String gitlabUrl, String pat, Long gitlabProjectId) {
@@ -289,33 +354,11 @@ public class GitlabApplicationClient {
     }
   }
 
-  public List<GitLabBranch> getBranches(String gitlabUrl, String pat, Long gitlabProjectId) {
-    String url = format("%s/projects/%s/repository/branches", gitlabUrl, gitlabProjectId);
-    LOG.debug("get branches : [{}]", url);
-    Request request = new Request.Builder()
-      .addHeader(PRIVATE_TOKEN, pat)
-      .get()
-      .url(url)
-      .build();
-
-    try (Response response = client.newCall(request).execute()) {
-      checkResponseIsSuccessful(response);
-      String body = response.body().string();
-      LOG.trace("loading branches payload result : [{}]", body);
-      return Arrays.asList(new GsonBuilder().create().fromJson(body, GitLabBranch[].class));
-    } catch (JsonSyntaxException e) {
-      throw new IllegalArgumentException("Could not parse GitLab answer to retrieve project branches. Got a non-json payload as result.");
-    } catch (IOException e) {
-      logException(url, e);
-      throw new IllegalStateException(e.getMessage(), e);
-    }
-  }
-
   public ProjectList searchProjects(String gitlabUrl, String personalAccessToken, @Nullable String projectName,
     @Nullable Integer pageNumber, @Nullable Integer pageSize) {
-    String url = format("%s/projects?archived=false&simple=true&membership=true&order_by=name&sort=asc&search=%s%s%s",
+    String url = format("%s/projects?archived=false&simple=true&membership=true%s%s%s",
       gitlabUrl,
-      projectName == null ? "" : urlEncode(projectName),
+      projectName == null ? "" : ("&search=" + urlEncode(projectName)),
       pageNumber == null ? "" : format("&page=%d", pageNumber),
       pageSize == null ? "" : format("&per_page=%d", pageSize)
     );
@@ -357,7 +400,7 @@ public class GitlabApplicationClient {
   }
 
   public Set<GsonGroup> getGroups(String gitlabUrl, String token) {
-    return Set.copyOf(executePaginatedQuery(gitlabUrl, token, "/groups", resp -> GSON.fromJson(resp, GITLAB_GROUP)));
+    return Set.copyOf(executePaginatedQuery(gitlabUrl, token, "/groups", resp -> parseJsonList(resp, GITLAB_GROUP)));
   }
 
   public Set<GsonUser> getDirectGroupMembers(String gitlabUrl, String token, String groupId) {
@@ -369,12 +412,17 @@ public class GitlabApplicationClient {
   }
 
   private Set<GsonUser> getMembers(String gitlabUrl, String token, String endpoint) {
-    return Set.copyOf(executePaginatedQuery(gitlabUrl, token, endpoint, resp -> GSON.fromJson(resp, GITLAB_USER)));
+    return Set.copyOf(executePaginatedQuery(gitlabUrl, token, endpoint, resp -> parseJsonList(resp, GITLAB_USER)));
   }
 
   public Set<GsonProjectMember> getAllProjectMembers(String gitlabUrl, String token, long projectId) {
     String url = format("/projects/%s/members/all", projectId);
-    return Set.copyOf(executePaginatedQuery(gitlabUrl, token, url, resp -> GSON.fromJson(resp, GITLAB_PROJECT_MEMBER)));
+    return Set.copyOf(executePaginatedQuery(gitlabUrl, token, url, resp -> parseJsonList(resp, GITLAB_PROJECT_MEMBER)));
+  }
+
+  private static <E> List<E> parseJsonList(String resp, TypeToken<List<E>> typeToken) {
+    List<E> result = GSON.fromJson(resp, typeToken);
+    return result != null ? result : List.of();
   }
 
   private <E> List<E> executePaginatedQuery(String appUrl, String token, String query, Function<String, List<E>> responseDeserializer) {

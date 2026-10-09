@@ -40,6 +40,7 @@ import org.sonar.api.issue.Issue;
 import org.sonar.api.issue.impact.SoftwareQuality;
 import org.sonar.api.measures.CoreMetrics;
 import org.sonar.api.measures.Metric;
+import org.sonar.api.measures.SeverityValues;
 import org.sonar.api.rule.Severity;
 import org.sonar.core.rule.RuleType;
 import org.sonar.core.metric.SoftwareQualitiesMetrics;
@@ -64,7 +65,6 @@ import static org.sonar.api.issue.impact.SoftwareQuality.RELIABILITY;
 import static org.sonar.api.issue.impact.SoftwareQuality.SECURITY;
 import static org.sonar.api.measures.CoreMetrics.EFFORT_TO_REACH_MAINTAINABILITY_RATING_A;
 import static org.sonar.api.measures.CoreMetrics.NEW_MAINTAINABILITY_RATING_KEY;
-import static org.sonar.api.measures.CoreMetrics.NEW_SECURITY_HOTSPOTS_REVIEWED;
 import static org.sonar.api.measures.CoreMetrics.NEW_SECURITY_HOTSPOTS_REVIEWED_STATUS;
 import static org.sonar.api.measures.CoreMetrics.NEW_SECURITY_HOTSPOTS_TO_REVIEW_STATUS;
 import static org.sonar.api.measures.CoreMetrics.NEW_SECURITY_REVIEW_RATING;
@@ -159,7 +159,8 @@ class MeasureUpdateFormulaFactoryImplTest {
       .withValue(SECURITY_HOTSPOTS_REVIEWED_STATUS, 1d)
       .expectedResult(50d);
     new HierarchyTester(CoreMetrics.SECURITY_REVIEW_RATING)
-      .withValue(SECURITY_HOTSPOTS_REVIEWED, 100d)
+      .withValue(SECURITY_HOTSPOTS_TO_REVIEW_STATUS, 0d)
+      .withValue(SECURITY_HOTSPOTS_REVIEWED_STATUS, 1d)
       .expectedRating(Rating.A);
 
     new HierarchyTester(CoreMetrics.NEW_SECURITY_HOTSPOTS_REVIEWED)
@@ -167,8 +168,38 @@ class MeasureUpdateFormulaFactoryImplTest {
       .withValue(NEW_SECURITY_HOTSPOTS_REVIEWED_STATUS, 1d)
       .expectedResult(50d);
     new HierarchyTester(CoreMetrics.NEW_SECURITY_REVIEW_RATING)
-      .withValue(NEW_SECURITY_HOTSPOTS_REVIEWED, 0d)
+      .withValue(NEW_SECURITY_HOTSPOTS_TO_REVIEW_STATUS, 1d)
+      .withValue(NEW_SECURITY_HOTSPOTS_REVIEWED_STATUS, 0d)
       .expectedRating(Rating.E);
+  }
+
+  @Test
+  void computeHierarchy_whenNoHotspotLeft_shouldUnsetReviewedPercentAndRateA() {
+    new HierarchyTester(CoreMetrics.SECURITY_HOTSPOTS_REVIEWED)
+      .withValue(SECURITY_HOTSPOTS_TO_REVIEW_STATUS, 0d)
+      .withValue(SECURITY_HOTSPOTS_REVIEWED_STATUS, 0d)
+      .expectedUnsetValue();
+    new HierarchyTester(CoreMetrics.SECURITY_REVIEW_RATING)
+      .withValue(SECURITY_HOTSPOTS_TO_REVIEW_STATUS, 0d)
+      .withValue(SECURITY_HOTSPOTS_REVIEWED_STATUS, 0d)
+      .expectedRating(Rating.A);
+
+    new HierarchyTester(CoreMetrics.NEW_SECURITY_HOTSPOTS_REVIEWED)
+      .withValue(NEW_SECURITY_HOTSPOTS_TO_REVIEW_STATUS, 0d)
+      .withValue(NEW_SECURITY_HOTSPOTS_REVIEWED_STATUS, 0d)
+      .expectedUnsetValue();
+    new HierarchyTester(CoreMetrics.NEW_SECURITY_REVIEW_RATING)
+      .withValue(NEW_SECURITY_HOTSPOTS_TO_REVIEW_STATUS, 0d)
+      .withValue(NEW_SECURITY_HOTSPOTS_REVIEWED_STATUS, 0d)
+      .expectedRating(Rating.A);
+  }
+
+  @Test
+  void computeHierarchy_whenNoHotspotMeasureAtAll_shouldUnsetReviewedPercentAndRateA() {
+    new HierarchyTester(CoreMetrics.SECURITY_HOTSPOTS_REVIEWED).expectedUnsetValue();
+    new HierarchyTester(CoreMetrics.SECURITY_REVIEW_RATING).expectedRating(Rating.A);
+    new HierarchyTester(CoreMetrics.NEW_SECURITY_HOTSPOTS_REVIEWED).expectedUnsetValue();
+    new HierarchyTester(CoreMetrics.NEW_SECURITY_REVIEW_RATING).expectedRating(Rating.A);
   }
 
   @Test
@@ -344,8 +375,9 @@ class MeasureUpdateFormulaFactoryImplTest {
       newGroup(RuleType.SECURITY_HOTSPOT).setStatus(Issue.STATUS_TO_REVIEW).setCount(1))
         .assertThatValueIs(SECURITY_HOTSPOTS_REVIEWED, 75.0);
 
+    // no hotspot: the percentage doesn't apply, the measure is dropped instead of being left as-is
     withNoIssues()
-      .assertNoValue(SECURITY_HOTSPOTS_REVIEWED);
+      .assertUnsetValue(SECURITY_HOTSPOTS_REVIEWED);
   }
 
   @Test
@@ -1068,8 +1100,9 @@ class MeasureUpdateFormulaFactoryImplTest {
       newGroup(RuleType.SECURITY_HOTSPOT).setStatus(Issue.STATUS_TO_REVIEW).setCount(5).setInLeak(false))
         .assertThatLeakValueIs(CoreMetrics.NEW_SECURITY_HOTSPOTS_REVIEWED, 75.0);
 
+    // no hotspot: the percentage doesn't apply, the measure is dropped instead of being left as-is
     withNoIssues()
-      .assertNoLeakValue(CoreMetrics.NEW_SECURITY_HOTSPOTS_REVIEWED);
+      .assertUnsetLeakValue(CoreMetrics.NEW_SECURITY_HOTSPOTS_REVIEWED);
   }
 
   @Test
@@ -1294,9 +1327,9 @@ class MeasureUpdateFormulaFactoryImplTest {
   @Test
   void compute_shouldComputeCountPerSoftwareQualityOnOverallCode() {
     withNoIssues()
-      .assertThatValueIs(SoftwareQualitiesMetrics.SOFTWARE_QUALITY_MAINTAINABILITY_ISSUES, 0)
-      .assertThatValueIs(SoftwareQualitiesMetrics.SOFTWARE_QUALITY_RELIABILITY_ISSUES, 0)
-      .assertThatValueIs(SoftwareQualitiesMetrics.SOFTWARE_QUALITY_SECURITY_ISSUES, 0);
+      .assertThatValueIs(CoreMetrics.SOFTWARE_QUALITY_MAINTAINABILITY_ISSUES, 0)
+      .assertThatValueIs(CoreMetrics.SOFTWARE_QUALITY_RELIABILITY_ISSUES, 0)
+      .assertThatValueIs(CoreMetrics.SOFTWARE_QUALITY_SECURITY_ISSUES, 0);
 
     with(
       newImpactGroup(RELIABILITY, HIGH, 3),
@@ -1309,17 +1342,17 @@ class MeasureUpdateFormulaFactoryImplTest {
       newImpactGroup(RELIABILITY, HIGH, Issue.STATUS_RESOLVED, Issue.RESOLUTION_WONT_FIX, 8, 1d, false),
       newImpactGroup(MAINTAINABILITY, MEDIUM, Issue.STATUS_RESOLVED, Issue.RESOLUTION_WONT_FIX, 8, 1d, false))
 
-        .assertThatValueIs(SoftwareQualitiesMetrics.SOFTWARE_QUALITY_MAINTAINABILITY_ISSUES, 1 + 1)
-        .assertThatValueIs(SoftwareQualitiesMetrics.SOFTWARE_QUALITY_RELIABILITY_ISSUES, 3 + 1)
-        .assertThatValueIs(SoftwareQualitiesMetrics.SOFTWARE_QUALITY_SECURITY_ISSUES, 1);
+        .assertThatValueIs(CoreMetrics.SOFTWARE_QUALITY_MAINTAINABILITY_ISSUES, 1 + 1)
+        .assertThatValueIs(CoreMetrics.SOFTWARE_QUALITY_RELIABILITY_ISSUES, 3 + 1)
+        .assertThatValueIs(CoreMetrics.SOFTWARE_QUALITY_SECURITY_ISSUES, 1);
   }
 
   @Test
   void compute_shouldComputeCountPerSoftwareQualityOnNewCode() {
     withNoIssues()
-      .assertThatLeakValueIs(SoftwareQualitiesMetrics.NEW_SOFTWARE_QUALITY_MAINTAINABILITY_ISSUES, 0)
-      .assertThatLeakValueIs(SoftwareQualitiesMetrics.NEW_SOFTWARE_QUALITY_RELIABILITY_ISSUES, 0)
-      .assertThatLeakValueIs(SoftwareQualitiesMetrics.NEW_SOFTWARE_QUALITY_SECURITY_ISSUES, 0);
+      .assertThatLeakValueIs(CoreMetrics.NEW_SOFTWARE_QUALITY_MAINTAINABILITY_ISSUES, 0)
+      .assertThatLeakValueIs(CoreMetrics.NEW_SOFTWARE_QUALITY_RELIABILITY_ISSUES, 0)
+      .assertThatLeakValueIs(CoreMetrics.NEW_SOFTWARE_QUALITY_SECURITY_ISSUES, 0);
 
     with(
       newImpactGroup(RELIABILITY, HIGH, 3, true),
@@ -1335,9 +1368,9 @@ class MeasureUpdateFormulaFactoryImplTest {
       // Should not be counted because on overall code
       newImpactGroup(MAINTAINABILITY, MEDIUM, 1, false))
 
-        .assertThatLeakValueIs(SoftwareQualitiesMetrics.NEW_SOFTWARE_QUALITY_MAINTAINABILITY_ISSUES, 1 + 1)
-        .assertThatLeakValueIs(SoftwareQualitiesMetrics.NEW_SOFTWARE_QUALITY_RELIABILITY_ISSUES, 3 + 1)
-        .assertThatLeakValueIs(SoftwareQualitiesMetrics.NEW_SOFTWARE_QUALITY_SECURITY_ISSUES, 1 + 12);
+        .assertThatLeakValueIs(CoreMetrics.NEW_SOFTWARE_QUALITY_MAINTAINABILITY_ISSUES, 1 + 1)
+        .assertThatLeakValueIs(CoreMetrics.NEW_SOFTWARE_QUALITY_RELIABILITY_ISSUES, 3 + 1)
+        .assertThatLeakValueIs(CoreMetrics.NEW_SOFTWARE_QUALITY_SECURITY_ISSUES, 1 + 12);
   }
 
   @Test
@@ -1410,6 +1443,276 @@ class MeasureUpdateFormulaFactoryImplTest {
       .stream()
       .filter(f -> new SoftwareQualitiesMetrics().getMetrics().contains(f.getMetric())))
         .allMatch(MeasureUpdateFormula::isOnlyIfComputedOnBranch);
+  }
+
+  @Test
+  void compute_newBugsSeverity() {
+    withNoIssues().assertThatLeakValueIs(CoreMetrics.NEW_BUGS_SEVERITY, 0d);
+
+    with(
+      newGroup(RuleType.BUG).setSeverity(Severity.BLOCKER).setInLeak(true))
+        .assertThatLeakValueIs(CoreMetrics.NEW_BUGS_SEVERITY, SeverityValues.BLOCKER);
+
+    with(
+      newGroup(RuleType.BUG).setSeverity(Severity.CRITICAL).setInLeak(true),
+      newGroup(RuleType.BUG).setSeverity(Severity.BLOCKER).setInLeak(false))
+        // not in leak: BLOCKER excluded, only CRITICAL in leak
+        .assertThatLeakValueIs(CoreMetrics.NEW_BUGS_SEVERITY, SeverityValues.HIGH);
+
+    with(
+      // not a bug — excluded
+      newGroup(RuleType.CODE_SMELL).setSeverity(Severity.BLOCKER).setInLeak(true))
+        .assertThatLeakValueIs(CoreMetrics.NEW_BUGS_SEVERITY, 0d);
+
+    with(
+      // resolved — excluded
+      newResolvedGroup(RuleType.BUG).setSeverity(Severity.BLOCKER).setInLeak(true))
+        .assertThatLeakValueIs(CoreMetrics.NEW_BUGS_SEVERITY, 0d);
+
+    with(
+      // bugs exist overall but none in new code — must report NO_ISSUES, not INFO
+      newGroup(RuleType.BUG).setSeverity(Severity.BLOCKER).setInLeak(false))
+        .assertThatLeakValueIs(CoreMetrics.NEW_BUGS_SEVERITY, 0d);
+  }
+
+  @Test
+  void compute_newVulnerabilitiesSeverity() {
+    withNoIssues().assertThatLeakValueIs(CoreMetrics.NEW_VULNERABILITIES_SEVERITY, 0d);
+
+    with(
+      newGroup(RuleType.VULNERABILITY).setSeverity(Severity.CRITICAL).setInLeak(true))
+        .assertThatLeakValueIs(CoreMetrics.NEW_VULNERABILITIES_SEVERITY, SeverityValues.HIGH);
+
+    with(
+      newGroup(RuleType.VULNERABILITY).setSeverity(Severity.MINOR).setInLeak(true),
+      newGroup(RuleType.VULNERABILITY).setSeverity(Severity.BLOCKER).setInLeak(false))
+        // not in leak: BLOCKER excluded, only MINOR in leak
+        .assertThatLeakValueIs(CoreMetrics.NEW_VULNERABILITIES_SEVERITY, SeverityValues.LOW);
+
+    with(
+      // not a vulnerability — excluded
+      newGroup(RuleType.BUG).setSeverity(Severity.BLOCKER).setInLeak(true))
+        .assertThatLeakValueIs(CoreMetrics.NEW_VULNERABILITIES_SEVERITY, 0d);
+
+    with(
+      // vulnerabilities exist overall but none in new code — must report NO_ISSUES, not INFO
+      newGroup(RuleType.VULNERABILITY).setSeverity(Severity.BLOCKER).setInLeak(false))
+        .assertThatLeakValueIs(CoreMetrics.NEW_VULNERABILITIES_SEVERITY, 0d);
+  }
+
+  @Test
+  void compute_newCodeSmellsSeverity() {
+    withNoIssues().assertThatLeakValueIs(CoreMetrics.NEW_CODE_SMELLS_SEVERITY, 0d);
+
+    with(
+      newGroup(RuleType.CODE_SMELL).setSeverity(Severity.MAJOR).setInLeak(true))
+        .assertThatLeakValueIs(CoreMetrics.NEW_CODE_SMELLS_SEVERITY, SeverityValues.MEDIUM);
+
+    with(
+      newGroup(RuleType.CODE_SMELL).setSeverity(Severity.MINOR).setInLeak(true),
+      newGroup(RuleType.CODE_SMELL).setSeverity(Severity.BLOCKER).setInLeak(false))
+        // not in leak: BLOCKER excluded, only MINOR in leak
+        .assertThatLeakValueIs(CoreMetrics.NEW_CODE_SMELLS_SEVERITY, SeverityValues.LOW);
+
+    with(
+      // not a code smell — excluded
+      newGroup(RuleType.VULNERABILITY).setSeverity(Severity.BLOCKER).setInLeak(true))
+        .assertThatLeakValueIs(CoreMetrics.NEW_CODE_SMELLS_SEVERITY, 0d);
+
+    with(
+      // code smells exist overall but none in new code — must report NO_ISSUES, not INFO
+      newGroup(RuleType.CODE_SMELL).setSeverity(Severity.BLOCKER).setInLeak(false))
+        .assertThatLeakValueIs(CoreMetrics.NEW_CODE_SMELLS_SEVERITY, 0d);
+  }
+
+  @Test
+  void compute_newReliabilityIssueSeverity() {
+    withNoIssues().assertThatLeakValueIs(CoreMetrics.NEW_RELIABILITY_ISSUE_SEVERITY, 0d);
+
+    with(
+      newImpactGroup(RELIABILITY, BLOCKER, 1, true))
+        .assertThatLeakValueIs(CoreMetrics.NEW_RELIABILITY_ISSUE_SEVERITY, SeverityValues.BLOCKER);
+
+    with(
+      newImpactGroup(RELIABILITY, HIGH, 1, true),
+      newImpactGroup(RELIABILITY, BLOCKER, 1, false))
+        // not in leak: BLOCKER excluded, only HIGH in leak
+        .assertThatLeakValueIs(CoreMetrics.NEW_RELIABILITY_ISSUE_SEVERITY, SeverityValues.HIGH);
+
+    with(
+      // wrong quality — excluded
+      newImpactGroup(SECURITY, BLOCKER, 1, true))
+        .assertThatLeakValueIs(CoreMetrics.NEW_RELIABILITY_ISSUE_SEVERITY, 0d);
+  }
+
+  @Test
+  void compute_newSecurityIssueSeverity() {
+    withNoIssues().assertThatLeakValueIs(CoreMetrics.NEW_SECURITY_ISSUE_SEVERITY, 0d);
+
+    with(
+      newImpactGroup(SECURITY, HIGH, 1, true))
+        .assertThatLeakValueIs(CoreMetrics.NEW_SECURITY_ISSUE_SEVERITY, SeverityValues.HIGH);
+
+    with(
+      newImpactGroup(SECURITY, MEDIUM, 1, true),
+      newImpactGroup(SECURITY, BLOCKER, 1, false))
+        // not in leak: BLOCKER excluded, only MEDIUM in leak
+        .assertThatLeakValueIs(CoreMetrics.NEW_SECURITY_ISSUE_SEVERITY, SeverityValues.MEDIUM);
+
+    with(
+      // wrong quality — excluded
+      newImpactGroup(RELIABILITY, BLOCKER, 1, true))
+        .assertThatLeakValueIs(CoreMetrics.NEW_SECURITY_ISSUE_SEVERITY, 0d);
+  }
+
+  @Test
+  void compute_newMaintainabilityIssueSeverity() {
+    withNoIssues().assertThatLeakValueIs(CoreMetrics.NEW_MAINTAINABILITY_ISSUE_SEVERITY, 0d);
+
+    with(
+      newImpactGroup(MAINTAINABILITY, LOW, 1, true))
+        .assertThatLeakValueIs(CoreMetrics.NEW_MAINTAINABILITY_ISSUE_SEVERITY, SeverityValues.LOW);
+
+    with(
+      newImpactGroup(MAINTAINABILITY, BLOCKER, 1, true),
+      newImpactGroup(MAINTAINABILITY, HIGH, 1, true),
+      newImpactGroup(MAINTAINABILITY, BLOCKER, 1, false))
+        // highest in leak is BLOCKER
+        .assertThatLeakValueIs(CoreMetrics.NEW_MAINTAINABILITY_ISSUE_SEVERITY, SeverityValues.BLOCKER);
+
+    with(
+      // wrong quality — excluded
+      newImpactGroup(SECURITY, BLOCKER, 1, true))
+        .assertThatLeakValueIs(CoreMetrics.NEW_MAINTAINABILITY_ISSUE_SEVERITY, 0d);
+  }
+
+  @Test
+  void compute_reliabilityIssueSeverity() {
+    withNoIssues().assertThatValueIs(CoreMetrics.RELIABILITY_ISSUE_SEVERITY, 0d);
+
+    with(
+      newImpactGroup(RELIABILITY, BLOCKER, 1))
+        .assertThatValueIs(CoreMetrics.RELIABILITY_ISSUE_SEVERITY, SeverityValues.BLOCKER);
+
+    with(
+      newImpactGroup(RELIABILITY, HIGH, 1, true),
+      newImpactGroup(RELIABILITY, MEDIUM, 1, false))
+        // overall code: max across leak and non-leak groups
+        .assertThatValueIs(CoreMetrics.RELIABILITY_ISSUE_SEVERITY, SeverityValues.HIGH);
+
+    with(
+      // wrong quality — excluded
+      newImpactGroup(SECURITY, BLOCKER, 1))
+        .assertThatValueIs(CoreMetrics.RELIABILITY_ISSUE_SEVERITY, 0d);
+  }
+
+  @Test
+  void compute_securityIssueSeverity() {
+    withNoIssues().assertThatValueIs(CoreMetrics.SECURITY_ISSUE_SEVERITY, 0d);
+
+    with(
+      newImpactGroup(SECURITY, HIGH, 1))
+        .assertThatValueIs(CoreMetrics.SECURITY_ISSUE_SEVERITY, SeverityValues.HIGH);
+
+    with(
+      newImpactGroup(SECURITY, MEDIUM, 1, true),
+      newImpactGroup(SECURITY, LOW, 1, false))
+        // overall code: max across leak and non-leak groups
+        .assertThatValueIs(CoreMetrics.SECURITY_ISSUE_SEVERITY, SeverityValues.MEDIUM);
+
+    with(
+      // wrong quality — excluded
+      newImpactGroup(RELIABILITY, BLOCKER, 1))
+        .assertThatValueIs(CoreMetrics.SECURITY_ISSUE_SEVERITY, 0d);
+  }
+
+  @Test
+  void compute_maintainabilityIssueSeverity() {
+    withNoIssues().assertThatValueIs(CoreMetrics.MAINTAINABILITY_ISSUE_SEVERITY, 0d);
+
+    with(
+      newImpactGroup(MAINTAINABILITY, LOW, 1))
+        .assertThatValueIs(CoreMetrics.MAINTAINABILITY_ISSUE_SEVERITY, SeverityValues.LOW);
+
+    with(
+      newImpactGroup(MAINTAINABILITY, BLOCKER, 1, true),
+      newImpactGroup(MAINTAINABILITY, HIGH, 1, false))
+        // highest across leak and non-leak groups is BLOCKER
+        .assertThatValueIs(CoreMetrics.MAINTAINABILITY_ISSUE_SEVERITY, SeverityValues.BLOCKER);
+
+    with(
+      // wrong quality — excluded
+      newImpactGroup(SECURITY, BLOCKER, 1))
+        .assertThatValueIs(CoreMetrics.MAINTAINABILITY_ISSUE_SEVERITY, 0d);
+  }
+
+  static List<Metric<?>> newSeverityMetrics() {
+    return List.of(
+      CoreMetrics.NEW_BUGS_SEVERITY,
+      CoreMetrics.NEW_VULNERABILITIES_SEVERITY,
+      CoreMetrics.NEW_CODE_SMELLS_SEVERITY,
+      CoreMetrics.NEW_RELIABILITY_ISSUE_SEVERITY,
+      CoreMetrics.NEW_SECURITY_ISSUE_SEVERITY,
+      CoreMetrics.NEW_MAINTAINABILITY_ISSUE_SEVERITY);
+  }
+
+  static List<Metric<?>> overallSeverityMetrics() {
+    return List.of(
+      CoreMetrics.RELIABILITY_ISSUE_SEVERITY,
+      CoreMetrics.SECURITY_ISSUE_SEVERITY,
+      CoreMetrics.MAINTAINABILITY_ISSUE_SEVERITY);
+  }
+
+  @MethodSource("newSeverityMetrics")
+  @ParameterizedTest
+  void hierarchy_newSeverityMetrics_whenChildHigher_shouldUseChildValue(Metric<?> metric) {
+    new HierarchyTester(metric)
+      .withValue(10d)
+      .withChildrenValues(20d)
+      .expectedResult(20d);
+  }
+
+  @MethodSource("newSeverityMetrics")
+  @ParameterizedTest
+  void hierarchy_newSeverityMetrics_whenCurrentHigher_shouldKeepCurrentValue(Metric<?> metric) {
+    new HierarchyTester(metric)
+      .withValue(25d)
+      .withChildrenValues(10d)
+      .expectedResult(25d);
+  }
+
+  @MethodSource("newSeverityMetrics")
+  @ParameterizedTest
+  void hierarchy_newSeverityMetrics_whenNoChildren_shouldNotSetValue(Metric<?> metric) {
+    new HierarchyTester(metric)
+      .withValue(10d)
+      .expectedResult(null);
+  }
+
+  @MethodSource("overallSeverityMetrics")
+  @ParameterizedTest
+  void hierarchy_overallSeverityMetrics_whenChildHigher_shouldUseChildValue(Metric<?> metric) {
+    new HierarchyTester(metric)
+      .withValue(10d)
+      .withChildrenValues(20d)
+      .expectedResult(20d);
+  }
+
+  @MethodSource("overallSeverityMetrics")
+  @ParameterizedTest
+  void hierarchy_overallSeverityMetrics_whenCurrentHigher_shouldKeepCurrentValue(Metric<?> metric) {
+    new HierarchyTester(metric)
+      .withValue(25d)
+      .withChildrenValues(10d)
+      .expectedResult(25d);
+  }
+
+  @MethodSource("overallSeverityMetrics")
+  @ParameterizedTest
+  void hierarchy_overallSeverityMetrics_whenNoChildren_shouldNotSetValue(Metric<?> metric) {
+    new HierarchyTester(metric)
+      .withValue(10d)
+      .expectedResult(null);
   }
 
   private static String impactMeasureToJson(long total, long high, long medium, long low) {
@@ -1514,6 +1817,21 @@ class MeasureUpdateFormulaFactoryImplTest {
       TestContext context = run(metric, false);
       assertThat(context.ratingValue).isNull();
       return this;
+    }
+
+    Verifier assertUnsetValue(Metric metric) {
+      assertUnset(run(metric, false));
+      return this;
+    }
+
+    Verifier assertUnsetLeakValue(Metric metric) {
+      assertUnset(run(metric, true));
+      return this;
+    }
+
+    private static void assertUnset(TestContext context) {
+      assertThat(context.unset).isTrue();
+      assertThat(context.doubleValue).isNull();
     }
 
     private TestContext run(Metric metric, boolean expectLeakFormula) {
@@ -1625,6 +1943,7 @@ class MeasureUpdateFormulaFactoryImplTest {
     private Double doubleValue;
     private Rating ratingValue;
     private String stringValue;
+    private boolean unset;
 
     private TestContext(Collection<Metric> dependentMetrics, InitialValues initialValues) {
       this.dependentMetrics = new HashSet<>(dependentMetrics);
@@ -1704,6 +2023,11 @@ class MeasureUpdateFormulaFactoryImplTest {
     public void setValue(String value) {
       this.stringValue = value;
     }
+
+    @Override
+    public void unsetValue() {
+      this.unset = true;
+    }
   }
 
   private class InitialValues {
@@ -1782,6 +2106,13 @@ class MeasureUpdateFormulaFactoryImplTest {
     public HierarchyTester expectedRating(@Nullable Rating rating) {
       TestContext ctx = run();
       assertThat(ctx.ratingValue).isEqualTo(rating);
+      return this;
+    }
+
+    public HierarchyTester expectedUnsetValue() {
+      TestContext ctx = run();
+      assertThat(ctx.unset).isTrue();
+      assertThat(ctx.doubleValue).isNull();
       return this;
     }
 

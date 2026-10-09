@@ -96,7 +96,7 @@ public class EsInstallationTest {
 
     EsInstallation underTest = new EsInstallation(props);
 
-    assertThat(underTest.getDataDirectory()).isEqualTo(new File(dataDir, "es8"));
+    assertThat(underTest.getDataDirectory()).isEqualTo(new File(dataDir, "es9"));
   }
 
   @Test
@@ -126,7 +126,7 @@ public class EsInstallationTest {
 
     assertThat(underTest.getOutdatedSearchDirectories())
       .extracting(File::getName)
-      .containsExactlyInAnyOrder("es", "es5", "es6", "es7");
+      .containsExactlyInAnyOrder("es", "es5", "es6", "es7", "es8");
   }
 
   @Test
@@ -139,7 +139,7 @@ public class EsInstallationTest {
 
     EsInstallation underTest = new EsInstallation(props);
 
-    assertThat(underTest.getConfDirectory()).isEqualTo(new File(new File(dataDir, "es8"), "config"));
+    assertThat(underTest.getConfDirectory()).isEqualTo(new File(new File(dataDir, "es9"), "config"));
   }
 
   @Test
@@ -165,7 +165,7 @@ public class EsInstallationTest {
 
     EsInstallation underTest = new EsInstallation(props);
 
-    assertThat(underTest.getLog4j2PropertiesLocation()).isEqualTo(new File(new File(dataDir, "es8"), "config/log4j2.properties"));
+    assertThat(underTest.getLog4j2PropertiesLocation()).isEqualTo(new File(new File(dataDir, "es9"), "config/log4j2.properties"));
   }
 
   @Test
@@ -178,7 +178,7 @@ public class EsInstallationTest {
 
     EsInstallation underTest = new EsInstallation(props);
 
-    assertThat(underTest.getElasticsearchYml()).isEqualTo(new File(new File(dataDir, "es8"), "config/elasticsearch.yml"));
+    assertThat(underTest.getElasticsearchYml()).isEqualTo(new File(new File(dataDir, "es9"), "config/elasticsearch.yml"));
   }
 
   @Test
@@ -191,7 +191,7 @@ public class EsInstallationTest {
 
     EsInstallation underTest = new EsInstallation(props);
 
-    assertThat(underTest.getJvmOptions()).isEqualTo(new File(new File(dataDir, "es8"), "config/jvm.options"));
+    assertThat(underTest.getJvmOptions()).isEqualTo(new File(new File(dataDir, "es9"), "config/jvm.options"));
   }
 
   @Test

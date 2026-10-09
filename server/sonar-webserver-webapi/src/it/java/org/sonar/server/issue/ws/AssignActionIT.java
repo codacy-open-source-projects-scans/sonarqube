@@ -29,8 +29,10 @@ import org.sonar.core.util.SequenceUuidFactory;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
 import org.sonar.db.DbTester;
+import org.sonar.db.component.BranchDto;
 import org.sonar.db.issue.IssueDto;
 import org.sonar.db.permission.ProjectPermission;
+import org.sonar.db.project.ProjectDto;
 import org.sonar.db.user.UserDto;
 import org.sonar.server.es.EsTester;
 import org.sonar.server.exceptions.ForbiddenException;
@@ -61,7 +63,10 @@ import static org.sonar.core.rule.RuleType.CODE_SMELL;
 import static org.sonar.db.permission.ProjectPermission.CODEVIEWER;
 import static org.sonar.db.permission.ProjectPermission.USER;
 import static org.sonar.server.tester.UserSessionRule.standalone;
+import org.junit.experimental.categories.Category;
+import org.sonar.test.tags.ElasticsearchTest;
 
+@Category(ElasticsearchTest.class)
 public class AssignActionIT {
 
   private static final String PREVIOUS_ASSIGNEE = "previous";
@@ -292,10 +297,9 @@ public class AssignActionIT {
 
   private void setUserWithPermission(IssueDto issue, ProjectPermission permission) {
     currentUser = insertUser(CURRENT_USER_LOGIN);
-    userSession.logIn(currentUser)
-      .addProjectPermission(permission,
-        dbClient.componentDao().selectByUuid(db.getSession(), issue.getProjectUuid()).get(),
-        dbClient.componentDao().selectByUuid(db.getSession(), issue.getComponentUuid()).get());
+    BranchDto branch = dbClient.branchDao().selectByUuid(db.getSession(), issue.getProjectUuid()).get();
+    ProjectDto project = dbClient.projectDao().selectByUuid(db.getSession(), branch.getProjectUuid()).get();
+    userSession.logIn(currentUser).addProjectPermission(permission, project).registerBranches(branch);
   }
 
   private void checkIssueAssignee(String issueKey, @Nullable String expectedAssignee) {

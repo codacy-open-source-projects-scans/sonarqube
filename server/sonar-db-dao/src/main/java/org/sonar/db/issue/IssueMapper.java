@@ -37,6 +37,8 @@ public interface IssueMapper {
 
   List<IssueDto> selectByKeys(List<String> keys);
 
+  List<IssueDto> selectSourceRedactionIssues(@Param("componentUuid") String componentUuid, @Param("ruleKeys") Collection<String> ruleKeys);
+
   Set<String> selectIssueKeysByComponentUuid(@Param("componentUuid") String componentUuid);
 
   Set<String> selectIssueKeysByComponentUuidWithFilters(@Param("componentUuid") String componentUuid,
@@ -54,9 +56,13 @@ public interface IssueMapper {
 
   List<IssueCount> countSandboxIssuesPerProject();
 
+  List<String> selectBranchUuidsWithSandboxDeferredIssues(@Param("now") long now);
+
+  List<String> selectSandboxDeferredIssueKeys(@Param("branchUuid") String branchUuid, @Param("now") long now, @Param("pagination") Pagination pagination);
+
   List<IssueCountByStatusAndResolution> countIssuesByStatusOnMainBranches();
 
-  List<PrIssueDto> selectOpenByComponentUuids(List<String> componentUuids);
+  List<PrIssueDto> selectOpenScannerIssuesByComponentUuids(List<String> componentUuids);
 
   void insert(IssueDto issue);
 
@@ -70,13 +76,38 @@ public interface IssueMapper {
 
   int updateIfBeforeSelectedDate(IssueDto issue);
 
+  int updateHunterAgentIssue(IssueDto issue);
+
   void scrollNonClosedByComponentUuid(@Param("componentUuid") String componentUuid, ResultHandler<IssueWithoutRuleInfoDto> handler);
+
+  void scrollNonClosedScannerIssuesByComponentUuid(@Param("componentUuid") String componentUuid, ResultHandler<IssueWithoutRuleInfoDto> handler);
+
+  void scrollNonClosedHunterAgentIssuesByComponentUuid(@Param("componentUuid") String componentUuid, ResultHandler<IssueWithoutRuleInfoDto> handler);
+
+  List<IssueWithoutRuleInfoDto> selectNonClosedHunterAgentIssuesByBranchUuid(@Param("branchUuid") String branchUuid);
+
+  List<IssueWithoutRuleInfoDto> selectClosedHunterAgentIssuesByKeys(@Param("branchUuid") String branchUuid, @Param("keys") Collection<String> keys);
 
   void scrollClosedByComponentUuid(@Param("componentUuid") String componentUuid, @Param("closeDateAfter") long closeDateAfter, ResultHandler<IssueWithoutRuleInfoDto> handler);
 
+  void scrollClosedScannerIssuesByComponentUuid(@Param("componentUuid") String componentUuid, @Param("closeDateAfter") long closeDateAfter,
+    ResultHandler<IssueWithoutRuleInfoDto> handler);
+
   Cursor<IndexedIssueDto> scrollIssuesForIndexation(@Nullable @Param("branchUuid") String branchUuid, @Nullable @Param("issueKeys") Collection<String> issueKeys);
 
+  List<HotspotMigrationKeyDto> selectHotspotKeysForMigration(@Nullable @Param("projectUuids") Collection<String> projectUuids,
+    @Nullable @Param("lastBranchUuid") String lastBranchUuid, @Nullable @Param("lastKee") String lastKee,
+    @Param("pagination") Pagination pagination);
+
+  List<HotspotToMigrateDto> selectHotspotsForMigrationByKeys(@Param("keys") List<String> keys);
+
+  int countHotspotsForMigration(@Nullable @Param("projectUuids") Collection<String> projectUuids);
+
+  int countNotConvertedHotspotsForMigration(@Nullable @Param("projectUuids") Collection<String> projectUuids);
+
   Cursor<IssueStatsDto> scrollIssuesForIssueStats(@Param("branchUuid") String branchUuid);
+
+  List<IssueCountDimensionDto> selectIssueCountDimensionsForBranches(@Param("branchUuids") List<String> branchUuids);
 
   AggregatedIssueStatsDto aggregateIssueStatsForBranchUuidAndRuleKey(@Param("branchUuid") String branchUuid,
     @Param("ruleRepository") String repository, @Param("ruleKey") String rule);

@@ -19,6 +19,7 @@
  */
 package org.sonar.server.platform.platformlevel;
 
+import java.util.Objects;
 import org.slf4j.LoggerFactory;
 import org.sonar.core.platform.EditionProvider;
 import org.sonar.core.platform.PlatformEditionProvider;
@@ -47,7 +48,9 @@ import org.sonar.server.rule.registration.RulesKeyVerifier;
 import org.sonar.server.rule.registration.RulesRegistrant;
 import org.sonar.server.rule.registration.StartupRuleUpdater;
 import org.sonar.server.rule.registration.ActiveRulesImpactInitializer;
+import org.sonar.server.startup.EncryptAlmPats;
 import org.sonar.server.startup.IssueFlagResetSetupTask;
+import org.sonar.server.startup.RegisterMeasureKeyMappings;
 import org.sonar.server.startup.RegisterMetrics;
 import org.sonar.server.startup.RegisterPermissionTemplates;
 import org.sonar.server.startup.RegisterPlugins;
@@ -83,6 +86,9 @@ public class PlatformLevelStartup extends PlatformLevel {
       RegisterMetrics.class,
       RegisterQualityGates.class,
       BuiltInQProfileLoader.class);
+    // Run after RegisterMetrics and also when no plugin changed, to backfill mappings after a migration.
+    addIfStartupLeader(
+      RegisterMeasureKeyMappings.class);
     addIfStartupLeader(
       BuiltInQualityProfilesUpdateListener.class,
       BuiltInQProfileUpdateImpl.class);
@@ -95,7 +101,8 @@ public class PlatformLevelStartup extends PlatformLevel {
       CeQueueCleaner.class,
       UpgradeSuggestionsCleaner.class,
       IssueFlagResetSetupTask.class,
-      PluginConsentVerifier.class);
+      PluginConsentVerifier.class,
+      EncryptAlmPats.class);
     add(RegisterPlugins.class,
       // RegisterServletFilters makes the WebService engine of Level4 served by the MasterServletFilter, therefore it
       // must be started after all the other startup tasks
@@ -117,7 +124,7 @@ public class PlatformLevelStartup extends PlatformLevel {
   }
 
   private boolean anyPluginChanged() {
-    return parent.getOptional(DetectPluginChange.class)
+    return Objects.requireNonNull(parent, "parent must not be null").getOptional(DetectPluginChange.class)
       .map(DetectPluginChange::anyPluginChanged)
       .orElseThrow(() -> new IllegalStateException("DetectPluginChange not available in the container yet"));
   }
