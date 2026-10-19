@@ -265,6 +265,7 @@ import org.sonar.server.plugins.PluginDownloader;
 import org.sonar.server.plugins.PluginUninstaller;
 import org.sonar.server.plugins.PluginsRiskConsentFilter;
 import org.sonar.server.plugins.ServerExtensionInstaller;
+import org.sonar.server.plugins.ServerPluginStaticResources;
 import org.sonar.server.plugins.ws.AvailableAction;
 import org.sonar.server.plugins.ws.CancelAllAction;
 import org.sonar.server.plugins.ws.DownloadAction;
@@ -365,6 +366,7 @@ import org.sonar.server.ws.WebServiceEngine;
 import org.sonar.server.ws.ws.WebServicesWsModule;
 import org.sonar.telemetry.TelemetryDaemon;
 import org.sonar.telemetry.core.TelemetryClient;
+import org.sonar.telemetry.core.event.AnalyticsEventPublisher;
 import org.sonar.telemetry.legacy.CloudUsageDataProvider;
 import org.sonar.telemetry.legacy.ProjectLocDistributionDataProvider;
 import org.sonar.telemetry.legacy.QualityProfileDataProvider;
@@ -673,6 +675,7 @@ public class PlatformLevel4 extends PlatformLevel {
 
       // Plugins WS
       PluginUpdateAggregator.class,
+      ServerPluginStaticResources.class,
       InstalledAction.class,
       AvailableAction.class,
       DownloadAction.class,
@@ -914,6 +917,8 @@ public class PlatformLevel4 extends PlatformLevel {
 
     // registered via sonar-unified-events
     addAll(EventsWebComponents.components());
+    // publishes Analytics.* cross-domain events onto the unified event bus
+    add(AnalyticsEventPublisher.class);
     // publishes a telemetry event on Web process startup
     add(ServerStartupEventPublisher.class);
 

@@ -40,6 +40,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.sonar.api.issue.Issue;
 import org.sonar.api.issue.impact.Severity;
@@ -378,13 +379,12 @@ class IssueDaoIT {
         tuple(RuleType.BUG.getDbConstant(), "MAIN", null, 2),
         tuple(RuleType.CODE_SMELL.getDbConstant(), "MAIN", null, 1),
         tuple(RuleType.BUG.getDbConstant(), "TEST", "HIGH", 1));
-    // ruleKey is already composed as repository:rule in SQL (nested concat(), portable to Oracle's 2-arg limit)
     assertThat(rows).extracting(IssueCountDimensionDto::ruleKey)
       .containsOnly("java:S1234", "java:S5678");
   }
 
   @Test
-  void selectIssueCountDimensionsForBranches_shouldComputeIssueStatusAndHotspotResolution() {
+  void selectIssueCountDimensionsForBranches_shouldComputeIssueStatusAndExcludeSecurityHotspots() {
     ComponentDto project = db.components().insertPrivateProject().getMainBranchComponent();
     RuleDto rule = db.rules().insert(r -> r.setRepositoryKey("java").setRuleKey("S1234").setType(RuleType.BUG));
     RuleDto hotspotRule = db.rules().insert(r -> r.setRepositoryKey("java").setRuleKey("S9999").setType(RuleType.SECURITY_HOTSPOT));
@@ -393,16 +393,21 @@ class IssueDaoIT {
 
     db.issues().insert(rule, branch, file, i -> i.setKee("false-positive").setType(rule.getType())
       .setStatus("RESOLVED").setResolution("FALSE-POSITIVE").setSeverity("MAJOR"));
+    db.issues().insert(rule, branch, file, i -> i.setKee("accepted").setType(rule.getType())
+      .setStatus("RESOLVED").setResolution("WONTFIX").setSeverity("MAJOR"));
+    db.issues().insert(rule, branch, file, i -> i.setKee("reopened").setType(rule.getType())
+      .setStatus("REOPENED").setResolution(null).setSeverity("MAJOR"));
     db.issues().insert(hotspotRule, branch, file, i -> i.setKee("reviewed-hotspot").setType(hotspotRule.getType())
       .setStatus("REVIEWED").setResolution("FIXED").setSeverity("MAJOR"));
 
     List<IssueCountDimensionDto> rows = underTest.selectIssueCountDimensionsForBranches(db.getSession(), List.of(branch.branchUuid()));
 
     assertThat(rows)
-      .extracting(IssueCountDimensionDto::issueType, IssueCountDimensionDto::issueStatus, IssueCountDimensionDto::hotspotResolution)
+      .extracting(IssueCountDimensionDto::issueType, IssueCountDimensionDto::issueStatus, IssueCountDimensionDto::status, IssueCountDimensionDto::hotspotResolution)
       .containsExactlyInAnyOrder(
-        tuple(RuleType.BUG.getDbConstant(), "FALSE_POSITIVE", null),
-        tuple(RuleType.SECURITY_HOTSPOT.getDbConstant(), null, "FIXED"));
+        tuple(RuleType.BUG.getDbConstant(), "FALSE_POSITIVE", "RESOLVED", null),
+        tuple(RuleType.BUG.getDbConstant(), "ACCEPTED", "RESOLVED", null),
+        tuple(RuleType.BUG.getDbConstant(), "OPEN", "REOPENED", null));
   }
 
   @Test
@@ -449,6 +454,29 @@ class IssueDaoIT {
     assertThat(rows.get(0).effectiveImpacts()).containsOnly(Map.entry("MAINTAINABILITY", "HIGH"));
   }
 
+  @ParameterizedTest
+  @EnumSource(SoftwareQuality.class)
+  void selectIssueCountDimensionsForBranches_whenOneQualityIsOverridden_shouldCountEachIssueOnceAndIgnoreOtherDefaults(SoftwareQuality quality) {
+    ComponentDto project = db.components().insertPrivateProject().getMainBranchComponent();
+    RuleDto rule = db.rules().insert(r -> r.setRepositoryKey("java").setRuleKey("S1234").setType(RuleType.BUG)
+      .replaceAllDefaultImpacts(List.of(
+        new ImpactDto().setSoftwareQuality(MAINTAINABILITY).setSeverity(MEDIUM),
+        new ImpactDto().setSoftwareQuality(SECURITY).setSeverity(MEDIUM),
+        new ImpactDto().setSoftwareQuality(RELIABILITY).setSeverity(MEDIUM))));
+    ComponentDto branch = db.components().insertProjectBranch(project);
+    ComponentDto file = db.components().insertComponent(newFileDto(branch));
+    for (int i = 0; i < 2; i++) {
+      db.issues().insert(rule, branch, file, issue -> issue.setType(rule.getType()).setStatus(STATUS_OPEN).setResolution(null).setSeverity("MAJOR")
+        .replaceAllImpacts(List.of(new ImpactDto().setSoftwareQuality(quality).setSeverity(HIGH))));
+    }
+
+    List<IssueCountDimensionDto> rows = underTest.selectIssueCountDimensionsForBranches(db.getSession(), List.of(branch.branchUuid()));
+
+    assertThat(rows).hasSize(1);
+    assertThat(rows.get(0).issueCount()).isEqualTo(2);
+    assertThat(rows.get(0).effectiveImpacts()).containsOnly(Map.entry(quality.name(), "HIGH"));
+  }
+
   @Test
   void selectIssueCountDimensionsForBranches_shouldFallBackToRuleDefaultsWhenIssueHasNoImpactsAtAll() {
     ComponentDto project = db.components().insertPrivateProject().getMainBranchComponent();
@@ -470,6 +498,29 @@ class IssueDaoIT {
     assertThat(rows.get(0).effectiveImpacts()).containsOnly(
       Map.entry("MAINTAINABILITY", "MEDIUM"),
       Map.entry("RELIABILITY", "LOW"));
+  }
+
+  @Test
+  void selectIssueCountDimensionsForBranches_whenNeitherIssueNorRuleHasImpacts_shouldReturnNoImpacts() {
+    ComponentDto project = db.components().insertPrivateProject().getMainBranchComponent();
+    RuleDto rule = db.rules().insert(r -> r.setRepositoryKey("java").setRuleKey("S1234").setType(RuleType.BUG).replaceAllDefaultImpacts(List.of()));
+    ComponentDto branch = db.components().insertProjectBranch(project);
+    ComponentDto file = db.components().insertComponent(newFileDto(branch));
+    db.issues().insert(rule, branch, file, i -> i.setType(rule.getType()).setStatus(STATUS_OPEN).setResolution(null).setSeverity("MAJOR")
+      .replaceAllImpacts(List.of()));
+
+    List<IssueCountDimensionDto> rows = underTest.selectIssueCountDimensionsForBranches(db.getSession(), List.of(branch.branchUuid()));
+
+    assertThat(rows).extracting(IssueCountDimensionDto::ruleKey, IssueCountDimensionDto::effectiveImpacts, IssueCountDimensionDto::issueCount)
+      .containsExactly(tuple("java:S1234", Map.of(), 1));
+  }
+
+  @Test
+  void selectIssueCountDimensionsForBranches_whenBranchHasNoIssues_shouldReturnEmpty() {
+    ComponentDto project = db.components().insertPrivateProject().getMainBranchComponent();
+
+    assertThat(underTest.selectIssueCountDimensionsForBranches(db.getSession(), List.of(project.branchUuid()))).isEmpty();
+    assertThat(underTest.selectIssueCountDimensionsForBranches(db.getSession(), List.of())).isEmpty();
   }
 
   @Test
